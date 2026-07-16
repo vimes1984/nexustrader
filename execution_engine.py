@@ -223,6 +223,7 @@ class ExecutionEngine:
             if self.learning_callback:
                 try:
                     self.learning_callback(
+                        symbol,
                         pos["strategy_signals"],
                         direction,
                         pnl_percent
@@ -234,18 +235,21 @@ class ExecutionEngine:
 
         return None
 
-    def get_equity(self, symbol, current_price):
-        """Calculates current total portfolio equity."""
+    def get_equity(self, current_prices):
+        """Calculates current total portfolio equity across all active positions.
+        
+        current_prices: dict of symbol -> current_price
+        """
         equity = self.balance
-        if symbol in self.active_positions:
-            pos = self.active_positions[symbol]
+        for symbol, pos in self.active_positions.items():
             qty = pos["quantity"]
             entry = pos["entry_price"]
+            price = current_prices.get(symbol, entry)
             
             if pos["direction"] == "BUY":
-                unrealized = (current_price - entry) * qty
+                unrealized = (price - entry) * qty
             else:
-                unrealized = (entry - current_price) * qty
+                unrealized = (entry - price) * qty
                 
             equity += unrealized
         return float(equity)

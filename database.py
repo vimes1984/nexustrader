@@ -21,10 +21,21 @@ def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Create ticks table (historical & live collected ticks)
+    # Check if ticks table needs migration
+    try:
+        cursor.execute("PRAGMA table_info(ticks)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if len(columns) > 0 and "symbol" not in columns:
+            logging.info("Migrating ticks table: dropping old single-ticker ticks table...")
+            cursor.execute("DROP TABLE ticks")
+    except Exception as e:
+        logging.error(f"Error checking ticks table schema: {e}")
+    
+    # Create ticks table (historical & live collected ticks with compound primary key)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS ticks (
-        timestamp TEXT PRIMARY KEY,
+        timestamp TEXT,
+        symbol TEXT,
         open REAL,
         high REAL,
         low REAL,
@@ -35,7 +46,8 @@ def init_db():
         macd_signal REAL,
         bb_upper REAL,
         bb_lower REAL,
-        atr REAL
+        atr REAL,
+        PRIMARY KEY (timestamp, symbol)
     )
     """)
     
@@ -80,17 +92,18 @@ def init_db():
     conn.close()
     logging.info("Database initialized successfully.")
 
-def save_tick(row):
+def save_tick(row, symbol):
     """Saves a price tick to database."""
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
         cursor.execute("""
         INSERT OR REPLACE INTO ticks 
-        (timestamp, open, high, low, close, volume, rsi, macd, macd_signal, bb_upper, bb_lower, atr)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (timestamp, symbol, open, high, low, close, volume, rsi, macd, macd_signal, bb_upper, bb_lower, atr)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             str(row['timestamp']),
+            symbol,
             float(row.get('open', 0)),
             float(row.get('high', 0)),
             float(row.get('low', 0)),

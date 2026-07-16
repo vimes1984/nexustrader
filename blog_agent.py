@@ -197,6 +197,22 @@ def analyze_weekly_performance(trades):
     sum_loss_pnl = sum([t["pnl"] for t in losing_trades])
     profit_factor = abs(sum_win_pnl / sum_loss_pnl) if sum_loss_pnl != 0 else float('inf')
     
+    # Ticker performance breakdown
+    ticker_breakdown = {}
+    for t in trades:
+        sym = t.get("symbol", "UNKNOWN")
+        if sym not in ticker_breakdown:
+            ticker_breakdown[sym] = {"trades": 0, "wins": 0, "pnl": 0.0}
+        ticker_breakdown[sym]["trades"] += 1
+        ticker_breakdown[sym]["pnl"] += t["pnl"]
+        if t["pnl"] > 0:
+            ticker_breakdown[sym]["wins"] += 1
+            
+    for sym in ticker_breakdown:
+        t_count = ticker_breakdown[sym]["trades"]
+        w_count = ticker_breakdown[sym]["wins"]
+        ticker_breakdown[sym]["win_rate"] = (w_count / t_count) if t_count > 0 else 0.0
+        
     # Strategy attribution
     # Initialize counts and PnL for each of the 6 strategies
     strat_perf = {name: {"trades": 0, "wins": 0, "pnl": 0.0} for name in STRATEGY_NAMES}
@@ -233,6 +249,7 @@ def analyze_weekly_performance(trades):
         "profit_factor": profit_factor,
         "best_trade": best_trade,
         "worst_trade": worst_trade,
+        "ticker_breakdown": ticker_breakdown,
         "strategy_performance": strat_perf
     }
 
@@ -332,6 +349,19 @@ def generate_report_template(stats, settings, start_date, end_date, op_mode):
     else:
         attribution_rows = "| - | - | - | - |\n"
 
+    # Ticker Breakdown Table
+    ticker_breakdown_rows = ""
+    ticker_breakdown = stats.get("ticker_breakdown", {})
+    if ticker_breakdown:
+        for sym in sorted(ticker_breakdown.keys()):
+            data = ticker_breakdown[sym]
+            pnl_val = data["pnl"]
+            pnl_str = f"€{pnl_val:+.2f}"
+            wr_str = f"{data['win_rate']*100:.1f}%" if data["trades"] > 0 else "-"
+            ticker_breakdown_rows += f"| {sym} | {data['trades']} | {wr_str} | {pnl_str} |\n"
+    else:
+        ticker_breakdown_rows = "| - | - | - | - |\n"
+
     # Best / Worst Trades
     best_trade_str = "N/A"
     worst_trade_str = "N/A"
@@ -349,7 +379,6 @@ def generate_report_template(stats, settings, start_date, end_date, op_mode):
     pf_str = f"{profit_factor:.2f}" if profit_factor != float('inf') else "∞"
     
     # ASCII sparkline or summary chart
-    # Let's generate a daily performance summary table or cumulative chart
     pnl_chart_str = ""
     if stats and trade_count > 0:
         # Show cumulative balance progression
@@ -388,6 +417,15 @@ Below is an extensive breakdown of the system's performance, resource allocation
 
 ---
 
+## 💼 Portfolio Asset Performance Breakdown
+Performance metrics segmented by individual portfolio asset ticker:
+
+| Asset Ticker | Trades Executed | Win Rate | Net Asset PnL |
+| :--- | :--- | :--- | :--- |
+{ticker_breakdown_rows}
+
+---
+
 ## 🧠 Neural Policy Network Allocations
 The Policy Gradient Neural Network dynamically distributes weights among individual strategies on each tick. It monitors indicators (OU market regime parameters, RSI, Bollinger position, ATR volatility, and win rate trend) to shift allocations toward strategies that perform best in current conditions.
 
@@ -422,6 +460,14 @@ This table highlights how individual strategies contributed to the trades opened
 1. **Regime Switching Adaptability:** The system uses Ornstein-Uhlenbeck process parameters to distinguish between trending and mean-reverting states. Under mean-reverting regimes, the neural network boosts weights for the **RSI Reversion**, **BB Breakout**, and **Psych Sweep** components, while suppressing trend-following metrics.
 2. **Online Policy Gradient Optimization:** After each trade closes, the neural network runs a policy gradient backward pass using trade PnL as the reward. Successful trades strengthen the neural pathways of the voting strategies, while losing trades penalize their weights.
 3. **Volatility-Adjusted Risk Sizing:** Take-profit and stop-loss boundaries are automatically computed using Average True Range (ATR) multiples. Sizing is governed by the Kelly Criterion (scaled by a fraction based on the risk profile), preventing catastrophic risk exposure.
+
+---
+
+## 🗺️ Quantitative Roadmap & Operational Plan
+To optimize execution safety and target higher capital return frequencies, we are implementing a structured phased software roadmap:
+1. **Diversified Multi-Asset Support (Active)**: We have transitioned the core loop to trade `ETH-EUR`, `SOL-EUR`, `BTC-EUR`, `DOGE-EUR`, and `XRP-EUR` concurrently under a single portfolio account.
+2. **Limit Order Queue Simulation (Next Phase)**: To prevent execution slippage in live trading, we are implementing maker/taker transaction fee modelling and limit order fills based on tick high/low crossings.
+3. **Daily Risk Safeguards & Circuit Breakers (Next Phase)**: Adding daily maximum drawdown boundaries (5% of daily start balance) that will automatically freeze the execution engines if breached, protecting the portfolio balance.
 
 ---
 *Report generated automatically by the NexusTrader Blog Agent.*

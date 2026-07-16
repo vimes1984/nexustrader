@@ -30,20 +30,19 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 
 app = FastAPI(title="NexusTrader API", version="1.0.0")
 
-# Central orchestrator state
+# Central orchestrator state supporting multi-asset portfolio operations
 class NexusTraderOrchestrator:
-    def __init__(self, ticker="ETH-EUR"):
-        self.ticker = ticker
-        self.data_ingestion = DataIngestion(ticker=ticker, interval="1h", period="60d")
+    def __init__(self):
+        self.tickers = ['ETH-EUR', 'SOL-EUR', 'BTC-EUR', 'DOGE-EUR', 'XRP-EUR']
+        self.data_ingestions = {}
+        self.strategy_ensembles = {}
+        self.learning_engines = {}
+        self.latest_ticks = {}
         
-        # We will initialize strategies and engines once historical data is loaded
-        self.strategy_ensemble = None
         self.probability_engine = ProbabilityEngine(kelly_fraction=0.2)
-        self.learning_engine = None
         self.execution_engine = ExecutionEngine(initial_balance=100.0)
         
         # State tracking
-        self.latest_tick = None
         self.connected_websockets = []
         self.running_task = None
         self.playback_speed = 0.2  # delay in seconds between simulated bars
@@ -53,79 +52,10 @@ class NexusTraderOrchestrator:
         # Setup learning callback connection
         self.execution_engine.set_learning_callback(self.on_trade_closed)
 
-    def select_best_ticker(self, candidates):
-        """Scans the candidate assets and selects the one with the highest volatility (profit potential)."""
-        import yfinance as yf
-        best_ticker = "ETH-EUR"
-        highest_vol = 0.0
-        
-        for ticker in candidates:
-            try:
-                # Fetch last 30 daily bars
-                df = yf.download(ticker, period="30d", interval="1d", progress=False)
-                if not df.empty:
-                    if isinstance(df.columns, pd.MultiIndex):
-                        close_series = df['Close'].iloc[:, 0].dropna()
-                    else:
-                        close_series = df['Close'].dropna()
-                        
-                    if len(close_series) > 1:
-                        close = close_series.values.astype(float)
-                        returns = np.diff(close) / (close[:-1] + 1e-9)
-                        volatility = np.std(returns)
-                        logging.info(f"Scan Ticker: {ticker} | 30-Day Volatility: {volatility*100:.2f}%")
-                        if volatility > highest_vol:
-                            highest_vol = volatility
-                            best_ticker = ticker
-            except Exception as e:
-                logging.error(f"Error scanning volatility for {ticker}: {e}")
-                
-        logging.info(f"Dynamic Asset Selector choice: {best_ticker} (Daily standard deviation: {highest_vol*100:.2f}%)")
-        return best_ticker
-
     async def initialize(self):
-        """Fetches initial data and trains ML strategies."""
-        # Capture the running event loop from the main FastAPI thread
+        """Fetches initial data and trains ML strategies for all tickers."""
         self.loop = asyncio.get_running_loop()
         
-        # 1. Dynamically select the best asset with highest daily volatility (profit potential)
-        logging.info("Scanning market for asset with highest daily volatility...")
-        candidates = ['ETH-EUR', 'SOL-EUR', 'BTC-EUR', 'DOGE-EUR', 'XRP-EUR']
-        try:
-            self.ticker = self.select_best_ticker(candidates)
-            self.data_ingestion = DataIngestion(ticker=self.ticker, interval="1h", period="60d")
-        except Exception as e:
-            logging.error(f"Error dynamically selecting asset: {e}. Falling back to default.")
-        
-        # 2. Fetch initial data
-        df = self.data_ingestion.fetch_historical_data()
-        
-        # 2. Train strategy ensemble
-        self.strategy_ensemble = StrategyEnsemble(history_df=df)
-        
-        # 3. Setup learning engine
-        num_strats = len(self.strategy_ensemble.strategies)
-        self.learning_engine = LearningEngine(num_strategies=num_strats, learning_rate=0.15)
-        
-        # Load saved Policy Gradient Neural Network parameters if they exist
-        db_net_str = database.load_setting("policy_net_weights")
-        if db_net_str:
-            try:
-                self.learning_engine.policy_net.from_json(db_net_str)
-                # Select initial weights based on starting state
-                state = self.learning_engine.get_state_vector(
-                    df.iloc[-1].to_dict(),
-                    list(df['close'].values[-60:]),
-                    self.execution_engine.closed_trades
-                )
-                self.strategy_ensemble.weights = self.learning_engine.select_weights(state)
-                logging.info("Loaded Policy Gradient Neural Network weights from database.")
-            except Exception as e:
-                logging.error(f"Error loading Policy Network weights from DB: {e}")
-        else:
-            # Fallback to simple equal weights if no DB model is found
-            self.strategy_ensemble.weights = np.ones(num_strats) / num_strats
-
         # Load risk mode from database if it exists
         db_risk_mode = database.load_setting("risk_mode")
         if db_risk_mode:
@@ -135,26 +65,65 @@ class NexusTraderOrchestrator:
             except Exception as e:
                 logging.error(f"Error loading risk mode from DB: {e}")
         
-        logging.info("NexusTrader Orchestrator initialized successfully.")
+        # Initialize each ticker independently
+        for ticker in self.tickers:
+            logging.info(f"Initializing assets and models for {ticker}...")
+            ingestor = DataIngestion(ticker=ticker, interval="1h", period="60d")
+            try:
+                df = ingestor.fetch_historical_data()
+            except Exception as e:
+                logging.error(f"Error fetching data for {ticker}: {e}. Skipping ticker.")
+                continue
+                
+            ensemble = StrategyEnsemble(history_df=df)
+            num_strats = len(ensemble.strategies)
+            learner = LearningEngine(num_strategies=num_strats, learning_rate=0.15)
+            
+            # Load saved Policy Gradient Neural Network weights if they exist
+            db_net_str = database.load_setting(f"policy_net_weights_{ticker}")
+            if db_net_str:
+                try:
+                    learner.policy_net.from_json(db_net_str)
+                    state = learner.get_state_vector(
+                        df.iloc[-1].to_dict(),
+                        list(df['close'].values[-60:]),
+                        [t for t in self.execution_engine.closed_trades if t['symbol'] == ticker]
+                    )
+                    ensemble.weights = learner.select_weights(state)
+                    logging.info(f"Loaded Policy Network weights for {ticker} from database.")
+                except Exception as e:
+                    logging.error(f"Error loading Policy Network weights for {ticker}: {e}")
+            else:
+                ensemble.weights = (np.ones(num_strats) / num_strats).tolist()
+                
+            self.data_ingestions[ticker] = ingestor
+            self.strategy_ensembles[ticker] = ensemble
+            self.learning_engines[ticker] = learner
+            
+        logging.info("NexusTrader Orchestrator initialized successfully for all tickers.")
 
     def _run_async(self, coro):
         """Safely schedule a coroutine to run on the main FastAPI event loop from any thread."""
         if self.loop and self.loop.is_running():
             asyncio.run_coroutine_threadsafe(coro, self.loop)
 
-    def on_trade_closed(self, strategy_signals, direction, pnl_percent):
+    def on_trade_closed(self, ticker, strategy_signals, direction, pnl_percent):
         """Callback from ExecutionEngine when a trade is closed."""
-        logging.info(f"Trade closed with PnL%: {pnl_percent*100:.2f}%. Training Policy Network...")
+        logging.info(f"[{ticker}] Trade closed with PnL%: {pnl_percent*100:.2f}%. Training Policy Network...")
+        
+        learner = self.learning_engines[ticker]
+        ensemble = self.strategy_ensembles[ticker]
         
         # Reconstruct the state vector when the trade was evaluated
-        state = self.learning_engine.get_state_vector(
-            self.latest_tick or {}, 
-            self.strategy_ensemble.price_history, 
-            self.execution_engine.closed_trades
+        latest_tick = self.latest_ticks.get(ticker, {})
+        state = learner.get_state_vector(
+            latest_tick or {},
+            ensemble.price_history,
+            [t for t in self.execution_engine.closed_trades if t['symbol'] == ticker]
         )
         
-        # Run backpropagation on neural network weights
-        new_weights = self.learning_engine.learn_from_trade(
+        # Run backpropagation on neural network weights using PnL as reward
+        new_weights = learner.learn_from_trade(
             state,
             strategy_signals,
             direction,
@@ -162,54 +131,63 @@ class NexusTraderOrchestrator:
         )
         
         # Write back to strategy ensemble
-        self.strategy_ensemble.weights = new_weights
+        ensemble.weights = new_weights
         
         # Save updated network parameters to database
-        database.save_setting("policy_net_weights", self.learning_engine.policy_net.to_json())
+        database.save_setting(f"policy_net_weights_{ticker}", learner.policy_net.to_json())
         
         # Push update to WebSocket clients immediately
         self._run_async(self.broadcast_message({
             "type": "learning_update",
+            "ticker": ticker,
             "weights": {
-                self.strategy_ensemble.strategies[i].name: new_weights[i]
+                ensemble.strategies[i].name: new_weights[i]
                 for i in range(len(new_weights))
             },
             "pnl": pnl_percent
         }))
 
-    def process_tick(self, row):
-        """Orchestrates single price tick logic."""
-        self.latest_tick = row
+    def process_tick(self, row, ticker):
+        """Orchestrates single price tick logic for a specific ticker."""
+        self.latest_ticks[ticker] = row
         current_price = float(row['close'])
         atr = row.get('atr', None)
         
         # Save tick to database for future analysis / machine learning training
-        database.save_tick(row)
+        database.save_tick(row, ticker)
+        
+        learner = self.learning_engines[ticker]
+        ensemble = self.strategy_ensembles[ticker]
+        ingestor = self.data_ingestions[ticker]
         
         # 1. Query the Policy Gradient Neural Network to allocate base strategy weights
-        state = self.learning_engine.get_state_vector(
+        state = learner.get_state_vector(
             row,
-            self.strategy_ensemble.price_history,
-            self.execution_engine.closed_trades
+            ensemble.price_history,
+            [t for t in self.execution_engine.closed_trades if t['symbol'] == ticker]
         )
-        base_weights = self.learning_engine.select_weights(state)
-        self.strategy_ensemble.weights = base_weights
+        base_weights = learner.select_weights(state)
+        ensemble.weights = base_weights
         
         # 2. Update existing positions (check if TP/SL hit)
-        closed_trade = self.execution_engine.update_positions(self.ticker, current_price)
+        closed_trade = self.execution_engine.update_positions(ticker, current_price)
+        
+        # Calculate current total equity across all tickers
+        current_prices = {t: float(r['close']) for t, r in self.latest_ticks.items()}
+        current_equity = self.execution_engine.get_equity(current_prices)
+        
         if closed_trade:
             # Broadcast closed trade
             self._run_async(self.broadcast_message({
                 "type": "trade_closed",
                 "trade": closed_trade,
                 "balance": self.execution_engine.balance,
-                "equity": self.execution_engine.get_equity(self.ticker, current_price)
+                "equity": current_equity
             }))
             
-        # 2. If no position is open, check strategy ensemble signals
-        pos_open = self.ticker in self.execution_engine.active_positions
-        
-        weighted_signal, strategy_breakdown = self.strategy_ensemble.get_weighted_signal(row, self.data_ingestion.data)
+        # 3. If no position is open for this ticker, check strategy ensemble signals
+        pos_open = ticker in self.execution_engine.active_positions
+        weighted_signal, strategy_breakdown = ensemble.get_weighted_signal(row, ingestor.data)
         
         evaluation = None
         trade_opened = False
@@ -226,7 +204,7 @@ class NexusTraderOrchestrator:
                     direction=direction,
                     weighted_signal=weighted_signal,
                     row=row,
-                    history_df=self.data_ingestion.data
+                    history_df=ingestor.data
                 )
                 
                 # If viable, open position
@@ -234,11 +212,11 @@ class NexusTraderOrchestrator:
                     # Gather the active signals at entry
                     signals_at_entry = [
                         strat.generate_signal(row)
-                        for strat in self.strategy_ensemble.strategies
+                        for strat in ensemble.strategies
                     ]
                     
                     opened = self.execution_engine.open_position(
-                        self.ticker,
+                        ticker,
                         evaluation,
                         signals_at_entry
                     )
@@ -247,21 +225,23 @@ class NexusTraderOrchestrator:
                         trade_opened = True
                         self._run_async(self.broadcast_message({
                             "type": "trade_opened",
-                            "position": self.execution_engine.active_positions[self.ticker],
+                            "ticker": ticker,
+                            "position": self.execution_engine.active_positions[ticker],
                             "balance": self.execution_engine.balance
                         }))
 
-        # 3. Broadcast real-time update to all clients
+        # 4. Broadcast real-time update to all clients
         self._run_async(self.broadcast_message({
             "type": "tick",
+            "ticker": ticker,
             "price": current_price,
             "timestamp": str(row['timestamp']),
             "weighted_signal": weighted_signal,
             "strategy_breakdown": strategy_breakdown,
             "evaluation": evaluation if not pos_open else None,
             "balance": self.execution_engine.balance,
-            "equity": self.execution_engine.get_equity(self.ticker, current_price),
-            "position": self.execution_engine.active_positions.get(self.ticker, None),
+            "equity": current_equity,
+            "position": self.execution_engine.active_positions.get(ticker, None),
             "indicators": {
                 "rsi": float(row.get('rsi', 50)),
                 "macd": float(row.get('macd', 0)),
@@ -286,30 +266,35 @@ class NexusTraderOrchestrator:
                 self.connected_websockets.remove(ws)
 
     def start_stream(self, mode="live", speed=0.2, poll_interval=5):
-        """Starts real-time live trading feed or simulation playback."""
+        """Starts real-time live trading feed or simulation playback for all tickers."""
         if self.is_simulating:
             self.stop_stream()
             
         self.mode = mode
         self.is_simulating = True
-        self.data_ingestion.subscribe(self.process_tick)
         
-        if mode == "live":
-            self.data_ingestion.start_live_stream(interval_seconds=poll_interval)
-            logging.info(f"Live real-time polling stream started for {self.ticker}.")
-        else:
-            self.playback_speed = speed
-            self.data_ingestion.start_simulation_stream(
-                speed_seconds=speed,
-                start_index=150
-            )
-            logging.info(f"Simulation playback stream started for {self.ticker}.")
+        for ticker in self.tickers:
+            if ticker in self.data_ingestions:
+                # Bind lambda capturing the current ticker
+                self.data_ingestions[ticker].subscribe(
+                    lambda row, t=ticker: self.process_tick(row, t)
+                )
+                if mode == "live":
+                    self.data_ingestions[ticker].start_live_stream(interval_seconds=poll_interval)
+                else:
+                    self.data_ingestions[ticker].start_simulation_stream(
+                        speed_seconds=speed,
+                        start_index=150
+                    )
+        logging.info(f"Multi-asset streaming started in {mode} mode.")
 
     def stop_stream(self):
         self.is_simulating = False
-        self.data_ingestion.stop_stream()
-        self.data_ingestion.subscribers = []
-        logging.info("Stream stopped.")
+        for ticker in self.tickers:
+            if ticker in self.data_ingestions:
+                self.data_ingestions[ticker].stop_stream()
+                self.data_ingestions[ticker].subscribers = []
+        logging.info("All ticker streams stopped.")
 
 # Instantiate Orchestrator
 orchestrator = NexusTraderOrchestrator()
@@ -327,12 +312,16 @@ async def shutdown_event():
 # API Endpoints
 @app.get("/api/status")
 def get_status():
-    price = orchestrator.data_ingestion.live_price or 0.0
+    current_prices = {}
+    for t in orchestrator.tickers:
+        if t in orchestrator.data_ingestions:
+            current_prices[t] = orchestrator.data_ingestions[t].live_price or 0.0
+            
     return {
         "balance": orchestrator.execution_engine.balance,
-        "equity": orchestrator.execution_engine.get_equity(orchestrator.ticker, price),
-        "position": orchestrator.execution_engine.active_positions.get(orchestrator.ticker, None),
-        "ticker": orchestrator.ticker
+        "equity": orchestrator.execution_engine.get_equity(current_prices),
+        "positions": orchestrator.execution_engine.active_positions,
+        "tickers": orchestrator.tickers
     }
 
 @app.get("/api/trades")
@@ -340,12 +329,13 @@ def get_trades():
     return orchestrator.execution_engine.closed_trades
 
 @app.get("/api/weights")
-def get_weights():
-    if not orchestrator.strategy_ensemble:
+def get_weights(ticker: str = "ETH-EUR"):
+    if ticker not in orchestrator.strategy_ensembles:
         return {}
+    ensemble = orchestrator.strategy_ensembles[ticker]
     return {
-        orchestrator.strategy_ensemble.strategies[i].name: float(orchestrator.strategy_ensemble.weights[i])
-        for i in range(len(orchestrator.strategy_ensemble.weights))
+        ensemble.strategies[i].name: float(ensemble.weights[i])
+        for i in range(len(ensemble.weights))
     }
 
 @app.post("/api/control")
@@ -360,10 +350,15 @@ def control_simulation(action: str, speed: float = 0.2, mode: str = "live"):
         orchestrator.stop_stream()
         orchestrator.execution_engine = ExecutionEngine(initial_balance=100.0)
         orchestrator.execution_engine.set_learning_callback(orchestrator.on_trade_closed)
-        # Reset weights to equal
-        num_strats = len(orchestrator.strategy_ensemble.strategies)
-        orchestrator.strategy_ensemble.weights = [1.0/num_strats] * num_strats
-        orchestrator.learning_engine = LearningEngine(num_strategies=num_strats, learning_rate=0.15)
+        
+        # Reset weights & learning engines for all tickers
+        for ticker in orchestrator.tickers:
+            if ticker in orchestrator.strategy_ensembles:
+                ensemble = orchestrator.strategy_ensembles[ticker]
+                num_strats = len(ensemble.strategies)
+                ensemble.weights = [1.0/num_strats] * num_strats
+                orchestrator.learning_engines[ticker] = LearningEngine(num_strategies=num_strats, learning_rate=0.15)
+                
         orchestrator.start_stream(mode=mode, speed=speed, poll_interval=5)
         return {"status": "reset_completed", "mode": mode}
     return {"error": "Invalid action"}
@@ -427,17 +422,20 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     orchestrator.connected_websockets.append(websocket)
     try:
-        # Send initial configuration and state
+        # Send initial configuration and state (defaults to first ticker weights for basic UI compatibility)
+        first_ticker = orchestrator.tickers[0]
+        ensemble = orchestrator.strategy_ensembles.get(first_ticker, None)
         init_state = {
             "type": "init",
-            "ticker": orchestrator.ticker,
+            "tickers": orchestrator.tickers,
+            "ticker": first_ticker,
             "balance": orchestrator.execution_engine.balance,
             "weights": {
-                orchestrator.strategy_ensemble.strategies[i].name: float(orchestrator.strategy_ensemble.weights[i])
-                for i in range(len(orchestrator.strategy_ensemble.weights))
-            },
+                ensemble.strategies[i].name: float(ensemble.weights[i])
+                for i in range(len(ensemble.weights))
+            } if ensemble else {},
             "risk_mode": orchestrator.probability_engine.risk_mode,
-            "strategies": [s.name for s in orchestrator.strategy_ensemble.strategies],
+            "strategies": [s.name for s in ensemble.strategies] if ensemble else [],
             "trades": orchestrator.execution_engine.closed_trades
         }
         await websocket.send_text(json.dumps(init_state))
@@ -445,7 +443,6 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             # Keep connection alive, listen for messages
             data = await websocket.receive_text()
-            # Handle client commands if any
     except WebSocketDisconnect:
         logging.info("WebSocket disconnected.")
     except Exception as e:
@@ -463,7 +460,6 @@ app.mount("/dashboard", StaticFiles(directory=get_resource_path("dashboard")), n
 
 if __name__ == "__main__":
     import sys
-    # Check if a graphical display environment is available and headless mode is not requested
     is_headless = "--headless" in sys.argv
     has_display = ("DISPLAY" in os.environ or "WAYLAND_DISPLAY" in os.environ) and not is_headless
     
@@ -471,22 +467,17 @@ if __name__ == "__main__":
         import threading
         import time
         
-        # 1. Start uvicorn server in a separate thread
         def run_server():
             logging.info("Starting backend server thread...")
             try:
-                # Bind to 0.0.0.0 to support external/forwarded port connections
                 uvicorn.run(app, host="0.0.0.0", port=8000, log_level="warning")
             except Exception as e:
                 logging.error(f"Uvicorn server crashed: {e}")
 
         server_thread = threading.Thread(target=run_server, daemon=True)
         server_thread.start()
-        
-        # Wait for uvicorn to boot up
         time.sleep(1.2)
         
-        # 2. Start webview GUI loop on the main thread
         try:
             import webview
             logging.info("Launching standalone desktop window via pywebview...")
@@ -507,7 +498,6 @@ if __name__ == "__main__":
             except KeyboardInterrupt:
                 logging.info("Shutting down via KeyboardInterrupt.")
     else:
-        # Headless server environment: Run uvicorn directly on the main thread
         logging.info("Headless environment detected (no DISPLAY). Running server on main thread...")
         try:
             uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
