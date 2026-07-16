@@ -695,6 +695,67 @@ if (elTriggerBlogBtn) {
     });
 }
 
+const elOptSentimentBtn = document.getElementById("trigger-opt-sentiment-btn");
+const elOptParamsBtn = document.getElementById("trigger-opt-params-btn");
+
+if (elOptSentimentBtn) {
+    elOptSentimentBtn.addEventListener("click", () => {
+        elBlogStatusMsg.textContent = "Optimizing sentiment source weights...";
+        elBlogStatusMsg.className = "color-blue";
+        elOptSentimentBtn.disabled = true;
+
+        fetch("/api/system/optimize/sentiment", { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                elOptSentimentBtn.disabled = false;
+                if (data.status === "success") {
+                    elBlogStatusMsg.textContent = "Sentiment weights optimized!";
+                    elBlogStatusMsg.className = "color-green";
+                    alert("Sentiment source weights optimized successfully!\n\n" + data.log);
+                    setTimeout(() => { elBlogStatusMsg.textContent = ""; }, 5000);
+                } else {
+                    elBlogStatusMsg.textContent = `Error: ${data.error || "failed"}`;
+                    elBlogStatusMsg.className = "color-red";
+                }
+            })
+            .catch(err => {
+                elOptSentimentBtn.disabled = false;
+                elBlogStatusMsg.textContent = "Error optimizing sentiment.";
+                elBlogStatusMsg.className = "color-red";
+                console.error(err);
+            });
+    });
+}
+
+if (elOptParamsBtn) {
+    elOptParamsBtn.addEventListener("click", () => {
+        elBlogStatusMsg.textContent = "Running backtest hyperparameter optimization...";
+        elBlogStatusMsg.className = "color-blue";
+        elOptParamsBtn.disabled = true;
+
+        fetch("/api/system/optimize/parameters", { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                elOptParamsBtn.disabled = false;
+                if (data.status === "success") {
+                    elBlogStatusMsg.textContent = "Parameters optimized!";
+                    elBlogStatusMsg.className = "color-green";
+                    alert("Hyperparameters optimized successfully!\n\n" + data.log);
+                    setTimeout(() => { elBlogStatusMsg.textContent = ""; }, 5000);
+                } else {
+                    elBlogStatusMsg.textContent = `Error: ${data.error || "failed"}`;
+                    elBlogStatusMsg.className = "color-red";
+                }
+            })
+            .catch(err => {
+                elOptParamsBtn.disabled = false;
+                elBlogStatusMsg.textContent = "Error optimizing parameters.";
+                elBlogStatusMsg.className = "color-red";
+                console.error(err);
+            });
+    });
+}
+
 // App Startup
 initChart();
 connectWebSocket();

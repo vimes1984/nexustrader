@@ -477,6 +477,36 @@ def update_system_config(trading_mode: str, risk_mode: str, max_drawdown: float)
     
     return {"status": "success"}
 
+@app.post("/api/system/optimize/sentiment")
+def trigger_sentiment_optimization():
+    try:
+        from weekly_optimizer import optimize_sentiment_weights
+        optimize_sentiment_weights()
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        report_path = os.path.join(base_dir, "blog", "daily_summaries", "weekly_sentiment_optimization.md")
+        if os.path.exists(report_path):
+            with open(report_path, "r") as f:
+                return {"status": "success", "log": f.read()}
+        return {"status": "success", "log": "Sentiment source optimization completed successfully."}
+    except Exception as e:
+        logging.error(f"Error in manual sentiment optimization: {e}")
+        return {"status": "error", "error": str(e)}
+
+@app.post("/api/system/optimize/parameters")
+def trigger_parameter_optimization():
+    try:
+        from self_improvement_agent import run_self_improvement
+        run_self_improvement()
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        report_path = os.path.join(base_dir, "blog", "daily_summaries", "weekly_self_improvement.md")
+        if os.path.exists(report_path):
+            with open(report_path, "r") as f:
+                return {"status": "success", "log": f.read()}
+        return {"status": "success", "log": "Parameter backtest optimization completed successfully."}
+    except Exception as e:
+        logging.error(f"Error in manual parameter optimization: {e}")
+        return {"status": "error", "error": str(e)}
+
 @app.get("/api/blog/config")
 def get_blog_config():
     return {

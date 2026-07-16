@@ -178,7 +178,20 @@
                         Blog Now
                     </button>
                 </div>
-                <div id="blog-status-msg" style="font-size: 11px; text-align: center; color: var(--text-muted); min-height: 15px;"></div>
+                <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 8px;">
+                    <span style="font-size: 11px; color: var(--text-secondary);">Manual Optimizers:</span>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn" id="trigger-opt-sentiment-btn" style="flex: 1; padding: 6px 10px; font-size: 11px; justify-content: center; border-color: rgba(168, 85, 247, 0.2); font-family: inherit; color: var(--neon-purple);">
+                            <i data-lucide="bar-chart-2" style="width: 12px; height: 12px; margin-right: 4px;"></i>
+                            Feeds Opt
+                        </button>
+                        <button class="btn" id="trigger-opt-params-btn" style="flex: 1; padding: 6px 10px; font-size: 11px; justify-content: center; border-color: rgba(168, 85, 247, 0.2); font-family: inherit; color: var(--neon-purple);">
+                            <i data-lucide="sliders" style="width: 12px; height: 12px; margin-right: 4px;"></i>
+                            Backtest Opt
+                        </button>
+                    </div>
+                </div>
+                <div id="blog-status-msg" style="font-size: 11px; text-align: center; color: var(--text-muted); min-height: 15px; margin-top: 5px;"></div>
             </article>
         </div>
     </main>
