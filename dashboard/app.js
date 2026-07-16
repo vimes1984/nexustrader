@@ -247,6 +247,42 @@ function handleTick(data) {
     }
 
     chart.update('none'); // Update without full recalculation transition for smooth updates
+
+    // Update Neural State inputs if present in tick
+    if (data.neural_state) {
+        const state = data.neural_state;
+        const is_mr = state[0];
+        const theta = state[1];
+        const rsi = state[2];
+        const macd_norm = state[3];
+        const bb_pos = state[4];
+        const atr_ratio = state[5];
+        const win_trend = state[6];
+        
+        const elRegime = document.getElementById("neural-val-regime");
+        if (elRegime) {
+            elRegime.textContent = is_mr === 1.0 ? "Mean Reverting" : "Trending";
+            elRegime.style.color = is_mr === 1.0 ? "var(--neon-purple)" : "var(--neon-blue)";
+        }
+        
+        const elTheta = document.getElementById("neural-val-theta");
+        if (elTheta) elTheta.textContent = theta.toFixed(4);
+        
+        const elRsi = document.getElementById("neural-val-rsi");
+        if (elRsi) elRsi.textContent = rsi.toFixed(4);
+        
+        const elMacd = document.getElementById("neural-val-macd");
+        if (elMacd) elMacd.textContent = macd_norm.toFixed(4);
+        
+        const elBb = document.getElementById("neural-val-bb");
+        if (elBb) elBb.textContent = bb_pos.toFixed(4);
+        
+        const elAtr = document.getElementById("neural-val-atr");
+        if (elAtr) elAtr.textContent = atr_ratio.toFixed(4);
+        
+        const elWinTrend = document.getElementById("neural-val-wintrend");
+        if (elWinTrend) elWinTrend.textContent = `${(win_trend * 100).toFixed(1)}%`;
+    }
 }
 
 function handleTradeOpened(data) {
@@ -272,6 +308,26 @@ function handleTradeClosed(data) {
 function handleLearningUpdate(data) {
     currentWeights = data.weights;
     renderWeights(currentWeights);
+    
+    // Log weight update in diagnostics panel
+    const logBox = document.getElementById("neural-log");
+    if (logBox) {
+        const timeStr = new Date().toLocaleTimeString();
+        const pnl = data.pnl ? (data.pnl * 100).toFixed(2) + "%" : "0.00%";
+        const pnlColor = data.pnl >= 0 ? "var(--neon-green)" : "var(--neon-red)";
+        
+        const entry = document.createElement("div");
+        entry.style.marginBottom = "6px";
+        entry.style.borderBottom = "1px solid rgba(255,255,255,0.02)";
+        entry.style.paddingBottom = "4px";
+        entry.innerHTML = `<span style="color:var(--text-muted)">[${timeStr}]</span> <span style="font-weight:600;color:var(--neon-blue)">${data.ticker}</span> weights updated (Reward: <span style="color:${pnlColor};font-weight:600;">${pnl}</span>)`;
+        
+        if (logBox.textContent.trim().startsWith("Waiting")) {
+            logBox.innerHTML = "";
+        }
+        
+        logBox.insertBefore(entry, logBox.firstChild);
+    }
 }
 
 // UI Render Helpers
@@ -476,6 +532,8 @@ elResetBtn.addEventListener("click", () => {
                 isStopped = false;
                 elPlayPauseText.textContent = "Pause";
                 elPlayPauseBtn.querySelector("i").setAttribute("data-lucide", "pause");
+                document.getElementById("status-text").textContent = "Simulating";
+                document.getElementById("bot-status").classList.remove("stopped");
                 lucide.createIcons();
                 
                 // Re-establish stats
@@ -484,6 +542,23 @@ elResetBtn.addEventListener("click", () => {
                 elEquity.textContent = "€100.00";
                 elUnrealized.textContent = "Active Trade Profit: €0.00 (0.00%)";
                 elUnrealized.className = "kpi-sub";
+                
+                // Reset the DOM trades log table
+                elTradeLogBody.innerHTML = `
+                    <tr>
+                        <td colspan="9" style="text-align: center; color: var(--text-muted); padding: 40px;">No trades completed yet. Watching the market for opportunities...</td>
+                    </tr>
+                `;
+                
+                // Reset active position container
+                elPositionDetails.innerHTML = `<p style="font-size: 13px; color: var(--text-muted); text-align: center; padding: 20px;">No Trade Currently Open</p>`;
+                
+                // Reset the performance KPI cards
+                updatePerformanceKPIs([], 100.0);
+                
+                // Clear the Neural Diagnostics update log
+                const logBox = document.getElementById("neural-log");
+                if (logBox) logBox.innerHTML = "Waiting for training updates...";
                 
                 console.log("Simulation reset successfully.");
             });

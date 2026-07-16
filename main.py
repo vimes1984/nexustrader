@@ -259,6 +259,7 @@ class NexusTraderOrchestrator:
             "balance": self.execution_engine.balance,
             "equity": current_equity,
             "position": self.execution_engine.active_positions.get(ticker, None),
+            "neural_state": state,
             "indicators": {
                 "rsi": float(row.get('rsi', 50)),
                 "macd": float(row.get('macd', 0)),

@@ -216,6 +216,54 @@
             </div>
         </article>
 
+        <!-- Neural Diagnostics Panel -->
+        <article class="glass-panel neural-diagnostics" style="display: flex; flex-direction: column;">
+            <h2 class="panel-title" style="margin-bottom: 15px;">
+                <i data-lucide="network" style="color: var(--neon-purple)"></i>
+                Neural Policy Engine
+            </h2>
+            <p style="font-size: 11px; color: var(--text-secondary); line-height: 1.4; margin-bottom: 15px;">
+                Real-time parameters fed into the Policy Gradient Neural Network.
+            </p>
+            <div class="details-grid" style="font-size: 12px; gap: 8px; flex-grow: 1; display: flex; flex-direction: column; justify-content: center;">
+                <div class="pos-row" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 6px;">
+                    <span>Market Regime:</span>
+                    <span id="neural-val-regime" class="color-blue" style="font-weight:600;">Trending</span>
+                </div>
+                <div class="pos-row" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 6px;">
+                    <span>Reversion Rate (&theta;):</span>
+                    <span id="neural-val-theta" style="font-weight:600;">0.00</span>
+                </div>
+                <div class="pos-row" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 6px;">
+                    <span>RSI Momentum:</span>
+                    <span id="neural-val-rsi" style="font-weight:600;">0.00</span>
+                </div>
+                <div class="pos-row" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 6px;">
+                    <span>MACD Divergence:</span>
+                    <span id="neural-val-macd" style="font-weight:600;">0.00</span>
+                </div>
+                <div class="pos-row" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 6px;">
+                    <span>Bollinger Band Pos:</span>
+                    <span id="neural-val-bb" style="font-weight:600;">0.00</span>
+                </div>
+                <div class="pos-row" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 6px;">
+                    <span>ATR Volatility:</span>
+                    <span id="neural-val-atr" style="font-weight:600;">0.00</span>
+                </div>
+                <div class="pos-row" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 6px;">
+                    <span>Recent Win Trend:</span>
+                    <span id="neural-val-wintrend" style="font-weight:600;">50.0%</span>
+                </div>
+            </div>
+            
+            <div style="margin-top: 15px;">
+                <label style="font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 6px;">Policy Update Log:</label>
+                <div id="neural-log" style="font-size: 11px; font-family: monospace; color: #a855f7; background: rgba(0,0,0,0.25); border: 1px solid var(--border-color); padding: 8px; border-radius: 8px; height: 80px; overflow-y: auto; line-height: 1.4;">
+                    Waiting for training updates...
+                </div>
+            </div>
+        </article>
+
         <!-- Probability Engine details -->
         <article class="glass-panel probability-details">
             <h2 class="panel-title">
