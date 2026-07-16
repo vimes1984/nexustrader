@@ -245,9 +245,26 @@ def get_ascii_bar(val, max_val=1.0, width=15):
     filled = max(0, min(width, filled))
     return "█" * filled + "░" * (width - filled)
 
-def generate_report_template(stats, settings, start_date, end_date):
+def generate_report_template(stats, settings, start_date, end_date, op_mode):
     """Generates a beautiful weekly blog report using stats and settings."""
     date_str = f"{start_date.strftime('%B %d, %Y')} to {end_date.strftime('%B %d, %Y')}"
+    
+    # Generate prominent Operational Status Badge based on mode
+    if op_mode == "MOCK_DEMO":
+        op_badge = """> [!NOTE]
+> **Operational Status:** `SAMPLE DATA (MOCK TEST DATA)`  
+> This report was generated using synthetic trade history for demonstration and testing purposes. No assets were traded. No real money or live connection was active.
+"""
+    elif op_mode == "LIVE_CAPITAL":
+        op_badge = """> [!WARNING]
+> **Operational Status:** `LIVE CAPITAL TRADING (REAL MONEY)`  
+> **WARNING:** The system is currently executing live transactions with real capital via broker API credentials. Real financial assets are at risk.
+"""
+    else: # PAPER_TRADING
+        op_badge = """> [!IMPORTANT]
+> **Operational Status:** `PAPER TRADING (LIVE SIMULATION)`  
+> The system is running simulations on live market feed ticks. Trades are executed using virtual balances (paper trading) with zero capital risk.
+"""
     
     # Calculate balance changes
     current_bal = settings["portfolio_balance"]
@@ -348,6 +365,7 @@ def generate_report_template(stats, settings, start_date, end_date):
     template = f"""# Weekly Performance Log: NexusTrader Algorithmic Operations
 **Reporting Period:** {date_str}  
 **System Status:** ACTIVE 🟢  
+{op_badge}
 
 Welcome to the weekly performance report of **NexusTrader**, a self-learning quantitative trading bot driven by an ensemble of technical strategies and optimized in real-time by a Policy Gradient Neural Network.
 
@@ -502,6 +520,17 @@ def push_to_github():
     except Exception as e:
         logging.error(f"Failed to push blog update to GitHub: {e}")
 
+def load_config():
+    """Loads trading configuration from config.json."""
+    config_path = os.path.expanduser("~/.nexustrader/config.json")
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, "r") as f:
+                return json.load(f)
+        except Exception as e:
+            logging.error(f"Error loading config.json: {e}")
+    return {}
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="NexusTrader Weekly Blog Agent")
@@ -520,6 +549,20 @@ if __name__ == "__main__":
         logging.info("Weekly Blog Agent is currently DISABLED in configuration. Exiting.")
         sys.exit(0)
         
+    # Determine the system operational mode
+    config = load_config()
+    trading_mode = config.get("trading_mode", "paper")
+    
+    if args.mock:
+        op_mode = "MOCK_DEMO"
+        op_mode_desc = "Synthetic Sample Data (Mock Test Data)"
+    elif trading_mode == "live":
+        op_mode = "LIVE_CAPITAL"
+        op_mode_desc = "Live Capital Trading (Real Money at Risk)"
+    else:
+        op_mode = "PAPER_TRADING"
+        op_mode_desc = "Paper Trading (Live Simulation on Real-time Market Data, No Risk)"
+        
     trades = load_trades(days_limit=args.days)
     
     # Define reporting window
@@ -530,7 +573,7 @@ if __name__ == "__main__":
     stats = analyze_weekly_performance(trades)
     
     # Generate baseline template containing all data tables
-    base_markdown = generate_report_template(stats, settings, start_date, end_date)
+    base_markdown = generate_report_template(stats, settings, start_date, end_date, op_mode)
     
     # Check if Gemini API key is available in DB or Environment
     api_key = settings.get("blog_gemini_api_key", "").strip()
@@ -545,6 +588,8 @@ if __name__ == "__main__":
         prompt = f"""
 You are an expert quantitative researcher and algorithmic trading engineer. 
 I have a trading system named "NexusTrader" that uses a Policy Gradient Neural Network to weight 6 strategies (EMA Crossover, RSI Reversion, BB Breakout, ML Random Forest, Kalman Trend, Psych Sweep) based on Ornstein-Uhlenbeck process parameters and market indicators.
+
+The operational mode of the system for this reporting period is: {op_mode_desc}. Make sure to clearly and explicitly mention this mode in your opening commentary and executive summary, describing whether this represents mock demo data, live forward simulated paper trading, or live capital with real money at risk, so that the reader has full context of the financial stakes involved.
 
 Here is the raw data and structured markdown for this week's report:
 ```markdown
