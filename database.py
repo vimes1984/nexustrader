@@ -65,17 +65,21 @@ def init_db():
         exit_reason TEXT,
         entry_time REAL,
         exit_time REAL,
-        strategy_signals TEXT
+        strategy_signals TEXT,
+        sentiment_sources TEXT
     )
     """)
     
-    # Check if strategy_signals column exists, if not alter the table
+    # Check if strategy_signals/sentiment_sources columns exist, if not alter the table
     try:
         cursor.execute("PRAGMA table_info(trades)")
         columns = [row[1] for row in cursor.fetchall()]
         if "strategy_signals" not in columns:
             logging.info("Migrating trades table: adding strategy_signals column...")
             cursor.execute("ALTER TABLE trades ADD COLUMN strategy_signals TEXT")
+        if "sentiment_sources" not in columns:
+            logging.info("Migrating trades table: adding sentiment_sources column...")
+            cursor.execute("ALTER TABLE trades ADD COLUMN sentiment_sources TEXT")
     except Exception as e:
         logging.error(f"Error migrating trades table: {e}")
         
@@ -128,9 +132,10 @@ def save_trade(trade):
     cursor = conn.cursor()
     try:
         signals_str = json.dumps(trade.get('strategy_signals', []))
+        sources_str = json.dumps(trade.get('sentiment_sources', {}))
         cursor.execute("""
-        INSERT INTO trades (symbol, direction, quantity, entry_price, exit_price, pnl, pnl_percent, exit_reason, entry_time, exit_time, strategy_signals)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO trades (symbol, direction, quantity, entry_price, exit_price, pnl, pnl_percent, exit_reason, entry_time, exit_time, strategy_signals, sentiment_sources)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             trade['symbol'],
             trade['direction'],
@@ -142,7 +147,8 @@ def save_trade(trade):
             trade['exit_reason'],
             float(trade['entry_time']),
             float(trade['exit_time']),
-            signals_str
+            signals_str,
+            sources_str
         ))
         conn.commit()
     except Exception as e:
@@ -167,6 +173,15 @@ def load_trades():
                     trade["strategy_signals"] = []
             else:
                 trade["strategy_signals"] = []
+                
+            if "sentiment_sources" in trade and trade["sentiment_sources"]:
+                try:
+                    trade["sentiment_sources"] = json.loads(trade["sentiment_sources"])
+                except Exception:
+                    trade["sentiment_sources"] = {}
+            else:
+                trade["sentiment_sources"] = {}
+                
             trades.append(trade)
     except Exception as e:
         logging.error(f"Error loading trades from db: {e}")

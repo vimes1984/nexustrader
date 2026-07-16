@@ -392,6 +392,16 @@ def generate_report_template(stats, settings, start_date, end_date, op_mode):
             cum_bal += t["pnl"]
             pnl_chart_str += f"| {idx+1} | {t['symbol']} | {t['direction']} | €{t['pnl']:+.2f} | €{cum_bal:.2f} |\n"
 
+    # Load weekly sentiment optimization report if it exists
+    sentiment_opt_section = ""
+    opt_report_path = os.path.join(BLOG_DIR, "daily_summaries", "weekly_sentiment_optimization.md")
+    if os.path.exists(opt_report_path):
+        try:
+            with open(opt_report_path, "r") as f:
+                sentiment_opt_section = "\n" + f.read() + "\n---\n"
+        except Exception:
+            pass
+
     template = f"""# Weekly Performance Log: NexusTrader Algorithmic Operations
 **Reporting Period:** {date_str}  
 **System Status:** ACTIVE 🟢  
@@ -437,7 +447,7 @@ Current baseline weights computed by the neural network:
 {weights_section}
 
 ---
-
+{sentiment_opt_section}
 ## 📈 Detailed Strategy Attribution
 This table highlights how individual strategies contributed to the trades opened during this period. A strategy is considered "aligned" if its voting signal matches the entry direction of the executed trade.
 
@@ -587,6 +597,13 @@ if __name__ == "__main__":
 
     if args.mock:
         insert_mock_data()
+        
+    # 1. Run the news sentiment source optimizer before generating the weekly report
+    try:
+        from weekly_optimizer import optimize_sentiment_weights
+        optimize_sentiment_weights()
+    except Exception as e:
+        logging.error(f"Error running weekly sentiment source optimization: {e}")
         
     settings = load_settings()
     

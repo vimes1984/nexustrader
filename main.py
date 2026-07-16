@@ -40,6 +40,7 @@ class NexusTraderOrchestrator:
         self.learning_engines = {}
         self.latest_ticks = {}
         self.latest_sentiments = {t: 0.0 for t in self.tickers}
+        self.latest_source_sentiments = {t: {} for t in self.tickers}
         self.last_sentiment_times = {t: 0.0 for t in self.tickers}
         
         self.probability_engine = ProbabilityEngine(kelly_fraction=0.2)
@@ -161,15 +162,17 @@ class NexusTraderOrchestrator:
                 try:
                     loop = asyncio.get_running_loop()
                     from sentiment_analyzer import fetch_ticker_sentiment
-                    score = await loop.run_in_executor(None, fetch_ticker_sentiment, t)
-                    self.latest_sentiments[t] = score
+                    weighted_score, source_averages = await loop.run_in_executor(None, fetch_ticker_sentiment, t)
+                    self.latest_sentiments[t] = weighted_score
+                    self.latest_source_sentiments[t] = source_averages
                 except Exception as ex:
                     logging.error(f"Error updating news sentiment for {t}: {ex}")
             
             self._run_async(update_sentiment(ticker))
 
-        # Inject cached sentiment score into row dictionary
+        # Inject cached sentiment score and source breakdowns into row dictionary
         row['sentiment'] = self.latest_sentiments.get(ticker, 0.0)
+        row['sentiment_sources'] = self.latest_source_sentiments.get(ticker, {})
         
         self.latest_ticks[ticker] = row
         current_price = float(row['close'])
@@ -240,6 +243,7 @@ class NexusTraderOrchestrator:
                 
                 # If viable, open position
                 if evaluation["is_viable"]:
+                    evaluation["sentiment_sources"] = row.get("sentiment_sources", {})
                     # Gather the active signals at entry
                     signals_at_entry = [
                         strat.generate_signal(row)

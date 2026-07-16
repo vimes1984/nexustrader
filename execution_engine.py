@@ -134,6 +134,7 @@ class ExecutionEngine:
                 "stop_loss": sl,
                 "entry_time": time.time(),
                 "strategy_signals": strategy_signals,
+                "sentiment_sources": evaluation.get("sentiment_sources", {}),
                 "fee_paid": fee
             }
             logging.info(f"Opened live {direction} position for {symbol}: Qty {quantity:.4f} at {entry_price:.2f}. Fee: {fee:.2f}")
@@ -149,6 +150,7 @@ class ExecutionEngine:
                 "stop_loss": sl,
                 "entry_time": time.time(),
                 "strategy_signals": strategy_signals,
+                "sentiment_sources": evaluation.get("sentiment_sources", {}),
                 "fee": fee
             }
             logging.info(f"[LIMIT ORDER PLACED] Placed pending limit {direction} order for {symbol} at {entry_price:.2f}")
@@ -182,6 +184,7 @@ class ExecutionEngine:
                     "stop_loss": order["stop_loss"],
                     "entry_time": time.time(),
                     "strategy_signals": order["strategy_signals"],
+                    "sentiment_sources": order.get("sentiment_sources", {}),
                     "fee_paid": order["fee"]
                 }
                 self.active_positions[symbol] = pos
@@ -254,7 +257,8 @@ class ExecutionEngine:
                 "exit_reason": exit_reason,
                 "entry_time": pos["entry_time"],
                 "exit_time": time.time(),
-                "strategy_signals": pos["strategy_signals"]
+                "strategy_signals": pos["strategy_signals"],
+                "sentiment_sources": pos.get("sentiment_sources", {})
             }
 
             # Save trade to DB
