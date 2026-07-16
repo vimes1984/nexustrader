@@ -502,7 +502,7 @@ if (elRiskSelect) {
     });
 }
 
-// Blog Agent Configuration and Triggers
+// Blog & System Configuration Controls
 const elBlogEnabledCheck = document.getElementById("blog-enabled-check");
 const elBlogGitPushCheck = document.getElementById("blog-git-push-check");
 const elBlogAiCheck = document.getElementById("blog-ai-check");
@@ -511,7 +511,11 @@ const elSaveBlogConfigBtn = document.getElementById("save-blog-config-btn");
 const elTriggerBlogBtn = document.getElementById("trigger-blog-btn");
 const elBlogStatusMsg = document.getElementById("blog-status-msg");
 
+const elTradingModeSelect = document.getElementById("setting-trading-mode");
+const elMaxDrawdownInput = document.getElementById("setting-max-drawdown");
+
 function loadBlogConfig() {
+    // 1. Fetch Blog configurations
     fetch("/api/blog/config")
         .then(res => res.json())
         .then(data => {
@@ -521,6 +525,20 @@ function loadBlogConfig() {
             if (elBlogApiKey) elBlogApiKey.value = data.blog_gemini_api_key || "";
         })
         .catch(err => console.error("Error loading blog config:", err));
+
+    // 2. Fetch System configurations
+    fetch("/api/system/config")
+        .then(res => res.json())
+        .then(data => {
+            if (elTradingModeSelect) elTradingModeSelect.value = data.trading_mode || "paper";
+            if (elMaxDrawdownInput) elMaxDrawdownInput.value = data.max_drawdown || 5;
+            
+            // Sync risk selector in header
+            if (data.risk_mode && elRiskSelect) {
+                elRiskSelect.value = data.risk_mode;
+            }
+        })
+        .catch(err => console.error("Error loading system config:", err));
 }
 
 if (elSaveBlogConfigBtn) {
@@ -530,22 +548,29 @@ if (elSaveBlogConfigBtn) {
         const aiEnabled = elBlogAiCheck ? elBlogAiCheck.checked : false;
         const apiKey = elBlogApiKey ? elBlogApiKey.value.trim() : "";
         
+        const tradingMode = elTradingModeSelect ? elTradingModeSelect.value : "paper";
+        const riskMode = elRiskSelect ? elRiskSelect.value : "conservative";
+        const maxDrawdown = elMaxDrawdownInput ? parseFloat(elMaxDrawdownInput.value) : 5.0;
+        
         elBlogStatusMsg.textContent = "Saving settings...";
         elBlogStatusMsg.className = "color-blue";
         
-        fetch(`/api/blog/config?enabled=${enabled}&ai_enabled=${aiEnabled}&api_key=${encodeURIComponent(apiKey)}&git_push_enabled=${gitPush}`, {
+        // 1. Save Blog settings
+        const saveBlogPromise = fetch(`/api/blog/config?enabled=${enabled}&ai_enabled=${aiEnabled}&api_key=${encodeURIComponent(apiKey)}&git_push_enabled=${gitPush}`, {
             method: 'POST'
-        })
-        .then(res => res.json())
+        });
+        
+        // 2. Save System settings
+        const saveSystemPromise = fetch(`/api/system/config?trading_mode=${tradingMode}&risk_mode=${riskMode}&max_drawdown=${maxDrawdown}`, {
+            method: 'POST'
+        });
+
+        Promise.all([saveBlogPromise, saveSystemPromise])
+        .then(results => Promise.all(results.map(r => r.json())))
         .then(data => {
-            if (data.status === "success") {
-                elBlogStatusMsg.textContent = "Settings saved successfully!";
-                elBlogStatusMsg.className = "color-green";
-                setTimeout(() => { elBlogStatusMsg.textContent = ""; }, 3000);
-            } else {
-                elBlogStatusMsg.textContent = "Failed to save settings.";
-                elBlogStatusMsg.className = "color-red";
-            }
+            elBlogStatusMsg.textContent = "Settings saved successfully!";
+            elBlogStatusMsg.className = "color-green";
+            setTimeout(() => { elBlogStatusMsg.textContent = ""; }, 3000);
         })
         .catch(err => {
             elBlogStatusMsg.textContent = "Error saving configuration.";

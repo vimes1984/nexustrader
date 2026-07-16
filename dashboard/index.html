@@ -117,17 +117,37 @@
                 </div>
             </article>
 
-            <!-- Blog Configuration Panel -->
+            <!-- System Configurations Panel -->
             <article class="glass-panel blog-panel" style="padding: 20px; display: flex; flex-direction: column; gap: 15px;">
                 <h2 class="panel-title" style="margin-bottom: 5px;">
-                    <i data-lucide="book-open" style="color: var(--neon-orange)"></i>
-                    Weekly Blog Agent
+                    <i data-lucide="settings" style="color: var(--neon-blue)"></i>
+                    System Settings
                 </h2>
                 <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.4;">
-                    Configure the automated weekly blog and publish updates back to your public repository.
+                    Configure risk rules, execution modes, and weekly blogging updates.
                 </p>
                 
                 <div style="display: flex; flex-direction: column; gap: 12px; font-size: 13px;">
+                    <!-- Engine Mode -->
+                    <label style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>Trading Mode:</span>
+                        <select id="setting-trading-mode" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 12px; outline: none; cursor: pointer;">
+                            <option value="paper">Paper Trading</option>
+                            <option value="live">Live Capital</option>
+                        </select>
+                    </label>
+
+
+
+                    <!-- Max Drawdown -->
+                    <label style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>Max Daily Loss (%):</span>
+                        <input type="number" id="setting-max-drawdown" min="1" max="25" value="5" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 12px; width: 60px; outline: none; text-align: center;">
+                    </label>
+
+                    <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 4px 0;">
+
+                    <!-- Weekly Blog Settings -->
                     <label style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
                         <span>Enable Weekly Blog:</span>
                         <input type="checkbox" id="blog-enabled-check" style="accent-color: var(--neon-blue); cursor: pointer;">
