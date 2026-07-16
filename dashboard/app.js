@@ -502,7 +502,101 @@ if (elRiskSelect) {
     });
 }
 
+// Blog Agent Configuration and Triggers
+const elBlogEnabledCheck = document.getElementById("blog-enabled-check");
+const elBlogGitPushCheck = document.getElementById("blog-git-push-check");
+const elBlogAiCheck = document.getElementById("blog-ai-check");
+const elBlogApiKey = document.getElementById("blog-api-key");
+const elSaveBlogConfigBtn = document.getElementById("save-blog-config-btn");
+const elTriggerBlogBtn = document.getElementById("trigger-blog-btn");
+const elBlogStatusMsg = document.getElementById("blog-status-msg");
+
+function loadBlogConfig() {
+    fetch("/api/blog/config")
+        .then(res => res.json())
+        .then(data => {
+            if (elBlogEnabledCheck) elBlogEnabledCheck.checked = data.blog_enabled;
+            if (elBlogGitPushCheck) elBlogGitPushCheck.checked = data.blog_git_push_enabled;
+            if (elBlogAiCheck) elBlogAiCheck.checked = data.blog_ai_enabled;
+            if (elBlogApiKey) elBlogApiKey.value = data.blog_gemini_api_key || "";
+        })
+        .catch(err => console.error("Error loading blog config:", err));
+}
+
+if (elSaveBlogConfigBtn) {
+    elSaveBlogConfigBtn.addEventListener("click", () => {
+        const enabled = elBlogEnabledCheck ? elBlogEnabledCheck.checked : true;
+        const gitPush = elBlogGitPushCheck ? elBlogGitPushCheck.checked : true;
+        const aiEnabled = elBlogAiCheck ? elBlogAiCheck.checked : false;
+        const apiKey = elBlogApiKey ? elBlogApiKey.value.trim() : "";
+        
+        elBlogStatusMsg.textContent = "Saving settings...";
+        elBlogStatusMsg.className = "color-blue";
+        
+        fetch(`/api/blog/config?enabled=${enabled}&ai_enabled=${aiEnabled}&api_key=${encodeURIComponent(apiKey)}&git_push_enabled=${gitPush}`, {
+            method: 'POST'
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === "success") {
+                elBlogStatusMsg.textContent = "Settings saved successfully!";
+                elBlogStatusMsg.className = "color-green";
+                setTimeout(() => { elBlogStatusMsg.textContent = ""; }, 3000);
+            } else {
+                elBlogStatusMsg.textContent = "Failed to save settings.";
+                elBlogStatusMsg.className = "color-red";
+            }
+        })
+        .catch(err => {
+            elBlogStatusMsg.textContent = "Error saving configuration.";
+            elBlogStatusMsg.className = "color-red";
+            console.error(err);
+        });
+    });
+}
+
+if (elTriggerBlogBtn) {
+    elTriggerBlogBtn.addEventListener("click", () => {
+        elBlogStatusMsg.textContent = "Generating blog post & syncing...";
+        elBlogStatusMsg.className = "color-blue";
+        elTriggerBlogBtn.disabled = true;
+        
+        // Confirm mock options
+        const useMock = confirm("Do you want to generate mock trading data before blogging? (Cancel to generate with actual DB data)");
+        
+        fetch(`/api/blog/generate?use_mock=${useMock}`, { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                elTriggerBlogBtn.disabled = false;
+                if (data.status === "success") {
+                    elBlogStatusMsg.textContent = "Blog published successfully!";
+                    elBlogStatusMsg.className = "color-green";
+                    setTimeout(() => { elBlogStatusMsg.textContent = ""; }, 5000);
+                    // Refresh trade log if mock was used
+                    if (useMock) {
+                        fetch("/api/trades")
+                            .then(res => res.json())
+                            .then(trades => {
+                                renderTradeLog(trades);
+                                updatePerformanceKPIs(trades, balance);
+                            });
+                    }
+                } else {
+                    elBlogStatusMsg.textContent = `Error: ${data.error || "failed"}`;
+                    elBlogStatusMsg.className = "color-red";
+                }
+            })
+            .catch(err => {
+                elTriggerBlogBtn.disabled = false;
+                elBlogStatusMsg.textContent = "Error generating blog.";
+                elBlogStatusMsg.className = "color-red";
+                console.error(err);
+            });
+    });
+}
+
 // App Startup
 initChart();
 connectWebSocket();
+loadBlogConfig();
 lucide.createIcons();

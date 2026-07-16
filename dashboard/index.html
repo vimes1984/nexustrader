@@ -93,28 +93,74 @@
             </div>
         </article>
 
-        <!-- Learning weights -->
-        <article class="glass-panel weights-panel">
-            <div>
-                <h2 class="panel-title" style="margin-bottom: 20px;">
-                    <i data-lucide="brain" style="color: var(--neon-purple)"></i>
-                    Strategy Popularity (AI Learning)
+        <div class="sidebar-container" style="display: flex; flex-direction: column; gap: 20px;">
+            <!-- Learning weights -->
+            <article class="glass-panel weights-panel">
+                <div>
+                    <h2 class="panel-title" style="margin-bottom: 20px;">
+                        <i data-lucide="brain" style="color: var(--neon-purple)"></i>
+                        Strategy Popularity (AI Learning)
+                    </h2>
+                    <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 24px; line-height: 1.4;">
+                        The bot automatically shifts more trust (weight) to the strategies that are currently making money in this market.
+                    </p>
+                    <div id="weights-container">
+                        <!-- Dynamic weight bars go here -->
+                    </div>
+                </div>
+                
+                <div style="border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 16px;">
+                    <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 8px;">Active Trade Status</h3>
+                    <div id="position-details-container" class="active-pos-details">
+                        <p style="font-size: 13px; color: var(--text-muted); text-align: center; padding: 20px;">No Trade Currently Open</p>
+                    </div>
+                </div>
+            </article>
+
+            <!-- Blog Configuration Panel -->
+            <article class="glass-panel blog-panel" style="padding: 20px; display: flex; flex-direction: column; gap: 15px;">
+                <h2 class="panel-title" style="margin-bottom: 5px;">
+                    <i data-lucide="book-open" style="color: var(--neon-orange)"></i>
+                    Weekly Blog Agent
                 </h2>
-                <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 24px; line-height: 1.4;">
-                    The bot automatically shifts more trust (weight) to the strategies that are currently making money in this market.
+                <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.4;">
+                    Configure the automated weekly blog and publish updates back to your public repository.
                 </p>
-                <div id="weights-container">
-                    <!-- Dynamic weight bars go here -->
+                
+                <div style="display: flex; flex-direction: column; gap: 12px; font-size: 13px;">
+                    <label style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
+                        <span>Enable Weekly Blog:</span>
+                        <input type="checkbox" id="blog-enabled-check" style="accent-color: var(--neon-blue); cursor: pointer;">
+                    </label>
+                    
+                    <label style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
+                        <span>Auto-Push to GitHub:</span>
+                        <input type="checkbox" id="blog-git-push-check" style="accent-color: var(--neon-blue); cursor: pointer;">
+                    </label>
+                    
+                    <label style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
+                        <span>Use AI Styling (Gemini):</span>
+                        <input type="checkbox" id="blog-ai-check" style="accent-color: var(--neon-blue); cursor: pointer;">
+                    </label>
+                    
+                    <div id="blog-key-container" style="display: flex; flex-direction: column; gap: 6px; margin-top: 4px;">
+                        <span>Gemini API Key:</span>
+                        <input type="password" id="blog-api-key" placeholder="Enter API key..." style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 12px; border-radius: 8px; font-size:12px; font-family:inherit; outline:none; transition: var(--transition);">
+                    </div>
                 </div>
-            </div>
-            
-            <div style="border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 16px;">
-                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 8px;">Active Trade Status</h3>
-                <div id="position-details-container" class="active-pos-details">
-                    <p style="font-size: 13px; color: var(--text-muted); text-align: center; padding: 20px;">No Trade Currently Open</p>
+                
+                <div style="display: flex; gap: 10px; margin-top: 5px;">
+                    <button class="btn btn-primary" id="save-blog-config-btn" style="flex: 1; padding: 8px 12px; font-size: 12px; justify-content: center; font-family: inherit;">
+                        Save Settings
+                    </button>
+                    <button class="btn" id="trigger-blog-btn" style="flex: 1; padding: 8px 12px; font-size: 12px; justify-content: center; border-color: rgba(0, 240, 255, 0.2); font-family: inherit;">
+                        <i data-lucide="sparkles" style="width: 14px; height: 14px; color: var(--neon-blue);"></i>
+                        Blog Now
+                    </button>
                 </div>
-            </div>
-        </article>
+                <div id="blog-status-msg" style="font-size: 11px; text-align: center; color: var(--text-muted); min-height: 15px;"></div>
+            </article>
+        </div>
     </main>
 
     <!-- Lower Panels Grid -->

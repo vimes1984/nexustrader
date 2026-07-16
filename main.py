@@ -378,6 +378,49 @@ def update_config(risk_mode: str):
         return {"status": "success", "risk_mode": risk_mode}
     return {"error": "Invalid risk mode"}
 
+@app.get("/api/blog/config")
+def get_blog_config():
+    return {
+        "blog_enabled": database.load_setting("blog_enabled", "true") == "true",
+        "blog_ai_enabled": database.load_setting("blog_ai_enabled", "false") == "true",
+        "blog_gemini_api_key": database.load_setting("blog_gemini_api_key", ""),
+        "blog_git_push_enabled": database.load_setting("blog_git_push_enabled", "true") == "true"
+    }
+
+@app.post("/api/blog/config")
+def update_blog_config(enabled: bool, ai_enabled: bool, api_key: str, git_push_enabled: bool):
+    database.save_setting("blog_enabled", "true" if enabled else "false")
+    database.save_setting("blog_ai_enabled", "true" if ai_enabled else "false")
+    database.save_setting("blog_gemini_api_key", api_key)
+    database.save_setting("blog_git_push_enabled", "true" if git_push_enabled else "false")
+    return {"status": "success"}
+
+@app.post("/api/blog/generate")
+async def trigger_blog_generation(use_mock: bool = False):
+    import subprocess
+    import sys
+    import os
+    
+    cmd = [sys.executable, get_resource_path("blog_agent.py")]
+    if use_mock:
+        cmd.append("--mock")
+        
+    try:
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=os.path.dirname(os.path.abspath(__file__))
+        )
+        stdout, stderr = await process.communicate()
+        
+        if process.returncode == 0:
+            return {"status": "success", "output": stdout.decode()}
+        else:
+            return {"status": "error", "error": stderr.decode()}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
 # Websocket endpoint
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):

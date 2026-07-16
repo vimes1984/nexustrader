@@ -14,7 +14,7 @@ if [ -n "$PID" ]; then
 fi
 
 echo "Starting NexusTrader in the background..."
-nohup ./dist/nexustrader --headless > nexustrader_log.txt 2>&1 &
+nohup python3 main.py --headless > nexustrader_log.txt 2>&1 &
 
 echo "--------------------------------------------------"
 echo "NexusTrader started successfully in background!"

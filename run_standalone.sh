@@ -11,9 +11,9 @@ echo "============================================="
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$DIR"
 
-# Launch compiled NexusTrader binary in the background (headless daemon mode)
-echo "🤖 Starting compiled API & Ingestion Engine on port 8000..."
-./dist/nexustrader --headless > nexustrader_log.txt 2>&1 &
+# Launch NexusTrader in the background (headless daemon mode)
+echo "🤖 Starting API & Ingestion Engine on port 8000..."
+python3 main.py --headless > nexustrader_log.txt 2>&1 &
 SERVER_PID=$!
 
 # Trap Ctrl+C to clean up the backend process automatically

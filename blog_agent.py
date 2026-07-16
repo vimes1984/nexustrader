@@ -474,6 +474,26 @@ def write_blog_post(markdown_content, date_str):
         f.write(new_index_content)
     logging.info(f"Blog index updated at: {index_path}")
 
+def push_to_github():
+    """Stages the generated blog posts and pushes to the GitHub remote repository."""
+    import subprocess
+    logging.info("Tying blog update back to the repository (git push)...")
+    try:
+        # Run git status/add first
+        subprocess.run(["git", "add", "blog/"], check=True)
+        # Check if there are staged changes to commit
+        status = subprocess.run(["git", "diff", "--cached", "--quiet"], capture_output=True)
+        if status.returncode != 0:
+            # There are changes to commit
+            date_str = datetime.datetime.now().strftime("%Y-%m-%d")
+            subprocess.run(["git", "commit", "-m", f"Weekly bot progress report {date_str} [automated]"], check=True)
+            subprocess.run(["git", "push", "origin", "main"], check=True)
+            logging.info("Successfully pushed weekly blog updates to GitHub remote origin/main.")
+        else:
+            logging.info("No new blog changes to push.")
+    except Exception as e:
+        logging.error(f"Failed to push blog update to GitHub: {e}")
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="NexusTrader Weekly Blog Agent")
@@ -485,6 +505,13 @@ if __name__ == "__main__":
         insert_mock_data()
         
     settings = load_settings()
+    
+    # Check if blog agent is disabled in config
+    blog_enabled = settings.get("blog_enabled", "true")
+    if blog_enabled == "false":
+        logging.info("Weekly Blog Agent is currently DISABLED in configuration. Exiting.")
+        sys.exit(0)
+        
     trades = load_trades(days_limit=args.days)
     
     # Define reporting window
@@ -497,9 +524,16 @@ if __name__ == "__main__":
     # Generate baseline template containing all data tables
     base_markdown = generate_report_template(stats, settings, start_date, end_date)
     
-    # Check if Gemini API key is available
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if api_key:
+    # Check if Gemini API key is available in DB or Environment
+    api_key = settings.get("blog_gemini_api_key", "").strip()
+    if not api_key:
+        api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+        
+    ai_enabled = settings.get("blog_ai_enabled", "false") == "true"
+    
+    blog_created = False
+    
+    if ai_enabled and api_key:
         prompt = f"""
 You are an expert quantitative researcher and algorithmic trading engineer. 
 I have a trading system named "NexusTrader" that uses a Policy Gradient Neural Network to weight 6 strategies (EMA Crossover, RSI Reversion, BB Breakout, ML Random Forest, Kalman Trend, Psych Sweep) based on Ornstein-Uhlenbeck process parameters and market indicators.
@@ -516,8 +550,15 @@ Keep ALL of the markdown tables and key-value sections exactly as they are so th
         if styled_markdown:
             write_blog_post(styled_markdown, date_str)
             print("Blog post created successfully with AI styling!")
-            sys.exit(0)
+            blog_created = True
             
-    # Fallback to base markdown if API fails or key is missing
-    write_blog_post(base_markdown, date_str)
-    print("Blog post created successfully with data template!")
+    if not blog_created:
+        # Fallback to base markdown if API fails, key is missing, or AI is disabled
+        write_blog_post(base_markdown, date_str)
+        print("Blog post created successfully with data template!")
+        
+    # Check if Git Push is enabled to publish public blog updates
+    git_push_enabled = settings.get("blog_git_push_enabled", "true") == "true"
+    if git_push_enabled:
+        push_to_github()
+
