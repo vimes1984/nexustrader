@@ -52,10 +52,21 @@ def init_db():
         pnl_percent REAL,
         exit_reason TEXT,
         entry_time REAL,
-        exit_time REAL
+        exit_time REAL,
+        strategy_signals TEXT
     )
     """)
     
+    # Check if strategy_signals column exists, if not alter the table
+    try:
+        cursor.execute("PRAGMA table_info(trades)")
+        columns = [row[1] for row in cursor.fetchall()]
+        if "strategy_signals" not in columns:
+            logging.info("Migrating trades table: adding strategy_signals column...")
+            cursor.execute("ALTER TABLE trades ADD COLUMN strategy_signals TEXT")
+    except Exception as e:
+        logging.error(f"Error migrating trades table: {e}")
+        
     # Create settings table (balance, weights)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS settings (
@@ -103,9 +114,10 @@ def save_trade(trade):
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
+        signals_str = json.dumps(trade.get('strategy_signals', []))
         cursor.execute("""
-        INSERT INTO trades (symbol, direction, quantity, entry_price, exit_price, pnl, pnl_percent, exit_reason, entry_time, exit_time)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO trades (symbol, direction, quantity, entry_price, exit_price, pnl, pnl_percent, exit_reason, entry_time, exit_time, strategy_signals)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             trade['symbol'],
             trade['direction'],
@@ -116,7 +128,8 @@ def save_trade(trade):
             float(trade['pnl_percent']),
             trade['exit_reason'],
             float(trade['entry_time']),
-            float(trade['exit_time'])
+            float(trade['exit_time']),
+            signals_str
         ))
         conn.commit()
     except Exception as e:
@@ -133,7 +146,15 @@ def load_trades():
         cursor.execute("SELECT * FROM trades ORDER BY exit_time ASC")
         rows = cursor.fetchall()
         for r in rows:
-            trades.append(dict(r))
+            trade = dict(r)
+            if "strategy_signals" in trade and trade["strategy_signals"]:
+                try:
+                    trade["strategy_signals"] = json.loads(trade["strategy_signals"])
+                except Exception:
+                    trade["strategy_signals"] = []
+            else:
+                trade["strategy_signals"] = []
+            trades.append(trade)
     except Exception as e:
         logging.error(f"Error loading trades from db: {e}")
     finally:

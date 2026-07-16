@@ -1,0 +1,523 @@
+#!/usr/bin/env python3
+import os
+import sys
+import json
+import sqlite3
+import time
+import datetime
+import logging
+import requests
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+
+DB_PATH = os.path.expanduser("~/.nexustrader/nexustrader.db")
+BLOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "blog")
+
+STRATEGY_NAMES = [
+    "EMA Crossover",
+    "RSI Reversion",
+    "BB Breakout",
+    "ML Random Forest",
+    "Kalman Trend",
+    "Psych Sweep"
+]
+
+def load_settings():
+    """Loads current orchestrator settings from sqlite DB."""
+    settings = {
+        "portfolio_balance": 100.0,
+        "risk_mode": "conservative",
+        "policy_net_weights": None
+    }
+    if not os.path.exists(DB_PATH):
+        return settings
+        
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        c.execute("SELECT key, value FROM settings")
+        for row in c.fetchall():
+            key, val = row
+            if key == "portfolio_balance":
+                settings[key] = float(val)
+            elif key == "policy_net_weights":
+                try:
+                    settings[key] = json.loads(val)
+                except Exception:
+                    settings[key] = val
+            else:
+                settings[key] = val
+        conn.close()
+    except Exception as e:
+        logging.error(f"Error loading settings: {e}")
+    return settings
+
+def load_trades(days_limit=None):
+    """Loads trades from SQLite database."""
+    trades = []
+    if not os.path.exists(DB_PATH):
+        return trades
+        
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        if days_limit:
+            cutoff = time.time() - (days_limit * 86400)
+            c.execute("SELECT * FROM trades WHERE exit_time >= ? ORDER BY exit_time ASC", (cutoff,))
+        else:
+            c.execute("SELECT * FROM trades ORDER BY exit_time ASC")
+            
+        for row in c.fetchall():
+            trade = dict(row)
+            if trade.get("strategy_signals"):
+                try:
+                    trade["strategy_signals"] = json.loads(trade["strategy_signals"])
+                except Exception:
+                    trade["strategy_signals"] = []
+            else:
+                trade["strategy_signals"] = []
+            trades.append(trade)
+        conn.close()
+    except Exception as e:
+        logging.error(f"Error loading trades: {e}")
+    return trades
+
+def insert_mock_data():
+    """Inserts realistic mock trades and settings into the database for demonstration purposes."""
+    logging.info("Populating mock trading data...")
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    
+    # Initialize DB schema if it doesn't exist
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS trades (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        symbol TEXT,
+        direction TEXT,
+        quantity REAL,
+        entry_price REAL,
+        exit_price REAL,
+        pnl REAL,
+        pnl_percent REAL,
+        exit_reason TEXT,
+        entry_time REAL,
+        exit_time REAL,
+        strategy_signals TEXT
+    )
+    """)
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT
+    )
+    """)
+    
+    # Check current trades count
+    c.execute("SELECT count(*) FROM trades")
+    trades_count = c.fetchone()[0]
+    
+    if trades_count > 0:
+        logging.info(f"Database already contains {trades_count} trades. Skipping mock data generation.")
+        conn.close()
+        return
+
+    # Mock trades list
+    # Let's generate 12 mock trades closed over the last 10 days
+    now = time.time()
+    mock_trades = [
+        # (symbol, direction, quantity, entry_price, exit_price, pnl, pnl_percent, exit_reason, entry_offset_days, exit_offset_days, strategy_signals)
+        ("ETH-EUR", "BUY", 0.05, 3120.0, 3198.0, 3.90, 0.025, "Take Profit", 9.5, 9.2, [1.0, 0.0, 0.0, 1.0, 1.0, 0.0]),
+        ("SOL-EUR", "BUY", 1.2, 142.5, 149.6, 8.52, 0.0498, "Take Profit", 8.2, 8.0, [1.0, 1.0, 1.0, 0.0, 1.0, 1.0]),
+        ("BTC-EUR", "SELL", 0.002, 58200.0, 58950.0, -1.50, -0.0128, "Stop Loss", 7.1, 6.9, [-1.0, 0.0, -1.0, -1.0, 0.0, -1.0]),
+        ("ETH-EUR", "BUY", 0.05, 3180.0, 3132.3, -2.38, -0.015, "Stop Loss", 6.5, 6.3, [0.0, 1.0, 1.0, -1.0, 0.0, 1.0]),
+        ("SOL-EUR", "SELL", 1.2, 151.2, 145.1, 7.32, 0.0403, "Take Profit", 5.4, 5.2, [-1.0, 1.0, 0.0, 1.0, -1.0, 1.0]),
+        ("XRP-EUR", "BUY", 150.0, 0.542, 0.558, 2.40, 0.0295, "Take Profit", 4.8, 4.5, [1.0, 0.0, 1.0, 1.0, 0.0, 0.0]),
+        ("BTC-EUR", "BUY", 0.002, 59100.0, 60873.0, 3.55, 0.030, "Take Profit", 3.9, 3.5, [1.0, 0.0, -1.0, 1.0, 1.0, 0.0]),
+        ("ETH-EUR", "BUY", 0.06, 3210.0, 3290.2, 4.81, 0.0249, "Take Profit", 3.1, 2.9, [1.0, 1.0, 0.0, 0.0, 1.0, 0.0]),
+        ("SOL-EUR", "BUY", 1.3, 148.4, 145.4, -3.90, -0.0202, "Stop Loss", 2.5, 2.3, [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]),
+        ("DOGE-EUR", "BUY", 800.0, 0.115, 0.122, 5.60, 0.0608, "Take Profit", 1.8, 1.5, [1.0, 0.0, 1.0, 1.0, 0.0, 1.5]),
+        ("ETH-EUR", "SELL", 0.06, 3295.0, 3245.5, 2.97, 0.015, "Take Profit", 1.1, 0.8, [-1.0, 1.0, 1.0, 0.0, -1.0, 1.0]),
+        ("BTC-EUR", "BUY", 0.002, 61200.0, 61506.0, 0.61, 0.005, "Take Profit", 0.4, 0.1, [1.0, 0.0, 0.0, 1.0, 1.0, 0.0])
+    ]
+    
+    for t in mock_trades:
+        sym, direction, qty, entry, exit, pnl, pnl_pct, reason, entry_off, exit_off, signals = t
+        entry_time = now - (entry_off * 86400)
+        exit_time = now - (exit_off * 86400)
+        c.execute("""
+        INSERT INTO trades (symbol, direction, quantity, entry_price, exit_price, pnl, pnl_percent, exit_reason, entry_time, exit_time, strategy_signals)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (sym, direction, qty, entry, exit, pnl, pnl_pct, reason, entry_time, exit_time, json.dumps(signals)))
+        
+    # Save settings
+    c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('portfolio_balance', '129.90')")
+    c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('risk_mode', 'aggressive')")
+    
+    # Mock Policy Network weights
+    weights = [0.28, 0.08, 0.06, 0.22, 0.26, 0.10]
+    weights_json = json.dumps({
+        "W1": [[0.1]*12]*7,
+        "b1": [[0.0]*12],
+        "W2": [[0.1]*6]*12,
+        "b2": [[0.0]*6]
+    })
+    # We save a format that matches weights query
+    c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('policy_net_weights', ?)", (weights_json,))
+    
+    conn.commit()
+    conn.close()
+    logging.info("Mock database populated successfully!")
+
+def analyze_weekly_performance(trades):
+    """Calculates all key statistics from the weekly trade log."""
+    if not trades:
+        return {}
+        
+    pnl_list = [t["pnl"] for t in trades]
+    pnl_pct_list = [t["pnl_percent"] for t in trades]
+    
+    total_trades = len(trades)
+    winning_trades = [t for t in trades if t["pnl"] > 0]
+    losing_trades = [t for t in trades if t["pnl"] <= 0]
+    
+    wins = len(winning_trades)
+    losses = len(losing_trades)
+    win_rate = (wins / total_trades) if total_trades > 0 else 0.0
+    
+    total_pnl = sum(pnl_list)
+    avg_pnl = total_pnl / total_trades if total_trades > 0 else 0.0
+    avg_pnl_pct = sum(pnl_pct_list) / total_trades if total_trades > 0 else 0.0
+    
+    best_trade = max(trades, key=lambda x: x["pnl"]) if trades else None
+    worst_trade = min(trades, key=lambda x: x["pnl"]) if trades else None
+    
+    sum_win_pnl = sum([t["pnl"] for t in winning_trades])
+    sum_loss_pnl = sum([t["pnl"] for t in losing_trades])
+    profit_factor = abs(sum_win_pnl / sum_loss_pnl) if sum_loss_pnl != 0 else float('inf')
+    
+    # Strategy attribution
+    # Initialize counts and PnL for each of the 6 strategies
+    strat_perf = {name: {"trades": 0, "wins": 0, "pnl": 0.0} for name in STRATEGY_NAMES}
+    
+    for t in trades:
+        signals = t.get("strategy_signals", [])
+        if len(signals) < len(STRATEGY_NAMES):
+            continue
+            
+        direction_val = 1.0 if t["direction"] == "BUY" else -1.0
+        for i, name in enumerate(STRATEGY_NAMES):
+            sig = signals[i]
+            # Alignment check: if signal aligns with direction, this strategy contributed to trade entry
+            if sig * direction_val > 0:
+                strat_perf[name]["trades"] += 1
+                strat_perf[name]["pnl"] += t["pnl"]
+                if t["pnl"] > 0:
+                    strat_perf[name]["wins"] += 1
+                    
+    # Format strategy statistics
+    for name in STRATEGY_NAMES:
+        t_count = strat_perf[name]["trades"]
+        w_count = strat_perf[name]["wins"]
+        strat_perf[name]["win_rate"] = (w_count / t_count) if t_count > 0 else 0.0
+        
+    return {
+        "total_trades": total_trades,
+        "wins": wins,
+        "losses": losses,
+        "win_rate": win_rate,
+        "total_pnl": total_pnl,
+        "avg_pnl": avg_pnl,
+        "avg_pnl_pct": avg_pnl_pct,
+        "profit_factor": profit_factor,
+        "best_trade": best_trade,
+        "worst_trade": worst_trade,
+        "strategy_performance": strat_perf
+    }
+
+def get_ascii_bar(val, max_val=1.0, width=15):
+    """Generates an ASCII bar for visual weight comparison."""
+    if max_val == 0:
+        return "░" * width
+    pct = val / max_val
+    filled = int(round(pct * width))
+    filled = max(0, min(width, filled))
+    return "█" * filled + "░" * (width - filled)
+
+def generate_report_template(stats, settings, start_date, end_date):
+    """Generates a beautiful weekly blog report using stats and settings."""
+    date_str = f"{start_date.strftime('%B %d, %Y')} to {end_date.strftime('%B %d, %Y')}"
+    
+    # Calculate balance changes
+    current_bal = settings["portfolio_balance"]
+    total_pnl = stats.get("total_pnl", 0.0)
+    starting_bal = current_bal - total_pnl
+    return_pct = (total_pnl / starting_bal) * 100 if starting_bal != 0 else 0.0
+    
+    # Risk Profile
+    risk_mode = settings.get("risk_mode", "conservative").upper()
+    
+    # Policy weights representation
+    weights_section = ""
+    # Try to load weights from SQLite
+    weights_list = [1.0/len(STRATEGY_NAMES)] * len(STRATEGY_NAMES)
+    
+    # Let's read weights from policy network if possible
+    # W1, b1, etc are network weights, we need to run forward pass on a mock state
+    # or just extract the weights if we can.
+    # To keep it simple, we can load active weights from the dashboard api or compute them
+    # Let's inspect database.py logic - policy network weights are saved to key 'policy_net_weights'
+    # Actually, we can fetch active weights or use the last loaded weights from DB
+    # Let's write code to query settings table for 'policy_net_weights'
+    weights_dict = {}
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        c = conn.cursor()
+        # Let's see if we have weights saved directly or in network JSON
+        c.execute("SELECT value FROM settings WHERE key='policy_net_weights'")
+        row = c.fetchone()
+        if row:
+            # Check if it contains the neural network weights or raw array
+            val = json.loads(row[0])
+            if "W1" in val:
+                # It's neural network weights. We can simulate a standard state to compute probabilities,
+                # or just look at last weights. Wait, we can see if there are logs, or we can just run forward pass on average state.
+                # Let's run a forward pass!
+                from learning_engine import PolicyNetwork
+                net = PolicyNetwork(state_dim=7, hidden_dim=12, action_dim=6)
+                net.from_json(row[0])
+                # standard/average state: regime=0.5, theta=0.1, rsi=0.0, macd=0.0, bb=0.0, atr=0.05, win_trend=0.5
+                probs = net.forward([0.5, 0.1, 0.0, 0.0, 0.0, 0.05, 0.5])
+                weights_list = probs.tolist()
+            else:
+                weights_list = val
+        conn.close()
+    except Exception as e:
+        # Fallback: if we can't load, check if there are recent ticks to get weights or just use equal weights
+        logging.warning(f"Could not compute neural weights: {e}. Using baseline weights.")
+        
+    max_w = max(weights_list) if weights_list else 1.0
+    for i, name in enumerate(STRATEGY_NAMES):
+        w = weights_list[i]
+        bar = get_ascii_bar(w, max_w, width=15)
+        weights_section += f"| **{name}** | {w*100:.1f}% | `{bar}` |\n"
+
+    # Strategy Attribution Table
+    attribution_rows = ""
+    if stats:
+        for name in STRATEGY_NAMES:
+            perf = stats["strategy_performance"][name]
+            pnl_val = perf["pnl"]
+            pnl_str = f"€{pnl_val:+.2f}"
+            wr_str = f"{perf['win_rate']*100:.1f}%" if perf["trades"] > 0 else "-"
+            attribution_rows += f"| {name} | {perf['trades']} | {wr_str} | {pnl_str} |\n"
+    else:
+        attribution_rows = "| - | - | - | - |\n"
+
+    # Best / Worst Trades
+    best_trade_str = "N/A"
+    worst_trade_str = "N/A"
+    if stats.get("best_trade"):
+        bt = stats["best_trade"]
+        best_trade_str = f"**{bt['symbol']}** ({bt['direction']}) - Exit PnL: **€{bt['pnl']:.2f}** ({bt['pnl_percent']*100:+.2f}%) via *{bt['exit_reason']}*"
+    if stats.get("worst_trade"):
+        wt = stats["worst_trade"]
+        worst_trade_str = f"**{wt['symbol']}** ({wt['direction']}) - Exit PnL: **€{wt['pnl']:.2f}** ({wt['pnl_percent']*100:+.2f}%) via *{wt['exit_reason']}*"
+
+    # Trade summary text
+    trade_count = stats.get("total_trades", 0)
+    win_rate = stats.get("win_rate", 0.0) * 100
+    profit_factor = stats.get("profit_factor", 0.0)
+    pf_str = f"{profit_factor:.2f}" if profit_factor != float('inf') else "∞"
+    
+    # ASCII sparkline or summary chart
+    # Let's generate a daily performance summary table or cumulative chart
+    pnl_chart_str = ""
+    if stats and trade_count > 0:
+        # Show cumulative balance progression
+        cum_bal = starting_bal
+        pnl_chart_str = "\n### Cumulative Balance Progression\n"
+        pnl_chart_str += "| Trade # | Ticker | Side | Net PnL | Portfolio Balance |\n"
+        pnl_chart_str += "| --- | --- | --- | --- | --- |\n"
+        pnl_chart_str += f"| Start | - | - | - | €{starting_bal:.2f} |\n"
+        for idx, t in enumerate(trades):
+            cum_bal += t["pnl"]
+            pnl_chart_str += f"| {idx+1} | {t['symbol']} | {t['direction']} | €{t['pnl']:+.2f} | €{cum_bal:.2f} |\n"
+
+    template = f"""# Weekly Performance Log: NexusTrader Algorithmic Operations
+**Reporting Period:** {date_str}  
+**System Status:** ACTIVE 🟢  
+
+Welcome to the weekly performance report of **NexusTrader**, a self-learning quantitative trading bot driven by an ensemble of technical strategies and optimized in real-time by a Policy Gradient Neural Network.
+
+Below is an extensive breakdown of the system's performance, resource allocations, neural network adaptations, and trading diagnostics.
+
+---
+
+## 📊 Executive Portfolio Summary
+
+| Metric | Value |
+| :--- | :--- |
+| **Current Account Equity** | **€{current_bal:.2f}** |
+| **Starting Balance (Week Start)** | €{starting_bal:.2f} |
+| **Net PnL (Euros)** | **€{total_pnl:+.2f}** |
+| **Weekly Return (%)** | **{return_pct:+.2f}%** |
+| **Risk Profile Configuration** | `{risk_mode}` |
+| **Active Trade Count** | {trade_count} |
+| **Overall System Win Rate** | **{win_rate:.1f}%** |
+| **Profit Factor** | **{pf_str}** |
+
+---
+
+## 🧠 Neural Policy Network Allocations
+The Policy Gradient Neural Network dynamically distributes weights among individual strategies on each tick. It monitors indicators (OU market regime parameters, RSI, Bollinger position, ATR volatility, and win rate trend) to shift allocations toward strategies that perform best in current conditions.
+
+Current baseline weights computed by the neural network:
+
+| Strategy | Allocation Weight | Visual Distribution |
+| :--- | :--- | :--- |
+{weights_section}
+
+---
+
+## 📈 Detailed Strategy Attribution
+This table highlights how individual strategies contributed to the trades opened during this period. A strategy is considered "aligned" if its voting signal matches the entry direction of the executed trade.
+
+| Strategy Component | Aligned Trades | Win Rate When Aligned | Net Strategy PnL |
+| :--- | :--- | :--- | :--- |
+{attribution_rows}
+
+---
+
+## 🔍 Trade Diagnostics & Extremes
+
+* 🟢 **Best Execution:** {best_trade_str}
+* 🔴 **Worst Drawdown:** {worst_trade_str}
+
+{pnl_chart_str}
+
+---
+
+## 💡 System Insights & Quantitative Summary
+
+1. **Regime Switching Adaptability:** The system uses Ornstein-Uhlenbeck process parameters to distinguish between trending and mean-reverting states. Under mean-reverting regimes, the neural network boosts weights for the **RSI Reversion**, **BB Breakout**, and **Psych Sweep** components, while suppressing trend-following metrics.
+2. **Online Policy Gradient Optimization:** After each trade closes, the neural network runs a policy gradient backward pass using trade PnL as the reward. Successful trades strengthen the neural pathways of the voting strategies, while losing trades penalize their weights.
+3. **Volatility-Adjusted Risk Sizing:** Take-profit and stop-loss boundaries are automatically computed using Average True Range (ATR) multiples. Sizing is governed by the Kelly Criterion (scaled by a fraction based on the risk profile), preventing catastrophic risk exposure.
+
+---
+*Report generated automatically by the NexusTrader Blog Agent.*
+"""
+    return template
+
+def query_gemini_api(api_key, context_prompt):
+    """Queries Gemini 2.5 Flash API to write a witty, professional blog post."""
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+    headers = {"Content-Type": "application/json"}
+    payload = {
+        "contents": [
+            {
+                "parts": [
+                    {"text": context_prompt}
+                ]
+            }
+        ]
+    }
+    
+    try:
+        logging.info("Sending request to Gemini API...")
+        response = requests.post(url, headers=headers, json=payload, timeout=30)
+        if response.status_code == 200:
+            data = response.json()
+            return data["candidates"][0]["content"]["parts"][0]["text"]
+        else:
+            logging.error(f"Gemini API returned error code {response.status_code}: {response.text}")
+    except Exception as e:
+        logging.error(f"Error querying Gemini API: {e}")
+    return None
+
+def write_blog_post(markdown_content, date_str):
+    """Writes the markdown report to the blog directory and updates index."""
+    os.makedirs(BLOG_DIR, exist_ok=True)
+    
+    filename = f"weekly_report_{date_str}.md"
+    filepath = os.path.join(BLOG_DIR, filename)
+    
+    # Save the blog post
+    with open(filepath, "w") as f:
+        f.write(markdown_content)
+    logging.info(f"Blog post written to: {filepath}")
+    
+    # Update README index
+    index_path = os.path.join(BLOG_DIR, "README.md")
+    existing_content = ""
+    if os.path.exists(index_path):
+        with open(index_path, "r") as f:
+            existing_content = f.read()
+            
+    header = "# 📓 NexusTrader Operations Log\nWelcome to the operational blog for NexusTrader. Here you can track weekly system reports, neural network policy weight adaptations, and trade performance analytics.\n\n## 📋 Report Index\n"
+    
+    # Parse existing links
+    links = []
+    if existing_content:
+        for line in existing_content.split("\n"):
+            if "- [" in line and ".md)" in line:
+                if filename not in line:  # Avoid duplicating the current file link
+                    links.append(line)
+                    
+    # Insert new link at the top of the index
+    new_link = f"- [{date_str} - Weekly Performance Log](file://{filepath})"
+    links.insert(0, new_link)
+    
+    new_index_content = header + "\n".join(links) + "\n"
+    with open(index_path, "w") as f:
+        f.write(new_index_content)
+    logging.info(f"Blog index updated at: {index_path}")
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="NexusTrader Weekly Blog Agent")
+    parser.add_argument("--mock", action="store_true", help="Insert mock trade data into SQLite database before running")
+    parser.add_argument("--days", type=int, default=7, help="Number of days of history to include in the report")
+    args = parser.parse_args()
+
+    if args.mock:
+        insert_mock_data()
+        
+    settings = load_settings()
+    trades = load_trades(days_limit=args.days)
+    
+    # Define reporting window
+    end_date = datetime.datetime.now()
+    start_date = end_date - datetime.timedelta(days=args.days)
+    date_str = end_date.strftime("%Y_%m_%d")
+    
+    stats = analyze_weekly_performance(trades)
+    
+    # Generate baseline template containing all data tables
+    base_markdown = generate_report_template(stats, settings, start_date, end_date)
+    
+    # Check if Gemini API key is available
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if api_key:
+        prompt = f"""
+You are an expert quantitative researcher and algorithmic trading engineer. 
+I have a trading system named "NexusTrader" that uses a Policy Gradient Neural Network to weight 6 strategies (EMA Crossover, RSI Reversion, BB Breakout, ML Random Forest, Kalman Trend, Psych Sweep) based on Ornstein-Uhlenbeck process parameters and market indicators.
+
+Here is the raw data and structured markdown for this week's report:
+```markdown
+{base_markdown}
+```
+
+Write a highly detailed, witty, professional, and engaging blog post based on this data.
+Keep ALL of the markdown tables and key-value sections exactly as they are so the data isn't lost, but rewrite the opening introduction, system insights, trade diagnostics, and conclusion. Add comments about what the metrics imply (e.g. why the profit factor is good or bad, what the network weights say about current market conditions, and how the policy gradient learned). Make it sound like a premium market commentary from a high-frequency trading firm. Ensure the output is formatted in clean Github Markdown. Do not include standard greetings or explanations of what you did—only output the final markdown text.
+"""
+        styled_markdown = query_gemini_api(api_key, prompt)
+        if styled_markdown:
+            write_blog_post(styled_markdown, date_str)
+            print("Blog post created successfully with AI styling!")
+            sys.exit(0)
+            
+    # Fallback to base markdown if API fails or key is missing
+    write_blog_post(base_markdown, date_str)
+    print("Blog post created successfully with data template!")
