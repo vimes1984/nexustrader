@@ -62,6 +62,7 @@ class ExecutionEngine:
         logging.info(f"Loaded {len(self.closed_trades)} closed trades from DB.")
         
         self.learning_callback = None
+        self.pending_limit_orders = {}  # symbol -> pending order dict
 
     def execute_order_on_broker(self, symbol, side, qty, price):
         """Sends order to live broker API if trading_mode is 'live'."""
@@ -98,9 +99,9 @@ class ExecutionEngine:
         self.learning_callback = callback
 
     def open_position(self, symbol, evaluation, strategy_signals):
-        """Opens a position based on an evaluation dict from the ProbabilityEngine."""
-        if symbol in self.active_positions:
-            logging.warning(f"Position already open for {symbol}. Skipping.")
+        """Opens a position or queues a limit order based on trade viability."""
+        if symbol in self.active_positions or symbol in self.pending_limit_orders:
+            logging.warning(f"Position or pending order already exists for {symbol}. Skipping.")
             return False
 
         direction = evaluation["direction"]
@@ -109,42 +110,87 @@ class ExecutionEngine:
         sl = evaluation["stop_loss"]
         kelly_fraction = evaluation["kelly_fraction"]
 
-        # Calculate position size in Euros (e.g. 5% of account balance)
+        # Calculate position size in Euros
         position_value = self.balance * kelly_fraction
-        
-        # Calculate quantity
         quantity = position_value / entry_price
-        
-        # Place order on live broker if live mode is enabled
-        success = self.execute_order_on_broker(symbol, direction.lower(), quantity, entry_price)
-        if not success:
-            logging.error(f"Could not execute entry order for {symbol} on live broker. Position aborted.")
-            return False
-            
-        # Calculate transaction fee
         fee = position_value * self.transaction_fee_rate
-        self.balance -= fee
-        
-        # Save updated balance to DB
-        database.save_setting("portfolio_balance", self.balance)
 
-        self.active_positions[symbol] = {
-            "symbol": symbol,
-            "direction": direction,
-            "entry_price": entry_price,
-            "quantity": quantity,
-            "take_profit": tp,
-            "stop_loss": sl,
-            "entry_time": time.time(),
-            "strategy_signals": strategy_signals,  # Keep record of strategy signals at entry
-            "fee_paid": fee
-        }
-
-        logging.info(f"Opened {direction} position for {symbol}: Qty {quantity:.4f} at {entry_price:.2f}. Fee: {fee:.2f}")
-        return True
+        if self.trading_mode == "live":
+            # For live trading, execute immediately on the broker API
+            success = self.execute_order_on_broker(symbol, direction.lower(), quantity, entry_price)
+            if not success:
+                logging.error(f"Could not execute entry order for {symbol} on live broker. Position aborted.")
+                return False
+                
+            self.balance -= fee
+            database.save_setting("portfolio_balance", self.balance)
+            
+            self.active_positions[symbol] = {
+                "symbol": symbol,
+                "direction": direction,
+                "entry_price": entry_price,
+                "quantity": quantity,
+                "take_profit": tp,
+                "stop_loss": sl,
+                "entry_time": time.time(),
+                "strategy_signals": strategy_signals,
+                "fee_paid": fee
+            }
+            logging.info(f"Opened live {direction} position for {symbol}: Qty {quantity:.4f} at {entry_price:.2f}. Fee: {fee:.2f}")
+            return True
+        else:
+            # For paper trading, place a simulated limit order
+            self.pending_limit_orders[symbol] = {
+                "symbol": symbol,
+                "direction": direction,
+                "limit_price": entry_price,
+                "quantity": quantity,
+                "take_profit": tp,
+                "stop_loss": sl,
+                "entry_time": time.time(),
+                "strategy_signals": strategy_signals,
+                "fee": fee
+            }
+            logging.info(f"[LIMIT ORDER PLACED] Placed pending limit {direction} order for {symbol} at {entry_price:.2f}")
+            return True
 
     def update_positions(self, symbol, current_price):
-        """Checks if active positions have hit TP or SL at the current price tick."""
+        """Checks pending limit orders for fills and active positions for TP/SL hits."""
+        # 1. Evaluate pending limit orders for this symbol (fill check)
+        if symbol in self.pending_limit_orders:
+            order = self.pending_limit_orders[symbol]
+            direction = order["direction"]
+            limit_price = order["limit_price"]
+            
+            fill_order = False
+            if direction == "BUY" and current_price <= limit_price:
+                fill_order = True
+            elif direction == "SELL" and current_price >= limit_price:
+                fill_order = True
+                
+            if fill_order:
+                # Deduct fee and open active position
+                self.balance -= order["fee"]
+                database.save_setting("portfolio_balance", self.balance)
+                
+                pos = {
+                    "symbol": symbol,
+                    "direction": direction,
+                    "entry_price": limit_price,
+                    "quantity": order["quantity"],
+                    "take_profit": order["take_profit"],
+                    "stop_loss": order["stop_loss"],
+                    "entry_time": time.time(),
+                    "strategy_signals": order["strategy_signals"],
+                    "fee_paid": order["fee"]
+                }
+                self.active_positions[symbol] = pos
+                logging.info(f"[LIMIT ORDER FILLED] Filled pending limit {direction} order for {symbol} at {limit_price:.2f}. Fee: {order['fee']:.2f}")
+                del self.pending_limit_orders[symbol]
+                
+                return {"event": "filled", "data": pos}
+                
+        # 2. Evaluate active positions for this symbol (TP/SL check)
         if symbol not in self.active_positions:
             return None
 
@@ -231,7 +277,7 @@ class ExecutionEngine:
                 except Exception as e:
                     logging.error(f"Error in learning callback during trade closure: {e}")
 
-            return closed_trade_record
+            return {"event": "closed", "data": closed_trade_record}
 
         return None
 

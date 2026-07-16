@@ -169,21 +169,30 @@ class NexusTraderOrchestrator:
         base_weights = learner.select_weights(state)
         ensemble.weights = base_weights
         
-        # 2. Update existing positions (check if TP/SL hit)
-        closed_trade = self.execution_engine.update_positions(ticker, current_price)
+        # 2. Update existing positions (check if TP/SL hit or limit orders filled)
+        update_event = self.execution_engine.update_positions(ticker, current_price)
         
         # Calculate current total equity across all tickers
         current_prices = {t: float(r['close']) for t, r in self.latest_ticks.items()}
         current_equity = self.execution_engine.get_equity(current_prices)
         
-        if closed_trade:
-            # Broadcast closed trade
-            self._run_async(self.broadcast_message({
-                "type": "trade_closed",
-                "trade": closed_trade,
-                "balance": self.execution_engine.balance,
-                "equity": current_equity
-            }))
+        if update_event:
+            if update_event["event"] == "closed":
+                # Broadcast closed trade
+                self._run_async(self.broadcast_message({
+                    "type": "trade_closed",
+                    "trade": update_event["data"],
+                    "balance": self.execution_engine.balance,
+                    "equity": current_equity
+                }))
+            elif update_event["event"] == "filled":
+                # Broadcast filled order to open trade
+                self._run_async(self.broadcast_message({
+                    "type": "trade_opened",
+                    "ticker": ticker,
+                    "position": update_event["data"],
+                    "balance": self.execution_engine.balance
+                }))
             
         # 3. If no position is open for this ticker, check strategy ensemble signals
         pos_open = ticker in self.execution_engine.active_positions
@@ -223,12 +232,20 @@ class NexusTraderOrchestrator:
                     
                     if opened:
                         trade_opened = True
-                        self._run_async(self.broadcast_message({
-                            "type": "trade_opened",
-                            "ticker": ticker,
-                            "position": self.execution_engine.active_positions[ticker],
-                            "balance": self.execution_engine.balance
-                        }))
+                        if self.execution_engine.trading_mode == "live":
+                            self._run_async(self.broadcast_message({
+                                "type": "trade_opened",
+                                "ticker": ticker,
+                                "position": self.execution_engine.active_positions[ticker],
+                                "balance": self.execution_engine.balance
+                            }))
+                        else:
+                            self._run_async(self.broadcast_message({
+                                "type": "limit_order_placed",
+                                "ticker": ticker,
+                                "order": self.execution_engine.pending_limit_orders[ticker],
+                                "balance": self.execution_engine.balance
+                            }))
 
         # 4. Broadcast real-time update to all clients
         self._run_async(self.broadcast_message({
