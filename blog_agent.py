@@ -19,7 +19,8 @@ STRATEGY_NAMES = [
     "BB Breakout",
     "ML Random Forest",
     "Kalman Trend",
-    "Psych Sweep"
+    "Psych Sweep",
+    "News Sentiment"
 ]
 
 def load_settings():
@@ -319,10 +320,10 @@ def generate_report_template(stats, settings, start_date, end_date, op_mode):
                 # or just look at last weights. Wait, we can see if there are logs, or we can just run forward pass on average state.
                 # Let's run a forward pass!
                 from learning_engine import PolicyNetwork
-                net = PolicyNetwork(state_dim=7, hidden_dim=12, action_dim=6)
+                net = PolicyNetwork(state_dim=8, hidden_dim=12, action_dim=7)
                 net.from_json(row[0])
-                # standard/average state: regime=0.5, theta=0.1, rsi=0.0, macd=0.0, bb=0.0, atr=0.05, win_trend=0.5
-                probs = net.forward([0.5, 0.1, 0.0, 0.0, 0.0, 0.05, 0.5])
+                # standard/average state with 8 dimensions: regime, theta, rsi, macd, bb, atr, win_trend, sentiment
+                probs = net.forward([0.5, 0.1, 0.0, 0.0, 0.0, 0.05, 0.5, 0.0])
                 weights_list = probs.tolist()
             else:
                 weights_list = val

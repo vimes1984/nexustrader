@@ -161,6 +161,18 @@ class MLPredictorStrategy(TradingStrategy):
             logging.error(f"Error generating ML signal: {e}")
         return 0.0
 
+class NewsSentimentStrategy:
+    def __init__(self):
+        self.name = "News Sentiment"
+
+    def generate_signal(self, row, history_df=None):
+        sentiment = float(row.get("sentiment", 0.0))
+        if sentiment >= 0.15:
+            return 1.0
+        elif sentiment <= -0.15:
+            return -1.0
+        return 0.0
+
 class StrategyEnsemble:
     def __init__(self, history_df=None):
         self.strategies = [
@@ -169,7 +181,8 @@ class StrategyEnsemble:
             BollingerBandsStrategy(),
             MLPredictorStrategy(),
             KalmanTrendStrategy(),
-            PsychologicalSweepStrategy()
+            PsychologicalSweepStrategy(),
+            NewsSentimentStrategy()
         ]
         
         # Initialize strategy weights equally

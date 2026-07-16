@@ -93,11 +93,11 @@ class PolicyNetwork:
 
 
 class LearningEngine:
-    def __init__(self, num_strategies=6, learning_rate=0.05, weight_floor=0.05):
+    def __init__(self, num_strategies=7, learning_rate=0.05, weight_floor=0.05):
         self.num_strategies = num_strategies
         self.weight_floor = weight_floor
         self.policy_net = PolicyNetwork(
-            state_dim=7, 
+            state_dim=8, 
             hidden_dim=12, 
             action_dim=num_strategies, 
             learning_rate=learning_rate
@@ -139,7 +139,10 @@ class LearningEngine:
             wins = sum(1 for t in recent_trades if t['pnl'] > 0)
             win_trend = wins / len(recent_trades)
 
-        return [is_mr, theta, rsi, macd_norm, bb_pos, atr_ratio, win_trend]
+        # 7. Real-time news sentiment (value in [-1.0, 1.0])
+        sentiment = float(row.get('sentiment', 0.0))
+
+        return [is_mr, theta, rsi, macd_norm, bb_pos, atr_ratio, win_trend, sentiment]
 
     def select_weights(self, state):
         """Queries the Policy Network for optimal strategy weights given current state."""

@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import sys
 import os
+import time
 
 def get_resource_path(relative_path):
     """ Get absolute path to resource, works for dev and for PyInstaller """
@@ -38,6 +39,8 @@ class NexusTraderOrchestrator:
         self.strategy_ensembles = {}
         self.learning_engines = {}
         self.latest_ticks = {}
+        self.latest_sentiments = {t: 0.0 for t in self.tickers}
+        self.last_sentiment_times = {t: 0.0 for t in self.tickers}
         
         self.probability_engine = ProbabilityEngine(kelly_fraction=0.2)
         self.execution_engine = ExecutionEngine(initial_balance=100.0)
@@ -149,6 +152,25 @@ class NexusTraderOrchestrator:
 
     def process_tick(self, row, ticker):
         """Orchestrates single price tick logic for a specific ticker."""
+        # Periodically refresh news sentiment in a background thread to prevent loop blocking
+        curr_time = time.time()
+        if curr_time - self.last_sentiment_times.get(ticker, 0.0) >= 300.0:
+            self.last_sentiment_times[ticker] = curr_time
+            
+            async def update_sentiment(t=ticker):
+                try:
+                    loop = asyncio.get_running_loop()
+                    from sentiment_analyzer import fetch_ticker_sentiment
+                    score = await loop.run_in_executor(None, fetch_ticker_sentiment, t)
+                    self.latest_sentiments[t] = score
+                except Exception as ex:
+                    logging.error(f"Error updating news sentiment for {t}: {ex}")
+            
+            self._run_async(update_sentiment(ticker))
+
+        # Inject cached sentiment score into row dictionary
+        row['sentiment'] = self.latest_sentiments.get(ticker, 0.0)
+        
         self.latest_ticks[ticker] = row
         current_price = float(row['close'])
         atr = row.get('atr', None)
