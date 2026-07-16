@@ -1,6 +1,10 @@
 # Weekly Performance Log: NexusTrader Algorithmic Operations
 **Reporting Period:** July 09, 2026 to July 16, 2026  
 **System Status:** ACTIVE 🟢  
+> [!NOTE]
+> **Operational Status:** `SAMPLE DATA (MOCK TEST DATA)`  
+> This report was generated using synthetic trade history for demonstration and testing purposes. No assets were traded. No real money or live connection was active.
+
 
 Welcome to the weekly performance report of **NexusTrader**, a self-learning quantitative trading bot driven by an ensemble of technical strategies and optimized in real-time by a Policy Gradient Neural Network.
 
