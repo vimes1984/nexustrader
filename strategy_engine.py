@@ -30,14 +30,17 @@ class EMACrossoverStrategy(TradingStrategy):
 class RSIStrategy(TradingStrategy):
     def __init__(self, oversold=35, overbought=65):
         super().__init__("RSI Reversion")
-        self.oversold = oversold
-        self.overbought = overbought
+        self.default_oversold = oversold
+        self.default_overbought = overbought
 
     def generate_signal(self, row, history=None):
+        import database
+        oversold = float(database.load_setting("opt_rsi_oversold", str(self.default_oversold)))
+        overbought = float(database.load_setting("opt_rsi_overbought", str(self.default_overbought)))
         rsi = row.get('rsi', 50)
-        if rsi < self.oversold:
+        if rsi < oversold:
             return 1.0  # Oversold -> Buy
-        elif rsi > self.overbought:
+        elif rsi > overbought:
             return -1.0  # Overbought -> Sell
         return 0.0
 
@@ -63,13 +66,17 @@ class KalmanTrendStrategy(TradingStrategy):
         self.kf = KalmanFilterPrice(process_variance=1e-5, measurement_variance=1e-2)
 
     def generate_signal(self, row, history=None):
+        import database
         close = row.get('close', 0)
         kf_price = self.kf.update(close)
         
-        # Kalman crossover signal with 0.1% trend confirmation filter
-        if close > kf_price * 1.001:
+        # Load optimized threshold parameter (default to 0.001 / 0.1%)
+        threshold = float(database.load_setting("opt_kalman_threshold", "0.001"))
+        
+        # Kalman crossover signal with trend confirmation filter
+        if close > kf_price * (1.0 + threshold):
             return 1.0  # Price above Kalman line -> Buy Trend
-        elif close < kf_price * 0.999:
+        elif close < kf_price * (1.0 - threshold):
             return -1.0  # Price below Kalman line -> Sell Trend
         return 0.0
 

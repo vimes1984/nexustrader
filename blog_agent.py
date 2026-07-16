@@ -310,7 +310,7 @@ def generate_report_template(stats, settings, start_date, end_date, op_mode):
         conn = sqlite3.connect(DB_PATH)
         c = conn.cursor()
         # Let's see if we have weights saved directly or in network JSON
-        c.execute("SELECT value FROM settings WHERE key='policy_net_weights'")
+        c.execute("SELECT value FROM settings WHERE key LIKE 'policy_net_weights_%' LIMIT 1")
         row = c.fetchone()
         if row:
             # Check if it contains the neural network weights or raw array
@@ -402,6 +402,16 @@ def generate_report_template(stats, settings, start_date, end_date, op_mode):
         except Exception:
             pass
 
+    # Load weekly self-improvement report if it exists
+    self_improvement_section = ""
+    imp_report_path = os.path.join(BLOG_DIR, "daily_summaries", "weekly_self_improvement.md")
+    if os.path.exists(imp_report_path):
+        try:
+            with open(imp_report_path, "r") as f:
+                self_improvement_section = "\n" + f.read() + "\n---\n"
+        except Exception:
+            pass
+
     template = f"""# Weekly Performance Log: NexusTrader Algorithmic Operations
 **Reporting Period:** {date_str}  
 **System Status:** ACTIVE 🟢  
@@ -448,6 +458,7 @@ Current baseline weights computed by the neural network:
 
 ---
 {sentiment_opt_section}
+{self_improvement_section}
 ## 📈 Detailed Strategy Attribution
 This table highlights how individual strategies contributed to the trades opened during this period. A strategy is considered "aligned" if its voting signal matches the entry direction of the executed trade.
 
@@ -604,6 +615,13 @@ if __name__ == "__main__":
         optimize_sentiment_weights()
     except Exception as e:
         logging.error(f"Error running weekly sentiment source optimization: {e}")
+        
+    # 2. Run the weekly self-improvement strategy parameter optimizer
+    try:
+        from self_improvement_agent import run_self_improvement
+        run_self_improvement()
+    except Exception as e:
+        logging.error(f"Error running weekly self-improvement optimization: {e}")
         
     settings = load_settings()
     
