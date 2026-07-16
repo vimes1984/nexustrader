@@ -448,7 +448,7 @@ def write_blog_post(markdown_content, date_str):
         f.write(markdown_content)
     logging.info(f"Blog post written to: {filepath}")
     
-    # Update README index
+    # Update README index (both README.md and index.md for GitHub Pages compatibility)
     index_path = os.path.join(BLOG_DIR, "README.md")
     existing_content = ""
     if os.path.exists(index_path):
@@ -465,14 +465,22 @@ def write_blog_post(markdown_content, date_str):
                 if filename not in line:  # Avoid duplicating the current file link
                     links.append(line)
                     
-    # Insert new link at the top of the index
-    new_link = f"- [{date_str} - Weekly Performance Log](file://{filepath})"
+    # Insert new link at the top of the index (use relative path for GitHub Pages & repo viewer compatibility)
+    new_link = f"- [{date_str} - Weekly Performance Log]({filename})"
     links.insert(0, new_link)
     
     new_index_content = header + "\n".join(links) + "\n"
+    
+    # Write to README.md
     with open(index_path, "w") as f:
         f.write(new_index_content)
-    logging.info(f"Blog index updated at: {index_path}")
+        
+    # Write to index.md for Jekyll/GitHub Pages
+    index_md_path = os.path.join(BLOG_DIR, "index.md")
+    with open(index_md_path, "w") as f:
+        f.write(new_index_content)
+        
+    logging.info(f"Blog indices updated (README.md and index.md)")
 
 def push_to_github():
     """Stages the generated blog posts and pushes to the GitHub remote repository."""

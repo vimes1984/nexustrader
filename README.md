@@ -99,7 +99,7 @@ A separate agent runs weekly to audit the performance of the trading bot and doc
 2. **Strategy Attribution**: Analyzes the stored `strategy_signals` at the time of each trade entry to determine which strategy components voted correctly and calculates net PnL and win rates for each strategy component.
 3. **Neural Weight Audit**: Performs a forward pass on the Policy Network to audit current baseline weights and draws an ASCII visual chart representing the bot's current policy allocation.
 4. **AI Market Commentary**: If `GEMINI_API_KEY` is configured in the environment, the agent queries the Gemini API to transform raw data into a professional, witty, and deep market log in the persona of an expert quantitative researcher. If no API key is present, it falls back to a highly detailed, data-rich Markdown template.
-5. **Logs Indexing**: Saves posts to [blog/](file:///home/chris/nexustrader/blog/) and automatically updates the [blog/README.md](file:///home/chris/nexustrader/blog/README.md) index file.
+5. **Logs Indexing**: Saves posts to [blog/](blog/) and automatically updates the [blog/README.md](blog/README.md) index file.
 
 ---
 
