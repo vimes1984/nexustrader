@@ -1,0 +1,31 @@
+# NexusTrader git ignore rules
+# Prevents database, virtual environment, and live credentials from leaking to GitHub.
+
+# Credentials and Configurations
+config.json
+
+# SQLite Database
+nexustrader.db
+nexustrader.db-journal
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+venv/
+env/
+
+# Logs
+nexustrader_log.txt
+*.log
+
+# PyInstaller
+dist/
+build/
+*.spec
+
+# IDEs
+.vscode/
+.idea/

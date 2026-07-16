@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NexusTrader — Self-Learning Algorithmic Trading Bot</title>
+    <meta name="description" content="Open-source algorithmic trading bot with real-time probability odds estimation, risk evaluation, and online reinforcement learning.">
+    <link rel="stylesheet" href="/dashboard/index.css">
+    <!-- Chart.js for visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Lucide Icons for beautiful iconography -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+    <!-- App Header -->
+    <header class="glass-panel">
+        <div class="brand">
+            <i data-lucide="cpu" style="color: var(--neon-blue); width: 32px; height: 32px;"></i>
+            <div>
+                <h1>NexusTrader</h1>
+                <p style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px;">AI Quantitative Suite</p>
+            </div>
+        </div>
+
+        <div class="controls-bar">
+            <div class="slider-container">
+                <span>Risk Profile:</span>
+                <select id="risk-mode-select" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 12px; border-radius: 8px; cursor: pointer; outline: none; font-size:13px; font-family:inherit;">
+                    <option value="conservative" style="background:#0f172a;">Conservative (Safe)</option>
+                    <option value="aggressive" style="background:#0f172a;">Aggressive (Fast)</option>
+                    <option value="hyper_growth" style="background:#0f172a;">Hyper-Growth (Max)</option>
+                </select>
+            </div>
+            <div class="slider-container">
+                <span>Speed:</span>
+                <input type="range" id="speed-slider" min="0.05" max="1.5" step="0.05" value="0.2">
+                <span id="speed-label">0.2s</span>
+            </div>
+            <button class="btn" id="play-pause-btn">
+                <i data-lucide="pause"></i>
+                <span id="play-pause-text">Pause</span>
+            </button>
+            <button class="btn" id="reset-btn" style="border-color: rgba(244, 63, 94, 0.3);">
+                <i data-lucide="rotate-ccw" style="color: var(--neon-red);"></i>
+                Reset Sim
+            </button>
+            <div class="status-badge" id="bot-status">
+                <span class="dot"></span>
+                <span id="status-text">Simulating</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- KPI Grid -->
+    <section class="dashboard-grid" aria-label="Key Performance Indicators">
+        <div class="glass-panel kpi-card" id="equity-card">
+            <div class="kpi-title">Total Portfolio Value</div>
+            <div class="kpi-value" id="val-equity">€100.00</div>
+            <div class="kpi-sub" id="val-unrealized-pnl">Active Trade Profit: €0.00 (0.00%)</div>
+        </div>
+        <div class="glass-panel kpi-card" id="balance-card">
+            <div class="kpi-title">Cash Ready to Invest</div>
+            <div class="kpi-value" id="val-balance">€100.00</div>
+            <div class="kpi-sub">Ready to deploy</div>
+        </div>
+        <div class="glass-panel kpi-card" id="winrate-card">
+            <div class="kpi-title">Success Rate (Wins)</div>
+            <div class="kpi-value" id="val-winrate">0.0%</div>
+            <div class="kpi-sub" id="val-trade-count">0 trades completed</div>
+        </div>
+        <div class="glass-panel kpi-card" id="totalpnl-card">
+            <div class="kpi-title">Total Profit</div>
+            <div class="kpi-value" id="val-total-pnl">€0.00</div>
+            <div class="kpi-sub" id="val-total-pnl-percent">0.00% growth</div>
+        </div>
+    </section>
+
+    <!-- Main Content Row -->
+    <main class="main-content">
+        <!-- Chart Section -->
+        <article class="glass-panel chart-panel">
+            <div class="panel-header">
+                <h2 class="panel-title">
+                    <i data-lucide="trending-up" style="color: var(--neon-blue)"></i>
+                    <span id="chart-ticker-title">ETH-EUR</span> Live Feed
+                </h2>
+                <div style="font-size: 14px; font-weight: 600; font-family: 'Space Grotesk', sans-serif;">
+                    Price: <span id="ticker-price" class="color-blue">€0.00</span>
+                </div>
+            </div>
+            <div class="chart-container">
+                <canvas id="main-chart"></canvas>
+            </div>
+        </article>
+
+        <!-- Learning weights -->
+        <article class="glass-panel weights-panel">
+            <div>
+                <h2 class="panel-title" style="margin-bottom: 20px;">
+                    <i data-lucide="brain" style="color: var(--neon-purple)"></i>
+                    Strategy Popularity (AI Learning)
+                </h2>
+                <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 24px; line-height: 1.4;">
+                    The bot automatically shifts more trust (weight) to the strategies that are currently making money in this market.
+                </p>
+                <div id="weights-container">
+                    <!-- Dynamic weight bars go here -->
+                </div>
+            </div>
+            
+            <div style="border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 16px;">
+                <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 8px;">Active Trade Status</h3>
+                <div id="position-details-container" class="active-pos-details">
+                    <p style="font-size: 13px; color: var(--text-muted); text-align: center; padding: 20px;">No Trade Currently Open</p>
+                </div>
+            </div>
+        </article>
+    </main>
+
+    <!-- Lower Panels Grid -->
+    <section class="bottom-content" aria-label="Trade History and Statistical Analysis">
+        <!-- Table Log -->
+        <article class="glass-panel table-panel">
+            <h2 class="panel-title" style="margin-bottom: 16px;">
+                <i data-lucide="list" style="color: var(--neon-blue)"></i>
+                Completed Trades History
+            </h2>
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Stock</th>
+                            <th>Buy/Sell</th>
+                            <th>Shares</th>
+                            <th>Buy Price</th>
+                            <th>Sell Price</th>
+                            <th>AI Win Chance</th>
+                            <th>Earnings (€)</th>
+                            <th>Why it Closed</th>
+                        </tr>
+                    </thead>
+                    <tbody id="trade-log-body">
+                        <!-- Dynamic trade items go here -->
+                        <tr>
+                            <td colspan="9" style="text-align: center; color: var(--text-muted); padding: 40px;">No trades completed yet. Watching the market for opportunities...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </article>
+
+        <!-- Probability Engine details -->
+        <article class="glass-panel probability-details">
+            <h2 class="panel-title">
+                <i data-lucide="shield-alert" style="color: var(--neon-orange)"></i>
+                AI Trade Evaluation
+            </h2>
+            
+            <div class="metric-gauge">
+                <div class="gauge-circle" id="prob-gauge" style="--gauge-percent: 0deg;">
+                    <span id="prob-value">0%</span>
+                    <label>Winning Chance</label>
+                </div>
+            </div>
+
+            <div class="details-grid" id="prob-details-grid">
+                <div class="pos-row">
+                    <span>Estimated Profit</span>
+                    <span id="val-ev" class="color-blue">-</span>
+                </div>
+                <div class="pos-row">
+                    <span>Risk vs Reward</span>
+                    <span id="val-rr">-</span>
+                </div>
+                <div class="pos-row">
+                    <span>Recommended Trade Size</span>
+                    <span id="val-kelly">-</span>
+                </div>
+                <div class="pos-row">
+                    <span>Strategy Confidence</span>
+                    <span id="val-sig-strength">-</span>
+                </div>
+            </div>
+            
+            <div id="viability-badge" style="margin-top: 20px; padding: 12px; text-align: center; border-radius: 8px; font-weight: 600; font-size: 14px; background: rgba(255,255,255,0.02); color: var(--text-muted);">
+                Analyzing market data for next trade...
+            </div>
+        </article>
+    </section>
+
+    <!-- App Logic -->
+    <script src="/dashboard/app.js"></script>
+    <script>
+        // Init Lucide Icons
+        lucide.createIcons();
+    </script>
+</body>
+</html>
