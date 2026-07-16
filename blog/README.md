@@ -3,3 +3,6 @@ Welcome to the operational blog for NexusTrader. Here you can track weekly syste
 
 ## 📋 Report Index
 - [2026_07_16 - Weekly Performance Log](weekly_report_2026_07_16.md)
+
+## 📅 Daily Summaries
+* [Daily Summary — July 16, 2026](daily_summaries/daily_summary_2026_07_16.md)
