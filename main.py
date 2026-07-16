@@ -365,6 +365,24 @@ def control_simulation(action: str, speed: float = 0.2, mode: str = "live"):
         return {"status": "stopped"}
     elif action == "reset":
         orchestrator.stop_stream()
+        
+        # Reset the balance setting in SQLite database
+        database.save_setting("portfolio_balance", "100.00")
+        
+        # Completely clear trades and ticks history from SQLite
+        conn = database.get_db_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("DELETE FROM trades")
+            cursor.execute("DELETE FROM ticks")
+            conn.commit()
+            logging.info("Cleared all trades and ticks tables in DB reset.")
+        except Exception as e:
+            logging.error(f"Error clearing DB tables on reset: {e}")
+        finally:
+            conn.close()
+            
+        # Instantiate fresh execution engine
         orchestrator.execution_engine = ExecutionEngine(initial_balance=100.0)
         orchestrator.execution_engine.set_learning_callback(orchestrator.on_trade_closed)
         
@@ -375,20 +393,62 @@ def control_simulation(action: str, speed: float = 0.2, mode: str = "live"):
                 num_strats = len(ensemble.strategies)
                 ensemble.weights = [1.0/num_strats] * num_strats
                 orchestrator.learning_engines[ticker] = LearningEngine(num_strategies=num_strats, learning_rate=0.15)
+                # Delete saved weight states from database
+                database.save_setting(f"policy_net_weights_{ticker}", "")
                 
-        orchestrator.start_stream(mode=mode, speed=speed, poll_interval=5)
-        return {"status": "reset_completed", "mode": mode}
+        # Start stream in original running mode
+        run_mode = orchestrator.mode if hasattr(orchestrator, "mode") else "live"
+        orchestrator.start_stream(mode=run_mode, speed=speed, poll_interval=5)
+        return {"status": "reset_completed", "mode": run_mode}
     return {"error": "Invalid action"}
 
-@app.post("/api/config")
-def update_config(risk_mode: str):
+@app.get("/api/system/config")
+def get_system_config():
+    config_path = os.path.expanduser("~/.nexustrader/config.json")
+    trading_mode = "paper"
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, "r") as f:
+                cfg = json.load(f)
+                trading_mode = cfg.get("trading_mode", "paper")
+        except Exception:
+            pass
+            
+    return {
+        "trading_mode": trading_mode,
+        "risk_mode": database.load_setting("risk_mode", "conservative"),
+        "max_drawdown": float(database.load_setting("max_daily_drawdown", "5.0"))
+    }
+
+@app.post("/api/system/config")
+def update_system_config(trading_mode: str, risk_mode: str, max_drawdown: float):
+    # 1. Update config.json for trading mode
+    config_path = os.path.expanduser("~/.nexustrader/config.json")
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, "r") as f:
+                cfg = json.load(f)
+            cfg["trading_mode"] = trading_mode
+            with open(config_path, "w") as f:
+                json.dump(cfg, f, indent=2)
+            
+            # Hot-reload in execution engine
+            orchestrator.execution_engine.trading_mode = trading_mode
+            logging.info(f"System Trading Mode updated to: {trading_mode}")
+        except Exception as e:
+            logging.error(f"Error updating config.json: {e}")
+            
+    # 2. Update Risk Mode
     if risk_mode in ["conservative", "aggressive", "hyper_growth"]:
         orchestrator.probability_engine.set_risk_mode(risk_mode)
-        # Save setting in SQLite DB
         database.save_setting("risk_mode", risk_mode)
-        logging.info(f"Risk Profile updated to: {risk_mode}")
-        return {"status": "success", "risk_mode": risk_mode}
-    return {"error": "Invalid risk mode"}
+        logging.info(f"System Risk Mode updated to: {risk_mode}")
+        
+    # 3. Update Max Drawdown
+    database.save_setting("max_daily_drawdown", str(max_drawdown))
+    logging.info(f"Max Daily Drawdown updated to: {max_drawdown}%")
+    
+    return {"status": "success"}
 
 @app.get("/api/blog/config")
 def get_blog_config():
