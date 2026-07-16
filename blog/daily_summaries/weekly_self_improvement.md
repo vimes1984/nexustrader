@@ -1,5 +1,5 @@
 ## Weekly Hyperparameter Backtest Optimization & Self-Improvement
-Optimizations run over a window of **201** historical price ticks.
+Optimizations run over a window of **203** historical price ticks.
 
 ### Optimized Strategy Parameters:
 * **RSI Reversion Strategy**: Oversold Threshold = `35.0`, Overbought Threshold = `65.0` (Backtest PnL: `€197.0212`)
