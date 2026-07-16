@@ -12,10 +12,10 @@ Below is an extensive breakdown of the system's performance, resource allocation
 
 | Metric | Value |
 | :--- | :--- |
-| **Current Account Equity** | **€129.90** |
-| **Starting Balance (Week Start)** | €110.42 |
+| **Current Account Equity** | **€99.98** |
+| **Starting Balance (Week Start)** | €80.50 |
 | **Net PnL (Euros)** | **€+19.48** |
-| **Weekly Return (%)** | **+17.64%** |
+| **Weekly Return (%)** | **+24.20%** |
 | **Risk Profile Configuration** | `AGGRESSIVE` |
 | **Active Trade Count** | 10 |
 | **Overall System Win Rate** | **70.0%** |
@@ -64,17 +64,17 @@ This table highlights how individual strategies contributed to the trades opened
 ### Cumulative Balance Progression
 | Trade # | Ticker | Side | Net PnL | Portfolio Balance |
 | --- | --- | --- | --- | --- |
-| Start | - | - | - | €110.42 |
-| 1 | BTC-EUR | SELL | €-1.50 | €108.92 |
-| 2 | ETH-EUR | BUY | €-2.38 | €106.54 |
-| 3 | SOL-EUR | SELL | €+7.32 | €113.86 |
-| 4 | XRP-EUR | BUY | €+2.40 | €116.26 |
-| 5 | BTC-EUR | BUY | €+3.55 | €119.81 |
-| 6 | ETH-EUR | BUY | €+4.81 | €124.62 |
-| 7 | SOL-EUR | BUY | €-3.90 | €120.72 |
-| 8 | DOGE-EUR | BUY | €+5.60 | €126.32 |
-| 9 | ETH-EUR | SELL | €+2.97 | €129.29 |
-| 10 | BTC-EUR | BUY | €+0.61 | €129.90 |
+| Start | - | - | - | €80.50 |
+| 1 | BTC-EUR | SELL | €-1.50 | €79.00 |
+| 2 | ETH-EUR | BUY | €-2.38 | €76.62 |
+| 3 | SOL-EUR | SELL | €+7.32 | €83.94 |
+| 4 | XRP-EUR | BUY | €+2.40 | €86.34 |
+| 5 | BTC-EUR | BUY | €+3.55 | €89.89 |
+| 6 | ETH-EUR | BUY | €+4.81 | €94.70 |
+| 7 | SOL-EUR | BUY | €-3.90 | €90.80 |
+| 8 | DOGE-EUR | BUY | €+5.60 | €96.40 |
+| 9 | ETH-EUR | SELL | €+2.97 | €99.37 |
+| 10 | BTC-EUR | BUY | €+0.61 | €99.98 |
 
 
 ---
