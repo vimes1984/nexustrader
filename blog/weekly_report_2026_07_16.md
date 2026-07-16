@@ -16,14 +16,28 @@ Below is an extensive breakdown of the system's performance, resource allocation
 
 | Metric | Value |
 | :--- | :--- |
-| **Current Account Equity** | **€99.97** |
-| **Starting Balance (Week Start)** | €80.49 |
+| **Current Account Equity** | **€99.96** |
+| **Starting Balance (Week Start)** | €80.48 |
 | **Net PnL (Euros)** | **€+19.48** |
-| **Weekly Return (%)** | **+24.20%** |
+| **Weekly Return (%)** | **+24.21%** |
 | **Risk Profile Configuration** | `AGGRESSIVE` |
 | **Active Trade Count** | 10 |
 | **Overall System Win Rate** | **70.0%** |
 | **Profit Factor** | **3.50** |
+
+---
+
+## 💼 Portfolio Asset Performance Breakdown
+Performance metrics segmented by individual portfolio asset ticker:
+
+| Asset Ticker | Trades Executed | Win Rate | Net Asset PnL |
+| :--- | :--- | :--- | :--- |
+| BTC-EUR | 3 | 66.7% | €+2.66 |
+| DOGE-EUR | 1 | 100.0% | €+5.60 |
+| ETH-EUR | 3 | 66.7% | €+5.40 |
+| SOL-EUR | 2 | 50.0% | €+3.42 |
+| XRP-EUR | 1 | 100.0% | €+2.40 |
+
 
 ---
 
@@ -68,17 +82,17 @@ This table highlights how individual strategies contributed to the trades opened
 ### Cumulative Balance Progression
 | Trade # | Ticker | Side | Net PnL | Portfolio Balance |
 | --- | --- | --- | --- | --- |
-| Start | - | - | - | €80.49 |
-| 1 | BTC-EUR | SELL | €-1.50 | €78.99 |
-| 2 | ETH-EUR | BUY | €-2.38 | €76.61 |
-| 3 | SOL-EUR | SELL | €+7.32 | €83.93 |
-| 4 | XRP-EUR | BUY | €+2.40 | €86.33 |
-| 5 | BTC-EUR | BUY | €+3.55 | €89.88 |
-| 6 | ETH-EUR | BUY | €+4.81 | €94.69 |
-| 7 | SOL-EUR | BUY | €-3.90 | €90.79 |
-| 8 | DOGE-EUR | BUY | €+5.60 | €96.39 |
-| 9 | ETH-EUR | SELL | €+2.97 | €99.36 |
-| 10 | BTC-EUR | BUY | €+0.61 | €99.97 |
+| Start | - | - | - | €80.48 |
+| 1 | BTC-EUR | SELL | €-1.50 | €78.98 |
+| 2 | ETH-EUR | BUY | €-2.38 | €76.60 |
+| 3 | SOL-EUR | SELL | €+7.32 | €83.92 |
+| 4 | XRP-EUR | BUY | €+2.40 | €86.32 |
+| 5 | BTC-EUR | BUY | €+3.55 | €89.87 |
+| 6 | ETH-EUR | BUY | €+4.81 | €94.68 |
+| 7 | SOL-EUR | BUY | €-3.90 | €90.78 |
+| 8 | DOGE-EUR | BUY | €+5.60 | €96.38 |
+| 9 | ETH-EUR | SELL | €+2.97 | €99.35 |
+| 10 | BTC-EUR | BUY | €+0.61 | €99.96 |
 
 
 ---
@@ -88,6 +102,14 @@ This table highlights how individual strategies contributed to the trades opened
 1. **Regime Switching Adaptability:** The system uses Ornstein-Uhlenbeck process parameters to distinguish between trending and mean-reverting states. Under mean-reverting regimes, the neural network boosts weights for the **RSI Reversion**, **BB Breakout**, and **Psych Sweep** components, while suppressing trend-following metrics.
 2. **Online Policy Gradient Optimization:** After each trade closes, the neural network runs a policy gradient backward pass using trade PnL as the reward. Successful trades strengthen the neural pathways of the voting strategies, while losing trades penalize their weights.
 3. **Volatility-Adjusted Risk Sizing:** Take-profit and stop-loss boundaries are automatically computed using Average True Range (ATR) multiples. Sizing is governed by the Kelly Criterion (scaled by a fraction based on the risk profile), preventing catastrophic risk exposure.
+
+---
+
+## 🗺️ Quantitative Roadmap & Operational Plan
+To optimize execution safety and target higher capital return frequencies, we are implementing a structured phased software roadmap:
+1. **Diversified Multi-Asset Support (Active)**: We have transitioned the core loop to trade `ETH-EUR`, `SOL-EUR`, `BTC-EUR`, `DOGE-EUR`, and `XRP-EUR` concurrently under a single portfolio account.
+2. **Limit Order Queue Simulation (Next Phase)**: To prevent execution slippage in live trading, we are implementing maker/taker transaction fee modelling and limit order fills based on tick high/low crossings.
+3. **Daily Risk Safeguards & Circuit Breakers (Next Phase)**: Adding daily maximum drawdown boundaries (5% of daily start balance) that will automatically freeze the execution engines if breached, protecting the portfolio balance.
 
 ---
 *Report generated automatically by the NexusTrader Blog Agent.*
