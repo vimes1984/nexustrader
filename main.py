@@ -552,6 +552,85 @@ def update_system_config(trading_mode: str, risk_mode: str, max_drawdown: float,
     
     return {"status": "success"}
 
+@app.get("/api/exchange/status")
+def get_exchange_status():
+    config_path = os.path.expanduser("~/.nexustrader/config.json")
+    if not os.path.exists(config_path):
+        return {"error": "Config not found"}
+        
+    try:
+        with open(config_path, "r") as f:
+            cfg = json.load(f)
+            
+        creds = cfg.get("api_credentials", {})
+        api_key = creds.get("api_key")
+        api_secret = creds.get("api_secret")
+        broker = cfg.get("broker", "kraken").lower()
+        
+        if not api_key or not api_secret:
+            return {"holdings": [], "open_orders": [], "message": "API credentials missing."}
+            
+        import ccxt
+        exchange_class = getattr(ccxt, broker)
+        exchange = exchange_class({
+            'apiKey': api_key,
+            'secret': api_secret,
+            'enableRateLimit': True,
+        })
+        
+        # 1. Fetch balances
+        balance_info = exchange.fetch_balance()
+        total_bal = balance_info.get('total', {})
+        
+        # Fetch conversion rates
+        prices = {}
+        try:
+            tickers = exchange.fetch_tickers(['BTC/EUR', 'ETH/EUR', 'SOL/EUR', 'DOGE/EUR', 'XRP/EUR'])
+            prices = {sym.split('/')[0]: float(tick['last']) for sym, tick in tickers.items() if tick.get('last') is not None}
+        except Exception:
+            pass
+            
+        holdings = []
+        for asset, qty in total_bal.items():
+            qty = float(qty)
+            if qty > 0.000001:
+                val_eur = qty
+                if asset != 'EUR':
+                    val_eur = qty * prices.get(asset, 0.0)
+                holdings.append({
+                    "asset": asset,
+                    "quantity": qty,
+                    "value_eur": val_eur
+                })
+                
+        # Sort holdings: EUR always first, then others by value desc
+        holdings.sort(key=lambda x: (x["asset"] != "EUR", -x["value_eur"]))
+        
+        # 2. Fetch Open Orders
+        open_orders = []
+        try:
+            orders = exchange.fetch_open_orders()
+            for o in orders:
+                open_orders.append({
+                    "id": o.get("id"),
+                    "symbol": o.get("symbol"),
+                    "side": o.get("side"),
+                    "type": o.get("type"),
+                    "price": o.get("price"),
+                    "amount": o.get("amount"),
+                    "filled": o.get("filled")
+                })
+        except Exception as oe:
+            logging.error(f"Error fetching open orders: {oe}")
+            
+        return {
+            "holdings": holdings,
+            "open_orders": open_orders
+        }
+    except Exception as e:
+        logging.error(f"Error in get_exchange_status API: {e}")
+        return {"error": str(e)}
+
 @app.post("/api/system/risk_mode")
 def update_system_risk_mode(risk_mode: str):
     if risk_mode in ["conservative", "aggressive", "hyper_growth"]:

@@ -1003,3 +1003,73 @@ initChart();
 connectWebSocket();
 loadBlogConfig();
 lucide.createIcons();
+
+// Live Exchange holdings and open orders status polling
+function updateExchangeStatus() {
+    const elHoldingsContainer = document.getElementById("holdings-list-container");
+    const elOpenOrdersContainer = document.getElementById("open-orders-list-container");
+    
+    if (!elHoldingsContainer || !elOpenOrdersContainer) return;
+    
+    fetch(`/api/exchange/status?t=${Date.now()}`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.error) {
+                elHoldingsContainer.innerHTML = `<p style="font-size: 11px; color: var(--neon-red); text-align: center; padding: 10px;">${data.error}</p>`;
+                elOpenOrdersContainer.innerHTML = `<p style="font-size: 11px; color: var(--neon-red); text-align: center; padding: 10px;">Error loading orders.</p>`;
+                return;
+            }
+            
+            if (data.message) {
+                elHoldingsContainer.innerHTML = `<p style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 10px;">${data.message}</p>`;
+                elOpenOrdersContainer.innerHTML = `<p style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 10px;">${data.message}</p>`;
+                return;
+            }
+            
+            // Render holdings
+            elHoldingsContainer.innerHTML = "";
+            if (!data.holdings || data.holdings.length === 0) {
+                elHoldingsContainer.innerHTML = `<p style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 10px;">No holdings found.</p>`;
+            } else {
+                data.holdings.forEach(h => {
+                    const row = document.createElement("div");
+                    row.style.cssText = "display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 8px; font-size: 12px; transition: var(--transition);";
+                    row.innerHTML = `
+                        <span style="font-weight: 600; color: var(--text-primary);">${h.asset}</span>
+                        <span style="color: var(--text-secondary); font-family: monospace;">${h.quantity.toFixed(4)}</span>
+                        <span style="font-weight: 600; color: var(--neon-blue);">€${h.value_eur.toFixed(2)}</span>
+                    `;
+                    elHoldingsContainer.appendChild(row);
+                });
+            }
+            
+            // Render Open Orders
+            elOpenOrdersContainer.innerHTML = "";
+            if (!data.open_orders || data.open_orders.length === 0) {
+                elOpenOrdersContainer.innerHTML = `<p style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 10px;">No pending orders found.</p>`;
+            } else {
+                data.open_orders.forEach(o => {
+                    const row = document.createElement("div");
+                    row.style.cssText = "display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 8px; font-size: 11px; transition: var(--transition);";
+                    const sideColor = o.side === "buy" ? "var(--neon-green)" : "var(--neon-red)";
+                    row.innerHTML = `
+                        <div>
+                            <span style="font-weight: 600; color: ${sideColor}; text-transform: uppercase;">${o.side}</span>
+                            <span style="color: var(--text-primary); font-weight: 500;">${o.symbol}</span>
+                        </div>
+                        <span style="color: var(--text-secondary); font-family: monospace;">${o.amount} @ €${o.price}</span>
+                    `;
+                    elOpenOrdersContainer.appendChild(row);
+                });
+            }
+        })
+        .catch(err => {
+            console.error("Error fetching exchange status:", err);
+            elHoldingsContainer.innerHTML = `<p style="font-size: 11px; color: var(--neon-red); text-align: center; padding: 10px;">Connection failed.</p>`;
+            elOpenOrdersContainer.innerHTML = `<p style="font-size: 11px; color: var(--neon-red); text-align: center; padding: 10px;">Connection failed.</p>`;
+        });
+}
+
+// Initial pull and setup 15s interval
+updateExchangeStatus();
+setInterval(updateExchangeStatus, 15000);
