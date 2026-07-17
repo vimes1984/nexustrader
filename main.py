@@ -934,7 +934,7 @@ def get_exchange_status():
         # Fetch conversion rates
         prices = {}
         try:
-            tickers = exchange.fetch_tickers(['BTC/EUR', 'ETH/EUR', 'SOL/EUR', 'DOGE/EUR', 'XRP/EUR'])
+            tickers = exchange.fetch_tickers(['BTC/USD', 'ETH/USD', 'SOL/USD', 'DOGE/USD', 'XRP/USD'])
             prices = {sym.split('/')[0]: float(tick['last']) for sym, tick in tickers.items() if tick.get('last') is not None}
         except Exception:
             pass
@@ -943,19 +943,19 @@ def get_exchange_status():
         for asset, qty in total_bal.items():
             qty = float(qty)
             if qty > 0.000001:
-                price_eur = 1.0
-                if asset != 'EUR':
-                    price_eur = prices.get(asset, 0.0)
-                val_eur = qty * price_eur
+                price_usd = 1.0
+                if asset != 'USD':
+                    price_usd = prices.get(asset, 0.0)
+                val_usd = qty * price_usd
                 holdings.append({
                     "asset": asset,
                     "quantity": qty,
-                    "price_eur": price_eur,
-                    "value_eur": val_eur
+                    "price_usd": price_usd,
+                    "value_usd": val_usd
                 })
                 
-        # Sort holdings: EUR always first, then others by value desc
-        holdings.sort(key=lambda x: (x["asset"] != "EUR", -x["value_eur"]))
+        # Sort holdings: USD always first, then others by value desc
+        holdings.sort(key=lambda x: (x["asset"] != "USD", -x["value_usd"]))
         # 2. Fetch Open Positions
         open_positions = []
         try:
