@@ -541,6 +541,7 @@ def control_simulation(action: str, speed: float = 0.2, mode: str = "live"):
         
         # Reset the balance setting in SQLite database
         database.save_setting("portfolio_balance", "100.00")
+        database.save_setting("initial_portfolio_balance", "100.00")
         
         # Completely clear trades and ticks history from SQLite
         conn = database.get_db_connection()

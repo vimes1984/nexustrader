@@ -119,6 +119,8 @@ class ExecutionEngine:
                     total_value_eur += qty * prices[asset]
                     
             self.live_equity = total_value_eur
+            self.live_holdings = {k: float(v) for k, v in total_bal.items() if float(v) > 0.000001}
+            self.last_known_prices = prices
             
             # Update initial balance if not set
             db_init_balance = database.load_setting("initial_portfolio_balance")
@@ -439,8 +441,28 @@ class ExecutionEngine:
         
         current_prices: dict of symbol -> current_price
         """
-        if self.trading_mode == "live" and hasattr(self, "live_equity"):
-            return float(self.live_equity)
+        if self.trading_mode == "live":
+            holdings = getattr(self, "live_holdings", {})
+            if not holdings:
+                return float(getattr(self, "live_equity", self.balance))
+                
+            total_value = 0.0
+            last_prices = getattr(self, "last_known_prices", {})
+            
+            for asset, qty in holdings.items():
+                if asset == "EUR":
+                    total_value += qty
+                else:
+                    price = None
+                    for key in [f"{asset}-EUR", f"{asset}/EUR", f"XXBT-EUR", f"XETH-EUR", f"XXRP-EUR"]:
+                        if key in current_prices and current_prices[key] is not None:
+                            price = float(current_prices[key])
+                            break
+                    if price is None or price == 0.0:
+                        price = float(last_prices.get(asset, 0.0))
+                    
+                    total_value += qty * price
+            return float(total_value)
             
         equity = self.balance
         for symbol, pos in self.active_positions.items():
