@@ -454,7 +454,7 @@
                                              <h3 style="font-size: 15px; font-weight: 600; color: var(--text-primary);">NexusSentinel</h3>
                                              <span style="font-size: 10px; color: var(--neon-purple); text-transform: uppercase; font-weight: 600;">Sentiment Feeds Tuner</span>
                                          </div>
-                                         <button class="btn" id="trigger-opt-sentiment-btn-tab" style="padding: 4px 8px; font-size: 10px; border-color: rgba(168,85,247,0.3); color: var(--neon-purple);">Optimize Feeds</button>
+                                         <button class="btn trigger-opt-sentiment-btn" id="trigger-opt-sentiment-btn-tab" style="padding: 4px 8px; font-size: 10px; border-color: rgba(168,85,247,0.3); color: var(--neon-purple);">Optimize Feeds</button>
                                     </div>
                                     <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.4; margin-top: 6px;">
                                         "I monitor crypto news channels and web feeds, adjusting NLP sentiment weights to filter noise during rapid market transitions."
@@ -471,7 +471,7 @@
                                              <h3 style="font-size: 15px; font-weight: 600; color: var(--text-primary);">NexusAuditor</h3>
                                              <span style="font-size: 10px; color: var(--neon-red); text-transform: uppercase; font-weight: 600;">Portfolio Risk Auditor</span>
                                          </div>
-                                         <button class="btn" id="trigger-risk-audit-btn-tab" style="padding: 4px 8px; font-size: 10px; border-color: rgba(244,63,94,0.3); color: var(--neon-red);">Audit Risk</button>
+                                         <button class="btn trigger-risk-audit-btn" id="trigger-risk-audit-btn-tab" style="padding: 4px 8px; font-size: 10px; border-color: rgba(244,63,94,0.3); color: var(--neon-red);">Audit Risk</button>
                                     </div>
                                     <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.4; margin-top: 6px;">
                                         "I audit portfolio leverage exposure, trade correlation matrices, and daily drawdowns to safeguard capital against tail risks."
@@ -557,6 +557,47 @@
                             </button>
                         </div>
                     </article>
+                    <!-- Automated Blogging configuration card for Reporter AI -->
+                    <article class="glass-panel" style="padding: 24px;">
+                        <h2 class="panel-title" style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="sparkles" style="color: var(--neon-green)"></i>
+                            Automated Blogging (Reporter AI)
+                        </h2>
+                        
+                        <div style="display: flex; flex-direction: column; gap: 12px; font-size: 13px;">
+                            <label style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
+                                <span>Enable Weekly Blog</span>
+                                <input type="checkbox" id="blog-enabled-check" style="accent-color: var(--neon-blue); cursor: pointer;">
+                            </label>
+                            <label style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
+                                <span>Auto-Push to GitHub</span>
+                                <input type="checkbox" id="blog-git-push-check" style="accent-color: var(--neon-blue); cursor: pointer;">
+                            </label>
+                            <label style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
+                                <span>Use AI Styling (Gemini)</span>
+                                <input type="checkbox" id="blog-ai-check" style="accent-color: var(--neon-blue); cursor: pointer;">
+                            </label>
+                            
+                            <div id="blog-key-container" style="display: flex; flex-direction: column; gap: 6px; margin-top: 4px;">
+                                <span>Gemini API Key</span>
+                                <div style="position: relative; display: flex; align-items: center; width: 100%;">
+                                    <input type="password" id="blog-api-key" placeholder="Enter API key..." style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 36px 8px 12px; border-radius: 8px; font-size:12px; font-family:inherit; outline:none; width: 100%;">
+                                    <button type="button" id="toggle-blog-api-key-visibility" style="position: absolute; right: 10px; background: transparent; border: none; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; outline: none; padding: 0;">
+                                        <i data-lucide="eye" style="width: 16px; height: 16px;"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <button class="btn btn-primary" id="save-blog-config-btn" style="width: 100%; justify-content: center; padding: 8px; font-size: 12px; margin-top: 10px;">
+                                <i data-lucide="save" style="width: 15px; height: 15px; margin-right: 4px;"></i>
+                                Save Blogging Config
+                            </button>
+                            <button class="btn" id="trigger-blog-btn" style="width: 100%; justify-content: center; border-color: rgba(16,185,129,0.2); color: var(--neon-green); font-size: 11px; padding: 8px;">
+                                <i data-lucide="pen-tool" style="width: 14px; height: 14px; margin-right: 4px;"></i>
+                                Generate Weekly Blog Post
+                            </button>
+                        </div>
+                    </article>
 
                     <!-- Feeds & Cooldown Panel -->
                     <article class="glass-panel" style="padding: 24px;">
@@ -565,10 +606,10 @@
                             Direct Directives
                         </h2>
                         <div style="display: flex; flex-direction: column; gap: 8px;">
-                            <button class="btn" id="trigger-opt-sentiment-btn-tab" style="width: 100%; justify-content: center; border-color: rgba(168,85,247,0.3); color: var(--neon-purple); font-size: 11px; padding: 8px;">
+                            <button class="btn trigger-opt-sentiment-btn" id="trigger-opt-sentiment-btn-dir" style="width: 100%; justify-content: center; border-color: rgba(168,85,247,0.3); color: var(--neon-purple); font-size: 11px; padding: 8px;">
                                 Optimize Sentiment Feeds
                             </button>
-                            <button class="btn" id="trigger-risk-audit-btn-tab" style="width: 100%; justify-content: center; border-color: rgba(244,63,94,0.3); color: var(--neon-red); font-size: 11px; padding: 8px;">
+                            <button class="btn trigger-risk-audit-btn" id="trigger-risk-audit-btn-dir" style="width: 100%; justify-content: center; border-color: rgba(244,63,94,0.3); color: var(--neon-red); font-size: 11px; padding: 8px;">
                                 Audit Portfolio Risk
                             </button>
                             <button class="btn" id="trigger-reset-cooldowns-btn-tab" style="width: 100%; justify-content: center; border-color: rgba(244,63,94,0.3); color: var(--neon-red); font-size: 11px; padding: 8px;">
@@ -656,52 +697,15 @@
                 </div>
 
                 <div class="main-right-column" style="display: flex; flex-direction: column; gap: 20px;">
-                    <!-- Weekly blogging settings -->
-                    <article class="glass-panel" style="padding: 24px;">
-                        <h2 class="panel-title" style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
-                            <i data-lucide="sparkles" style="color: var(--neon-blue)"></i>
-                            Automated Blogging
-                        </h2>
-                        
-                        <div style="display: flex; flex-direction: column; gap: 12px; font-size: 13px;">
-                            <label style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
-                                <span>Enable Weekly Blog</span>
-                                <input type="checkbox" id="blog-enabled-check" style="accent-color: var(--neon-blue); cursor: pointer;">
-                            </label>
-                            <label style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
-                                <span>Auto-Push to GitHub</span>
-                                <input type="checkbox" id="blog-git-push-check" style="accent-color: var(--neon-blue); cursor: pointer;">
-                            </label>
-                            <label style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
-                                <span>Use AI Styling (Gemini)</span>
-                                <input type="checkbox" id="blog-ai-check" style="accent-color: var(--neon-blue); cursor: pointer;">
-                            </label>
-                            
-                            <div id="blog-key-container" style="display: flex; flex-direction: column; gap: 6px; margin-top: 4px;">
-                                <span>Gemini API Key</span>
-                                <div style="position: relative; display: flex; align-items: center; width: 100%;">
-                                    <input type="password" id="blog-api-key" placeholder="Enter API key..." style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 36px 8px 12px; border-radius: 8px; font-size:12px; font-family:inherit; outline:none; width: 100%;">
-                                    <button type="button" id="toggle-blog-api-key-visibility" style="position: absolute; right: 10px; background: transparent; border: none; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; outline: none; padding: 0;">
-                                        <i data-lucide="eye" style="width: 16px; height: 16px;"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </article>
-
                     <!-- Save and Test buttons -->
                     <article class="glass-panel" style="padding: 20px;">
-                        <button class="btn btn-primary" id="save-blog-config-btn" style="width: 100%; justify-content: center; padding: 10px; font-size: 13px; margin-bottom: 10px;">
+                        <button class="btn btn-primary" id="save-system-config-btn" style="width: 100%; justify-content: center; padding: 10px; font-size: 13px; margin-bottom: 10px;">
                             <i data-lucide="save" style="width: 16px; height: 16px; margin-right: 4px;"></i>
-                            Save Config & Credentials
+                            Save Broker & Risk Settings
                         </button>
-                        <button class="btn" id="test-broker-api-btn" style="width: 100%; justify-content: center; border-color: rgba(0, 240, 255, 0.2); color: var(--neon-blue); font-size: 12px; padding: 10px; margin-bottom: 10px;">
+                        <button class="btn" id="test-broker-api-btn" style="width: 100%; justify-content: center; border-color: rgba(0, 240, 255, 0.2); color: var(--neon-blue); font-size: 12px; padding: 10px;">
                             <i data-lucide="check-circle" style="width: 15px; height: 15px; margin-right: 4px;"></i>
                             Test Exchange API connection
-                        </button>
-                        <button class="btn" id="trigger-blog-btn" style="width: 100%; justify-content: center; border-color: rgba(16,185,129,0.2); color: var(--neon-green); font-size: 12px; padding: 10px;">
-                            <i data-lucide="pen-tool" style="width: 15px; height: 15px; margin-right: 4px;"></i>
-                            Generate Weekly Blog Post
                         </button>
                     </article>
                 </div>
@@ -849,6 +853,9 @@
             </article>
         </div>
     </div>
+    
+    <!-- Floating Cybernetic Toast Notifications -->
+    <div id="toast-container" style="position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 9999; pointer-events: none;"></div>
 
     <!-- App Logic -->
     <script src="/dashboard/app_v2.js?v=2.3"></script>

@@ -3,6 +3,69 @@ let socket = null;
 let chart = null;
 let weightsChart = null;
 
+// Cybernetic Floating Toast Notifications
+function showToast(message, type = "success") {
+    const container = document.getElementById("toast-container");
+    if (!container) return;
+    const toast = document.createElement("div");
+    
+    // Choose neon themes for the toast type
+    let color = "var(--neon-blue)";
+    let border = "1px solid rgba(0, 240, 255, 0.2)";
+    let icon = "⚡";
+    if (type === "success") {
+        color = "var(--neon-green)";
+        border = "1px solid rgba(16, 185, 129, 0.2)";
+        icon = "✅";
+    } else if (type === "error") {
+        color = "var(--neon-red)";
+        border = "1px solid rgba(244, 63, 94, 0.2)";
+        icon = "❌";
+    } else if (type === "info") {
+        color = "var(--neon-purple)";
+        border = "1px solid rgba(168, 85, 247, 0.2)";
+        icon = "📡";
+    }
+    
+    toast.style.background = "rgba(15, 23, 42, 0.9)";
+    toast.style.color = "#ffffff";
+    toast.style.borderLeft = `4px solid ${color}`;
+    toast.style.borderTop = border;
+    toast.style.borderRight = border;
+    toast.style.borderBottom = border;
+    toast.style.padding = "10px 16px";
+    toast.style.borderRadius = "8px";
+    toast.style.backdropFilter = "blur(12px)";
+    toast.style.boxShadow = "0 8px 32px 0 rgba(0, 0, 0, 0.4)";
+    toast.style.fontSize = "12px";
+    toast.style.fontWeight = "600";
+    toast.style.fontFamily = "'Space Grotesk', sans-serif";
+    toast.style.display = "flex";
+    toast.style.alignItems = "center";
+    toast.style.gap = "10px";
+    toast.style.opacity = "0";
+    toast.style.transform = "translateY(20px)";
+    toast.style.transition = "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)";
+    
+    toast.innerHTML = `<span style="font-size: 14px;">${icon}</span> <span>${message}</span>`;
+    container.appendChild(toast);
+    
+    // Animate in
+    setTimeout(() => {
+        toast.style.opacity = "1";
+        toast.style.transform = "translateY(0)";
+    }, 20);
+    
+    // Animate out and remove
+    setTimeout(() => {
+        toast.style.opacity = "0";
+        toast.style.transform = "translateY(-15px)";
+        setTimeout(() => {
+            toast.remove();
+        }, 300);
+    }, 4500);
+}
+
 // Chart state
 const maxChartPoints = 40;
 const chartLabels = [];
@@ -1072,6 +1135,7 @@ function loadBlogConfig() {
         .catch(err => console.error("Error loading schedule config:", err));
 }
 
+// 1. Save Blog settings click handler
 if (elSaveBlogConfigBtn) {
     elSaveBlogConfigBtn.addEventListener("click", () => {
         const enabled = elBlogEnabledCheck ? elBlogEnabledCheck.checked : true;
@@ -1079,6 +1143,33 @@ if (elSaveBlogConfigBtn) {
         const aiEnabled = elBlogAiCheck ? elBlogAiCheck.checked : false;
         const apiKey = elBlogApiKey ? elBlogApiKey.value.trim() : "";
         
+        elSaveBlogConfigBtn.disabled = true;
+        showToast("Saving Blogging Config...", "info");
+        
+        fetch(`/api/blog/config?enabled=${enabled}&ai_enabled=${aiEnabled}&api_key=${encodeURIComponent(apiKey)}&git_push_enabled=${gitPush}`, {
+            method: 'POST'
+        })
+        .then(res => res.json())
+        .then(data => {
+            elSaveBlogConfigBtn.disabled = false;
+            if (data.status === "success" || data.enabled !== undefined) {
+                showToast("Automated Blogging configuration saved!", "success");
+            } else {
+                showToast("Failed to save blogging config: " + (data.error || "unknown error"), "error");
+            }
+        })
+        .catch(err => {
+            elSaveBlogConfigBtn.disabled = false;
+            showToast("Error saving blogging configuration.", "error");
+            console.error(err);
+        });
+    });
+}
+
+// 2. Save General System / Broker settings click handler
+const elSaveSystemConfigBtn = document.getElementById("save-system-config-btn");
+if (elSaveSystemConfigBtn) {
+    elSaveSystemConfigBtn.addEventListener("click", () => {
         const tradingMode = elTradingModeSelect ? elTradingModeSelect.value : "paper";
         const broker = elBrokerSelect ? elBrokerSelect.value : "kraken";
         const exchangeApiKey = elApiKeyInput ? elApiKeyInput.value.trim() : "";
@@ -1096,29 +1187,24 @@ if (elSaveBlogConfigBtn) {
         const riskMode = elRiskSelect ? elRiskSelect.value : "conservative";
         const maxDrawdown = elMaxDrawdownInput ? parseFloat(elMaxDrawdownInput.value) : 5.0;
         
-        elBlogStatusMsg.textContent = "Saving settings...";
-        elBlogStatusMsg.className = "color-blue";
+        elSaveSystemConfigBtn.disabled = true;
+        showToast("Saving Broker & Risk boundaries...", "info");
         
-        // 1. Save Blog settings
-        const saveBlogPromise = fetch(`/api/blog/config?enabled=${enabled}&ai_enabled=${aiEnabled}&api_key=${encodeURIComponent(apiKey)}&git_push_enabled=${gitPush}`, {
+        fetch(`/api/system/config?trading_mode=${tradingMode}&risk_mode=${riskMode}&max_drawdown=${maxDrawdown}&broker=${broker}&api_key=${encodeURIComponent(exchangeApiKey)}&api_secret=${encodeURIComponent(exchangeApiSecret)}&trailing_stop=${trailingStop}&cooldown=${cooldown}&tp_multiplier=${tpMultiplier}&sl_multiplier=${slMultiplier}&nn_lr=${nnLr}&nn_floor=${nnFloor}`, {
             method: 'POST'
-        });
-        
-        // 2. Save System settings
-        const saveSystemPromise = fetch(`/api/system/config?trading_mode=${tradingMode}&risk_mode=${riskMode}&max_drawdown=${maxDrawdown}&broker=${broker}&api_key=${encodeURIComponent(exchangeApiKey)}&api_secret=${encodeURIComponent(exchangeApiSecret)}&trailing_stop=${trailingStop}&cooldown=${cooldown}&tp_multiplier=${tpMultiplier}&sl_multiplier=${slMultiplier}&nn_lr=${nnLr}&nn_floor=${nnFloor}`, {
-            method: 'POST'
-        });
-
-        Promise.all([saveBlogPromise, saveSystemPromise])
-        .then(results => Promise.all(results.map(r => r.json())))
+        })
+        .then(res => res.json())
         .then(data => {
-            elBlogStatusMsg.textContent = "Settings saved successfully!";
-            elBlogStatusMsg.className = "color-green";
-            setTimeout(() => { elBlogStatusMsg.textContent = ""; }, 3000);
+            elSaveSystemConfigBtn.disabled = false;
+            if (data.status === "success") {
+                showToast("Broker and Risk boundaries updated successfully!", "success");
+            } else {
+                showToast("Failed to save broker settings: " + (data.error || "unknown error"), "error");
+            }
         })
         .catch(err => {
-            elBlogStatusMsg.textContent = "Error saving configuration.";
-            elBlogStatusMsg.className = "color-red";
+            elSaveSystemConfigBtn.disabled = false;
+            showToast("Error saving system settings.", "error");
             console.error(err);
         });
     });
@@ -1134,9 +1220,8 @@ if (elSavePromptsBtn) {
         const elSent = document.getElementById("prompt-sentiment-text");
         const elRisk = document.getElementById("prompt-risk-text");
         
-        elBlogStatusMsg.textContent = "Saving prompt templates...";
-        elBlogStatusMsg.className = "color-blue";
         elSavePromptsBtn.disabled = true;
+        showToast("Saving Agent Prompts...", "info");
         
         const qVal = encodeURIComponent(elQuant ? elQuant.value : "");
         const dVal = encodeURIComponent(elDev ? elDev.value : "");
@@ -1150,18 +1235,14 @@ if (elSavePromptsBtn) {
             .then(data => {
                 elSavePromptsBtn.disabled = false;
                 if (data.status === "success") {
-                    elBlogStatusMsg.textContent = "AI Prompts saved successfully!";
-                    elBlogStatusMsg.className = "color-green";
-                    setTimeout(() => { elBlogStatusMsg.textContent = ""; }, 5000);
+                    showToast("AI Agent prompt templates updated!", "success");
                 } else {
-                    elBlogStatusMsg.textContent = `Error: ${data.error || "failed"}`;
-                    elBlogStatusMsg.className = "color-red";
+                    showToast("Failed to save prompts: " + data.error, "error");
                 }
             })
             .catch(err => {
                 elSavePromptsBtn.disabled = false;
-                elBlogStatusMsg.textContent = "Error saving prompts.";
-                elBlogStatusMsg.className = "color-red";
+                showToast("Error saving prompts.", "error");
                 console.error(err);
             });
     });
@@ -1174,9 +1255,8 @@ if (elSaveScheduleBtn) {
         const elWeeklyDay = document.getElementById("sched-weekly-day");
         const elWeeklyHour = document.getElementById("sched-weekly-hour");
         
-        elBlogStatusMsg.textContent = "Saving schedule configuration...";
-        elBlogStatusMsg.className = "color-blue";
         elSaveScheduleBtn.disabled = true;
+        showToast("Saving schedule timers...", "info");
         
         const elNnHour = document.getElementById("sched-nn-hour");
         const elSentHour = document.getElementById("sched-sent-hour");
@@ -1193,18 +1273,14 @@ if (elSaveScheduleBtn) {
             .then(data => {
                 elSaveScheduleBtn.disabled = false;
                 if (data.status === "success") {
-                    elBlogStatusMsg.textContent = "Schedule updated & applied to crontab!";
-                    elBlogStatusMsg.className = "color-green";
-                    setTimeout(() => { elBlogStatusMsg.textContent = ""; }, 5000);
+                    showToast("Schedules updated & applied to crontab!", "success");
                 } else {
-                    elBlogStatusMsg.textContent = `Error: ${data.error || "failed"}`;
-                    elBlogStatusMsg.className = "color-red";
+                    showToast("Failed to save schedules: " + data.error, "error");
                 }
             })
             .catch(err => {
                 elSaveScheduleBtn.disabled = false;
-                elBlogStatusMsg.textContent = "Error saving schedule.";
-                elBlogStatusMsg.className = "color-red";
+                showToast("Error saving schedule.", "error");
                 console.error(err);
             });
     });
@@ -1212,9 +1288,8 @@ if (elSaveScheduleBtn) {
 
 if (elTriggerBlogBtn) {
     elTriggerBlogBtn.addEventListener("click", () => {
-        elBlogStatusMsg.textContent = "Generating blog post & syncing...";
-        elBlogStatusMsg.className = "color-blue";
         elTriggerBlogBtn.disabled = true;
+        showToast("Generating blog post & syncing reports...", "info");
         
         // Confirm mock options
         const useMock = confirm("Do you want to generate mock trading data before blogging? (Cancel to generate with actual DB data)");
@@ -1224,9 +1299,7 @@ if (elTriggerBlogBtn) {
             .then(data => {
                 elTriggerBlogBtn.disabled = false;
                 if (data.status === "success") {
-                    elBlogStatusMsg.textContent = "Blog published successfully!";
-                    elBlogStatusMsg.className = "color-green";
-                    setTimeout(() => { elBlogStatusMsg.textContent = ""; }, 5000);
+                    showToast("Blog report published successfully!", "success");
                     // Refresh trade log if mock was used
                     if (useMock) {
                         fetch(`/api/trades?t=${Date.now()}`)
@@ -1237,136 +1310,156 @@ if (elTriggerBlogBtn) {
                             });
                     }
                 } else {
-                    elBlogStatusMsg.textContent = `Error: ${data.error || "failed"}`;
-                    elBlogStatusMsg.className = "color-red";
+                    showToast("Failed to generate blog: " + data.error, "error");
                 }
             })
             .catch(err => {
                 elTriggerBlogBtn.disabled = false;
-                elBlogStatusMsg.textContent = "Error generating blog.";
-                elBlogStatusMsg.className = "color-red";
+                showToast("Error generating blog.", "error");
                 console.error(err);
             });
     });
 }
 
-const elOptSentimentBtn = document.getElementById("trigger-opt-sentiment-btn");
-const elOptParamsBtn = document.getElementById("trigger-opt-params-btn");
-
-if (elOptSentimentBtn) {
-    elOptSentimentBtn.addEventListener("click", () => {
-        elBlogStatusMsg.textContent = "Optimizing sentiment source weights...";
-        elBlogStatusMsg.className = "color-blue";
-        elOptSentimentBtn.disabled = true;
-
-        fetch("/api/system/optimize/sentiment", { method: 'POST' })
-            .then(res => res.json())
-            .then(data => {
-                elOptSentimentBtn.disabled = false;
-                if (data.status === "success") {
-                    elBlogStatusMsg.textContent = "Sentiment weights optimized!";
-                    elBlogStatusMsg.className = "color-green";
-                    alert("Sentiment source weights optimized successfully!\n\n" + data.log);
-                    setTimeout(() => { elBlogStatusMsg.textContent = ""; }, 5000);
-                } else {
-                    elBlogStatusMsg.textContent = `Error: ${data.error || "failed"}`;
-                    elBlogStatusMsg.className = "color-red";
-                }
-            })
-            .catch(err => {
-                elOptSentimentBtn.disabled = false;
-                elBlogStatusMsg.textContent = "Error optimizing sentiment.";
-                elBlogStatusMsg.className = "color-red";
-                console.error(err);
-            });
-    });
-}
-
+// -------------------------------------------------------------
+// AI Agent Action Click Event Handlers
+// -------------------------------------------------------------
+const elOptParamsBtn = document.getElementById("trigger-opt-params-btn-tab");
 if (elOptParamsBtn) {
     elOptParamsBtn.addEventListener("click", () => {
-        elBlogStatusMsg.textContent = "Running backtest hyperparameter optimization...";
-        elBlogStatusMsg.className = "color-blue";
         elOptParamsBtn.disabled = true;
-
+        showToast("PhD Quant Agent optimizing ATR multipliers...", "info");
         fetch("/api/system/optimize/parameters", { method: 'POST' })
             .then(res => res.json())
             .then(data => {
                 elOptParamsBtn.disabled = false;
                 if (data.status === "success") {
-                    elBlogStatusMsg.textContent = "Parameters optimized!";
-                    elBlogStatusMsg.className = "color-green";
-                    alert("Hyperparameters optimized successfully!\n\n" + data.log);
-                    setTimeout(() => { elBlogStatusMsg.textContent = ""; }, 5000);
+                    showToast("Quant optimization complete!", "success");
+                    alert("Quant Parameter optimization complete!\n\n" + data.log);
                 } else {
-                    elBlogStatusMsg.textContent = `Error: ${data.error || "failed"}`;
-                    elBlogStatusMsg.className = "color-red";
+                    showToast("Quant optimization failed: " + data.error, "error");
                 }
             })
             .catch(err => {
                 elOptParamsBtn.disabled = false;
-                elBlogStatusMsg.textContent = "Error optimizing parameters.";
-                elBlogStatusMsg.className = "color-red";
+                showToast("Error running Quant optimizer.", "error");
                 console.error(err);
             });
     });
 }
 
-const elOptNnBtn = document.getElementById("trigger-opt-nn-btn");
-if (elOptNnBtn) {
-    elOptNnBtn.addEventListener("click", () => {
-        elBlogStatusMsg.textContent = "AI Agent optimizing Neural Network settings...";
-        elBlogStatusMsg.className = "color-blue";
-        elOptNnBtn.disabled = true;
-
-        fetch("/api/system/optimize/nn", { method: 'POST' })
-            .then(res => res.json())
-            .then(data => {
-                elOptNnBtn.disabled = false;
-                if (data.status === "success") {
-                    elBlogStatusMsg.textContent = "Neural Network settings optimized!";
-                    elBlogStatusMsg.className = "color-green";
-                    alert("Neural Network Self-Improvement optimization completed successfully!\n\n" + data.log);
-                    setTimeout(() => { elBlogStatusMsg.textContent = ""; }, 5000);
-                } else {
-                    elBlogStatusMsg.textContent = `Error: ${data.error || "failed"}`;
-                    elBlogStatusMsg.className = "color-red";
-                }
-            })
-            .catch(err => {
-                elOptNnBtn.disabled = false;
-                elBlogStatusMsg.textContent = "Error optimizing Neural Network.";
-                elBlogStatusMsg.className = "color-red";
-                console.error(err);
-            });
-    });
-}
-
-const elSelfDevBtn = document.getElementById("trigger-self-dev-btn");
+const elSelfDevBtn = document.getElementById("trigger-self-dev-btn-tab");
 if (elSelfDevBtn) {
     elSelfDevBtn.addEventListener("click", () => {
-        elBlogStatusMsg.textContent = "Autonomous AI Software Agent designing and building new feature...";
-        elBlogStatusMsg.className = "color-blue";
         elSelfDevBtn.disabled = true;
-
+        showToast("Dev Architect iterating code improvements...", "info");
         fetch("/api/system/optimize/self_dev", { method: 'POST' })
             .then(res => res.json())
             .then(data => {
                 elSelfDevBtn.disabled = false;
                 if (data.status === "success") {
-                    elBlogStatusMsg.textContent = "AI Feature Built & Deployed!";
-                    elBlogStatusMsg.className = "color-green";
+                    showToast("Self-Dev code generation complete!", "success");
                     alert("AI Self-Development session completed successfully!\n\n" + data.log);
-                    setTimeout(() => { elBlogStatusMsg.textContent = ""; }, 5000);
                 } else {
-                    elBlogStatusMsg.textContent = `Error: ${data.error || "failed"}`;
-                    elBlogStatusMsg.className = "color-red";
-                    alert("Self-Development failed: " + data.error);
+                    showToast("Self-Development failed: " + data.error, "error");
                 }
             })
             .catch(err => {
                 elSelfDevBtn.disabled = false;
-                elBlogStatusMsg.textContent = "Error running self-developer agent.";
-                elBlogStatusMsg.className = "color-red";
+                showToast("Error running self-dev agent.", "error");
+                console.error(err);
+            });
+    });
+}
+
+const elOptNnBtn = document.getElementById("trigger-opt-nn-btn-tab");
+if (elOptNnBtn) {
+    elOptNnBtn.addEventListener("click", () => {
+        elOptNnBtn.disabled = true;
+        showToast("NeuralCore tuning learning rate & bounds...", "info");
+        fetch("/api/system/optimize/nn", { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                elOptNnBtn.disabled = false;
+                if (data.status === "success") {
+                    showToast("Neural optimizer completed!", "success");
+                    alert("Neural Network self-tuning completed successfully!\n\n" + data.log);
+                } else {
+                    showToast("Neural core optimization failed: " + data.error, "error");
+                }
+            })
+            .catch(err => {
+                elOptNnBtn.disabled = false;
+                showToast("Error tuning neural network.", "error");
+                console.error(err);
+            });
+    });
+}
+
+document.querySelectorAll(".trigger-opt-sentiment-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+        btn.disabled = true;
+        showToast("Sentinel monitoring web feeds & sentiment...", "info");
+        fetch("/api/system/optimize/sentiment", { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                btn.disabled = false;
+                if (data.status === "success") {
+                    showToast("Sentiment source weights optimized!", "success");
+                    alert("Sentiment source weights optimized successfully!\n\n" + data.log);
+                } else {
+                    showToast("Sentiment optimization failed: " + data.error, "error");
+                }
+            })
+            .catch(err => {
+                btn.disabled = false;
+                showToast("Error optimizing sentiment.", "error");
+                console.error(err);
+            });
+    });
+});
+
+document.querySelectorAll(".trigger-risk-audit-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+        btn.disabled = true;
+        showToast("Risk Auditor evaluating drawdowns...", "info");
+        fetch("/api/system/optimize/risk_audit", { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                btn.disabled = false;
+                if (data.status === "success") {
+                    showToast("Portfolio Risk Audit complete!", "success");
+                    alert("Portfolio Risk Audit completed successfully!\n\n" + data.log);
+                } else {
+                    showToast("Risk audit failed: " + data.error, "error");
+                }
+            })
+            .catch(err => {
+                btn.disabled = false;
+                showToast("Error running risk audit.", "error");
+                console.error(err);
+            });
+    });
+});
+
+const elResetCooldownsBtn = document.getElementById("trigger-reset-cooldowns-btn-tab");
+if (elResetCooldownsBtn) {
+    elResetCooldownsBtn.addEventListener("click", () => {
+        elResetCooldownsBtn.disabled = true;
+        showToast("Clearing asset exchange cooldowns...", "info");
+        fetch("/api/system/reset_cooldowns", { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                elResetCooldownsBtn.disabled = false;
+                if (data.status === "success") {
+                    showToast("System cooldowns cleared!", "success");
+                } else {
+                    showToast("Failed to clear cooldowns: " + data.error, "error");
+                }
+            })
+            .catch(err => {
+                elResetCooldownsBtn.disabled = false;
+                showToast("Error resetting cooldowns.", "error");
                 console.error(err);
             });
     });
@@ -1813,6 +1906,7 @@ if (elSaveNnParamsBtn) {
         const maxDrawdown = document.getElementById("setting-max-drawdown")?.value ? parseFloat(document.getElementById("setting-max-drawdown").value) : 5.0;
 
         elSaveNnParamsBtn.disabled = true;
+        showToast("Saving Neural Hyperparameters...", "info");
         
         // Sync inputs with the other settings tab inputs so they stay updated
         const elNnLrOrig = document.getElementById("setting-nn-lr");
@@ -1827,70 +1921,22 @@ if (elSaveNnParamsBtn) {
         .then(data => {
             elSaveNnParamsBtn.disabled = false;
             if (data.status === "success") {
-                alert("Neural Network hyperparameters saved successfully!");
+                showToast("Neural hyperparameters saved successfully!", "success");
             } else {
-                alert("Failed to save neural parameters: " + data.error);
+                showToast("Failed to save neural parameters: " + data.error, "error");
             }
         })
         .catch(err => {
             elSaveNnParamsBtn.disabled = false;
+            showToast("Error saving neural settings.", "error");
             console.error("Error saving neural core settings:", err);
         });
     });
 }
 
 // -------------------------------------------------------------
-// Bind Duplicate Actions inside Personified Cards Tab
-// -------------------------------------------------------------
-const bindTabAction = (btnId, origBtnId) => {
-    const btn = document.getElementById(btnId);
-    const origBtn = document.getElementById(origBtnId);
-    if (btn && origBtn) {
-        btn.addEventListener("click", () => {
-            origBtn.click();
-        });
-    }
-};
-
-bindTabAction("trigger-opt-params-btn-tab", "trigger-opt-params-btn");
-bindTabAction("trigger-self-dev-btn-tab", "trigger-self-dev-btn");
-bindTabAction("trigger-blog-btn-tab", "trigger-blog-btn");
-bindTabAction("trigger-opt-nn-btn-tab", "trigger-opt-nn-btn");
-bindTabAction("trigger-opt-sentiment-btn-tab", "trigger-opt-sentiment-btn");
-bindTabAction("trigger-reset-cooldowns-btn-tab", "trigger-reset-cooldowns-btn");
-
-// 🛡️ Portfolio Risk Auditor Manual Trigger
-const elRiskAuditBtn = document.getElementById("trigger-risk-audit-btn-tab");
-if (elRiskAuditBtn) {
-    elRiskAuditBtn.addEventListener("click", () => {
-        elBlogStatusMsg.textContent = "AI Risk Agent auditing portfolio drawdowns...";
-        elBlogStatusMsg.className = "color-blue";
-        elRiskAuditBtn.disabled = true;
-
-        fetch("/api/system/optimize/risk_audit", { method: 'POST' })
-            .then(res => res.json())
-            .then(data => {
-                elRiskAuditBtn.disabled = false;
-                if (data.status === "success") {
-                    elBlogStatusMsg.textContent = "Portfolio Risk Audit complete!";
-                    elBlogStatusMsg.className = "color-green";
-                    alert("Portfolio Risk Audit completed successfully!\n\n" + data.log);
-                    setTimeout(() => { elBlogStatusMsg.textContent = ""; }, 5000);
-                } else {
-                    elBlogStatusMsg.textContent = `Error: ${data.error || "failed"}`;
-                    elBlogStatusMsg.className = "color-red";
-                }
-            })
-            .catch(err => {
-                elRiskAuditBtn.disabled = false;
-                elBlogStatusMsg.textContent = "Error running Risk Audit.";
-                elBlogStatusMsg.className = "color-red";
-                console.error(err);
-            });
-    });
-}
-
 // Populate NN values in Neural tab from config values on load
+// -------------------------------------------------------------
 setTimeout(() => {
     const elNnLrOrig = document.getElementById("setting-nn-lr");
     const elNnFloorOrig = document.getElementById("setting-nn-floor");
