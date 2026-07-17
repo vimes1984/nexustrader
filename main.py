@@ -1132,6 +1132,32 @@ def trigger_nn_optimization():
         logging.error(f"Error in manual Neural Network optimization: {e}")
         return {"status": "error", "error": str(e)}
 
+@app.post("/api/system/optimize/sentiment")
+def trigger_sentiment_optimization():
+    try:
+        from sentiment_agent import run_sentiment_self_improvement
+        res = run_sentiment_self_improvement()
+        if res.startswith("Success"):
+            return {"status": "success", "log": res}
+        else:
+            return {"status": "error", "error": res}
+    except Exception as e:
+        logging.error(f"Error in manual Sentiment optimization: {e}")
+        return {"status": "error", "error": str(e)}
+
+@app.post("/api/system/optimize/risk_audit")
+def trigger_risk_audit():
+    try:
+        from risk_auditor import run_risk_audit
+        res = run_risk_audit()
+        if res.startswith("Success"):
+            return {"status": "success", "log": res}
+        else:
+            return {"status": "error", "error": res}
+    except Exception as e:
+        logging.error(f"Error in manual Risk Audit: {e}")
+        return {"status": "error", "error": str(e)}
+
 DEFAULT_PROMPT_QUANT = """You are a world-class Quantitative Researcher, PhD in Mathematical Finance, and elite risk manager critically evaluating the performance of the NexusTrader self-learning ensemble bot.
 
 Our core operational mandate is to scale net returns to a stable, risk-adjusted target of $1,000 USD per day while strictly minimizing maximum drawdown (MDD) and tail risk.
@@ -1180,22 +1206,49 @@ At the very end of your response, output recommended setting adjustments strictl
 }
 ```"""
 
+DEFAULT_PROMPT_SENTIMENT = """You are a high-caliber NLP Sentiment Engineer and Social Media Quant.
+Our core goal is to filter noise and optimize sentiment feed weights to scale bot earnings to $1,000 USD/day.
+
+Analyze recent feed weighted scores and sentiment data. Propose mapping corrections or new feed sources.
+At the very end of your response, output a strict JSON block with feed weights mapping corrections:
+```json
+{
+  "recommended_news_sentiment_weight": float
+}
+```"""
+
+DEFAULT_PROMPT_RISK = """You are a highly conservative Quantitative Portfolio Risk Auditor.
+Our goal is to verify that risk exposures, asset correlations, and tail drawdowns strictly protect capital while targeting $1,000 USD/day.
+
+Critique leverage levels, daily drawdown limits, and portfolio correlation matrices.
+At the very end of your response, output a strict JSON block with risk parameter recommendations:
+```json
+{
+  "recommended_max_daily_loss": float,
+  "recommended_loss_cooldown_hours": float
+}
+```"""
+
 @app.get("/api/system/prompts")
 def get_prompts():
     return {
         "prompt_quant": database.load_setting("prompt_self_improvement", DEFAULT_PROMPT_QUANT),
         "prompt_dev": database.load_setting("prompt_self_developer", DEFAULT_PROMPT_DEV),
         "prompt_blog": database.load_setting("prompt_blog_agent", DEFAULT_PROMPT_BLOG),
-        "prompt_nn": database.load_setting("prompt_nn_agent", DEFAULT_PROMPT_NN)
+        "prompt_nn": database.load_setting("prompt_nn_agent", DEFAULT_PROMPT_NN),
+        "prompt_sentiment": database.load_setting("prompt_sentiment_agent", DEFAULT_PROMPT_SENTIMENT),
+        "prompt_risk": database.load_setting("prompt_risk_auditor", DEFAULT_PROMPT_RISK)
     }
 
 @app.post("/api/system/prompts")
-def update_prompts(prompt_quant: str, prompt_dev: str, prompt_blog: str, prompt_nn: str):
+def update_prompts(prompt_quant: str, prompt_dev: str, prompt_blog: str, prompt_nn: str, prompt_sentiment: str, prompt_risk: str):
     try:
         database.save_setting("prompt_self_improvement", prompt_quant)
         database.save_setting("prompt_self_developer", prompt_dev)
         database.save_setting("prompt_blog_agent", prompt_blog)
         database.save_setting("prompt_nn_agent", prompt_nn)
+        database.save_setting("prompt_sentiment_agent", prompt_sentiment)
+        database.save_setting("prompt_risk_auditor", prompt_risk)
         return {"status": "success"}
     except Exception as e:
         return {"status": "error", "error": str(e)}
@@ -1206,6 +1259,8 @@ def update_crontab_schedule():
         weekly_day = int(database.load_setting("weekly_agent_day", "0"))  # 0=Sunday
         weekly_hour = int(database.load_setting("weekly_agent_hour", "23"))
         nn_hour = int(database.load_setting("nn_agent_hour", "1"))
+        sent_hour = int(database.load_setting("sentiment_agent_hour", "2"))
+        risk_hour = int(database.load_setting("risk_auditor_hour", "3"))
         
         project_path = os.path.dirname(os.path.abspath(__file__))
         
@@ -1213,6 +1268,8 @@ def update_crontab_schedule():
         daily_line = f"0 {daily_hour} * * * cd {project_path} && ./daily_agent.sh >> daily_agent.log 2>&1"
         weekly_line = f"59 {weekly_hour} * * {weekly_day} cd {project_path} && /usr/bin/python3 blog_agent.py >> blog_agent.log 2>&1"
         nn_line = f"0 {nn_hour} * * * cd {project_path} && /usr/bin/python3 nn_agent.py >> nn_agent.log 2>&1"
+        sent_line = f"0 {sent_hour} * * * cd {project_path} && /usr/bin/python3 sentiment_agent.py >> sentiment_agent.log 2>&1"
+        risk_line = f"0 {risk_hour} * * * cd {project_path} && /usr/bin/python3 risk_auditor.py >> risk_auditor.log 2>&1"
         
         # Read current crontab
         import subprocess
@@ -1224,12 +1281,14 @@ def update_crontab_schedule():
             
         new_lines = []
         for line in lines:
-            if "daily_agent.sh" not in line and "blog_agent.py" not in line and "nn_agent.py" not in line:
+            if "daily_agent.sh" not in line and "blog_agent.py" not in line and "nn_agent.py" not in line and "sentiment_agent.py" not in line and "risk_auditor.py" not in line:
                 new_lines.append(line)
                 
         new_lines.append(daily_line)
         new_lines.append(weekly_line)
         new_lines.append(nn_line)
+        new_lines.append(sent_line)
+        new_lines.append(risk_line)
         
         # Write back to crontab
         cron_content = "\n".join(new_lines) + "\n"
@@ -1254,11 +1313,13 @@ def get_system_schedule():
         "daily_agent_hour": int(database.load_setting("daily_agent_hour", "0")),
         "weekly_agent_day": int(database.load_setting("weekly_agent_day", "0")),
         "weekly_agent_hour": int(database.load_setting("weekly_agent_hour", "23")),
-        "nn_agent_hour": int(database.load_setting("nn_agent_hour", "1"))
+        "nn_agent_hour": int(database.load_setting("nn_agent_hour", "1")),
+        "sentiment_agent_hour": int(database.load_setting("sentiment_agent_hour", "2")),
+        "risk_auditor_hour": int(database.load_setting("risk_auditor_hour", "3"))
     }
 
 @app.post("/api/system/schedule")
-def update_system_schedule(daily_agent_hour: int, weekly_agent_day: int, weekly_agent_hour: int, nn_agent_hour: int = 1):
+def update_system_schedule(daily_agent_hour: int, weekly_agent_day: int, weekly_agent_hour: int, nn_agent_hour: int = 1, sentiment_agent_hour: int = 2, risk_auditor_hour: int = 3):
     try:
         if not (0 <= daily_agent_hour <= 23):
             return {"status": "error", "error": "Daily hour must be between 0 and 23"}
@@ -1267,12 +1328,18 @@ def update_system_schedule(daily_agent_hour: int, weekly_agent_day: int, weekly_
         if not (0 <= weekly_agent_hour <= 23):
             return {"status": "error", "error": "Weekly hour must be between 0 and 23"}
         if not (0 <= nn_agent_hour <= 23):
-            return {"status": "error", "error": "NN optimizer hour must be between 0 and 23"}
+            return {"status": "error", "error": "NN hour must be between 0 and 23"}
+        if not (0 <= sentiment_agent_hour <= 23):
+            return {"status": "error", "error": "Sentiment hour must be between 0 and 23"}
+        if not (0 <= risk_auditor_hour <= 23):
+            return {"status": "error", "error": "Risk hour must be between 0 and 23"}
             
         database.save_setting("daily_agent_hour", str(daily_agent_hour))
         database.save_setting("weekly_agent_day", str(weekly_agent_day))
         database.save_setting("weekly_agent_hour", str(weekly_agent_hour))
         database.save_setting("nn_agent_hour", str(nn_agent_hour))
+        database.save_setting("sentiment_agent_hour", str(sentiment_agent_hour))
+        database.save_setting("risk_auditor_hour", str(risk_auditor_hour))
         
         # Update system crontab dynamically
         update_crontab_schedule()

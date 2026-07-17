@@ -18,6 +18,12 @@ python3 agent_self_developer.py
 echo "🤖 3. Running Neural Network Hyperparameter Self-Improvement..."
 python3 nn_agent.py
 
+echo "🤖 4. Running News Sentiment Weight Self-Improvement..."
+python3 sentiment_agent.py
+
+echo "🤖 5. Running Portfolio Risk Auditing..."
+python3 risk_auditor.py
+
 echo "=========================================================="
 echo "🎉 Daily Agent tasks completed successfully!"
 echo "=========================================================="

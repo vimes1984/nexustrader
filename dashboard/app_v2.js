@@ -1014,6 +1014,10 @@ function loadBlogConfig() {
             if (elDev && data.prompt_dev) elDev.value = data.prompt_dev;
             if (elBlog && data.prompt_blog) elBlog.value = data.prompt_blog;
             if (elNnPrompt && data.prompt_nn) elNnPrompt.value = data.prompt_nn;
+            const elSentimentPrompt = document.getElementById("prompt-sentiment-text");
+            const elRiskPrompt = document.getElementById("prompt-risk-text");
+            if (elSentimentPrompt && data.prompt_sentiment) elSentimentPrompt.value = data.prompt_sentiment;
+            if (elRiskPrompt && data.prompt_risk) elRiskPrompt.value = data.prompt_risk;
         })
         .catch(err => console.error("Error loading prompt config:", err));
 
@@ -1029,6 +1033,10 @@ function loadBlogConfig() {
             if (elWeeklyHour) elWeeklyHour.value = data.weekly_agent_hour;
             const elNnHour = document.getElementById("sched-nn-hour");
             if (elNnHour) elNnHour.value = data.nn_agent_hour || 1;
+            const elSentHour = document.getElementById("sched-sent-hour");
+            const elRiskHour = document.getElementById("sched-risk-hour");
+            if (elSentHour) elSentHour.value = data.sentiment_agent_hour || 2;
+            if (elRiskHour) elRiskHour.value = data.risk_auditor_hour || 3;
         })
         .catch(err => console.error("Error loading schedule config:", err));
 }
@@ -1092,6 +1100,8 @@ if (elSavePromptsBtn) {
         const elDev = document.getElementById("prompt-dev-text");
         const elBlog = document.getElementById("prompt-blog-text");
         const elNn = document.getElementById("prompt-nn-text");
+        const elSent = document.getElementById("prompt-sentiment-text");
+        const elRisk = document.getElementById("prompt-risk-text");
         
         elBlogStatusMsg.textContent = "Saving prompt templates...";
         elBlogStatusMsg.className = "color-blue";
@@ -1101,8 +1111,10 @@ if (elSavePromptsBtn) {
         const dVal = encodeURIComponent(elDev ? elDev.value : "");
         const bVal = encodeURIComponent(elBlog ? elBlog.value : "");
         const nVal = encodeURIComponent(elNn ? elNn.value : "");
+        const sVal = encodeURIComponent(elSent ? elSent.value : "");
+        const rVal = encodeURIComponent(elRisk ? elRisk.value : "");
         
-        fetch(`/api/system/prompts?prompt_quant=${qVal}&prompt_dev=${dVal}&prompt_blog=${bVal}&prompt_nn=${nVal}`, { method: 'POST' })
+        fetch(`/api/system/prompts?prompt_quant=${qVal}&prompt_dev=${dVal}&prompt_blog=${bVal}&prompt_nn=${nVal}&prompt_sentiment=${sVal}&prompt_risk=${rVal}`, { method: 'POST' })
             .then(res => res.json())
             .then(data => {
                 elSavePromptsBtn.disabled = false;
@@ -1136,12 +1148,16 @@ if (elSaveScheduleBtn) {
         elSaveScheduleBtn.disabled = true;
         
         const elNnHour = document.getElementById("sched-nn-hour");
+        const elSentHour = document.getElementById("sched-sent-hour");
+        const elRiskHour = document.getElementById("sched-risk-hour");
         const dhVal = elDailyHour ? parseInt(elDailyHour.value) : 0;
         const wdVal = elWeeklyDay ? parseInt(elWeeklyDay.value) : 0;
         const whVal = elWeeklyHour ? parseInt(elWeeklyHour.value) : 23;
         const nhVal = elNnHour ? parseInt(elNnHour.value) : 1;
+        const shVal = elSentHour ? parseInt(elSentHour.value) : 2;
+        const rhVal = elRiskHour ? parseInt(elRiskHour.value) : 3;
         
-        fetch(`/api/system/schedule?daily_agent_hour=${dhVal}&weekly_agent_day=${wdVal}&weekly_agent_hour=${whVal}&nn_agent_hour=${nhVal}`, { method: 'POST' })
+        fetch(`/api/system/schedule?daily_agent_hour=${dhVal}&weekly_agent_day=${wdVal}&weekly_agent_hour=${whVal}&nn_agent_hour=${nhVal}&sentiment_agent_hour=${shVal}&risk_auditor_hour=${rhVal}`, { method: 'POST' })
             .then(res => res.json())
             .then(data => {
                 elSaveScheduleBtn.disabled = false;
@@ -1806,6 +1822,37 @@ bindTabAction("trigger-blog-btn-tab", "trigger-blog-btn");
 bindTabAction("trigger-opt-nn-btn-tab", "trigger-opt-nn-btn");
 bindTabAction("trigger-opt-sentiment-btn-tab", "trigger-opt-sentiment-btn");
 bindTabAction("trigger-reset-cooldowns-btn-tab", "trigger-reset-cooldowns-btn");
+
+// 🛡️ Portfolio Risk Auditor Manual Trigger
+const elRiskAuditBtn = document.getElementById("trigger-risk-audit-btn-tab");
+if (elRiskAuditBtn) {
+    elRiskAuditBtn.addEventListener("click", () => {
+        elBlogStatusMsg.textContent = "AI Risk Agent auditing portfolio drawdowns...";
+        elBlogStatusMsg.className = "color-blue";
+        elRiskAuditBtn.disabled = true;
+
+        fetch("/api/system/optimize/risk_audit", { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                elRiskAuditBtn.disabled = false;
+                if (data.status === "success") {
+                    elBlogStatusMsg.textContent = "Portfolio Risk Audit complete!";
+                    elBlogStatusMsg.className = "color-green";
+                    alert("Portfolio Risk Audit completed successfully!\n\n" + data.log);
+                    setTimeout(() => { elBlogStatusMsg.textContent = ""; }, 5000);
+                } else {
+                    elBlogStatusMsg.textContent = `Error: ${data.error || "failed"}`;
+                    elBlogStatusMsg.className = "color-red";
+                }
+            })
+            .catch(err => {
+                elRiskAuditBtn.disabled = false;
+                elBlogStatusMsg.textContent = "Error running Risk Audit.";
+                elBlogStatusMsg.className = "color-red";
+                console.error(err);
+            });
+    });
+}
 
 // Populate NN values in Neural tab from config values on load
 setTimeout(() => {
