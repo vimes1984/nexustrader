@@ -8,7 +8,7 @@ import logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 class DataIngestion:
-    def __init__(self, ticker="ETH-EUR", interval="1h", period="60d"):
+    def __init__(self, ticker="ETH-USD", interval="1h", period="60d"):
         self.ticker = ticker
         self.interval = interval
         self.period = period

@@ -100,11 +100,49 @@ def init_db():
         pnl REAL
     )
     """)
+
+    # Create weights history table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS weights_history (
+        timestamp REAL,
+        ticker TEXT,
+        weights TEXT,
+        PRIMARY KEY (timestamp, ticker)
+    )
+    """)
     
     # Commit and close
     conn.commit()
     conn.close()
     logging.info("Database initialized successfully.")
+
+def save_weights_history(timestamp: float, ticker: str, weights: dict):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT OR REPLACE INTO weights_history (timestamp, ticker, weights) VALUES (?, ?, ?)",
+            (timestamp, ticker, json.dumps(weights))
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logging.error(f"Error saving weights history: {e}")
+
+def load_weights_history(ticker: str, limit: int = 100):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT timestamp, weights FROM weights_history WHERE ticker = ? ORDER BY timestamp ASC LIMIT ?",
+            (ticker, limit)
+        )
+        rows = cursor.fetchall()
+        conn.close()
+        return [{"timestamp": r[0], "weights": json.loads(r[1])} for r in rows]
+    except Exception as e:
+        logging.error(f"Error loading weights history: {e}")
+        return []
 
 def save_tick(row, symbol):
     """Saves a price tick to database."""

@@ -450,11 +450,11 @@ class ExecutionEngine:
             last_prices = getattr(self, "last_known_prices", {})
             
             for asset, qty in holdings.items():
-                if asset == "EUR":
+                if asset in ["EUR", "USD"]:
                     total_value += qty
                 else:
                     price = None
-                    for key in [f"{asset}-EUR", f"{asset}/EUR", f"XXBT-EUR", f"XETH-EUR", f"XXRP-EUR"]:
+                    for key in [f"{asset}-USD", f"{asset}/USD", f"{asset}-EUR", f"{asset}/EUR", f"XXBT-USD", f"XETH-USD", f"XXRP-USD", f"XXBT-EUR", f"XETH-EUR", f"XXRP-EUR"]:
                         if key in current_prices and current_prices[key] is not None:
                             price = float(current_prices[key])
                             break

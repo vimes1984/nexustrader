@@ -5,7 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NexusTrader — Self-Learning Algorithmic Trading Bot</title>
     <meta name="description" content="Open-source algorithmic trading bot with real-time probability odds estimation, risk evaluation, and online reinforcement learning.">
-    <link rel="stylesheet" href="/dashboard/index.css">
+    <link rel="stylesheet" href="/dashboard/index_v2.css">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0f172a">
+    <link rel="apple-touch-icon" href="/dashboard/icon-192.png">
     <!-- Chart.js for visualization -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- Lucide Icons for beautiful iconography -->
@@ -56,12 +59,12 @@
     <section class="dashboard-grid" aria-label="Key Performance Indicators">
         <div class="glass-panel kpi-card" id="equity-card">
             <div class="kpi-title">Total Portfolio Value</div>
-            <div class="kpi-value" id="val-equity">€100.00</div>
-            <div class="kpi-sub" id="val-unrealized-pnl">Active Trade Profit: €0.00 (0.00%)</div>
+            <div class="kpi-value" id="val-equity">$100.00</div>
+            <div class="kpi-sub" id="val-unrealized-pnl">Active Trade Profit: $0.00 (0.00%)</div>
         </div>
         <div class="glass-panel kpi-card" id="balance-card">
             <div class="kpi-title">Cash Ready to Invest</div>
-            <div class="kpi-value" id="val-balance">€100.00</div>
+            <div class="kpi-value" id="val-balance">$100.00</div>
             <div class="kpi-sub">Ready to deploy</div>
         </div>
         <div class="glass-panel kpi-card" id="winrate-card">
@@ -71,7 +74,7 @@
         </div>
         <div class="glass-panel kpi-card" id="totalpnl-card">
             <div class="kpi-title">Total Profit</div>
-            <div class="kpi-value" id="val-total-pnl">€0.00</div>
+            <div class="kpi-value" id="val-total-pnl">$0.00</div>
             <div class="kpi-sub" id="val-total-pnl-percent">0.00% growth</div>
         </div>
     </section>
@@ -85,7 +88,7 @@
             <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center; gap: 15px; flex-wrap: wrap; margin-bottom: 16px;">
                 <h2 class="panel-title" style="margin: 0;">
                     <i data-lucide="trending-up" style="color: var(--neon-blue)"></i>
-                    <span id="chart-ticker-title">ETH-EUR</span> Live Feed
+                    <span id="chart-ticker-title">ETH-USD</span> Live Feed
                 </h2>
                 
                 <!-- Portfolio Timeframe Selector (hidden by default) -->
@@ -97,7 +100,7 @@
                 </div>
 
                 <div id="ticker-price-container" style="font-size: 14px; font-weight: 600; font-family: 'Space Grotesk', sans-serif;">
-                    Price: <span id="ticker-price" class="color-blue">€0.00</span>
+                    Price: <span id="ticker-price" class="color-blue">$0.00</span>
                 </div>
             </div>
             
@@ -108,18 +111,6 @@
             
             <div class="chart-container">
                 <canvas id="main-chart"></canvas>
-            </div>
-
-            <!-- Chart Legend -->
-            <div class="chart-legend-container" style="display: flex; justify-content: center; gap: 20px; margin-top: 12px; font-size: 11px; color: var(--text-secondary);">
-                <div style="display: flex; align-items: center; gap: 6px;">
-                    <span style="display: inline-block; width: 12px; height: 3px; background: #00f0ff; border-radius: 2px;"></span>
-                    <span>Asset price feed</span>
-                </div>
-                <div style="display: flex; align-items: center; gap: 6px;">
-                    <span style="display: inline-block; width: 12px; height: 3px; background: rgba(168, 85, 247, 0.6); border-radius: 2px; border-top: 1px dashed rgba(168, 85, 247, 1);"></span>
-                    <span>Bollinger Bands (volatility boundaries)</span>
-                </div>
             </div>
         </article>
 
@@ -144,7 +135,7 @@
                             <th>Buy Price</th>
                             <th>Sell Price</th>
                             <th>AI Win Chance</th>
-                            <th>Earnings (€)</th>
+                            <th>Earnings ($)</th>
                             <th>Why it Closed</th>
                         </tr>
                     </thead>
@@ -198,6 +189,32 @@
                 </div>
             </div>
             
+            <!-- Memory & Persistence Diagnostics -->
+            <div style="margin-top: 15px; padding: 12px; background: rgba(168, 85, 247, 0.05); border: 1px solid rgba(168, 85, 247, 0.2); border-radius: 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <span style="font-size: 11px; font-weight: 700; color: var(--neon-purple); text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 4px;">
+                        <i data-lucide="cpu" style="width: 12px; height: 12px;"></i>
+                        AI Brain Memory
+                    </span>
+                    <span id="neural-memory-badge" style="font-size: 10px; padding: 2px 6px; border-radius: 4px; background: rgba(16, 185, 129, 0.15); color: var(--neon-green); font-weight: 700; border: 1px solid rgba(16, 185, 129, 0.3);">
+                        SECURE & PERSISTENT
+                    </span>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 8px; font-size: 11px;">
+                    <div style="display: flex; flex-direction: column; gap: 2px;">
+                        <span style="color: var(--text-muted);">Lifetime Training Epochs:</span>
+                        <span id="neural-lifetime-epochs" style="font-weight: 700; color: var(--text-primary);">0 epochs</span>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 2px; text-align: right;">
+                        <span style="color: var(--text-muted);">Model DNA Signature:</span>
+                        <span id="neural-model-dna" style="font-family: monospace; font-weight: 700; color: var(--neon-blue);">NN-DEFAULT</span>
+                    </div>
+                </div>
+                <div id="neural-memory-footer" style="font-size: 9px; color: var(--text-muted); margin-top: 6px; text-align: center; border-top: 1px dashed rgba(168, 85, 247, 0.15); padding-top: 6px;">
+                    Weights synchronized to local SQLite DB.
+                </div>
+            </div>
+
             <div style="margin-top: 15px;">
                 <label style="font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 6px;">Policy Update Log:</label>
                 <div id="neural-log" style="font-size: 11px; font-family: monospace; color: #a855f7; background: rgba(0,0,0,0.25); border: 1px solid var(--border-color); padding: 8px; border-radius: 8px; height: 80px; overflow-y: auto; line-height: 1.4;">
@@ -244,7 +261,7 @@
             </div>
         </article>
     </section>
-        </div><div class="sidebar-container" style="display: flex; flex-direction: column; gap: 20px;">
+        </div><div class="sidebar-container" style="display: grid; grid-template-columns: 1fr; gap: 20px;">
             <!-- Learning weights -->
             <article class="glass-panel weights-panel">
                 <div>
@@ -260,6 +277,16 @@
                     </div>
                 </div>
                 
+                <div style="border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 16px;">
+                    <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                        <i data-lucide="trending-up" style="width: 14px; height: 14px; color: var(--neon-purple);"></i>
+                        Neural Weights Evolution (Learning History)
+                    </h3>
+                    <div style="position: relative; height: 160px; width: 100%; margin-top: 10px;">
+                        <canvas id="weights-history-chart"></canvas>
+                    </div>
+                </div>
+
                 <div style="border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 16px;">
                     <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 8px;">Active Trade Status</h3>
                     <div id="position-details-container" class="active-pos-details">
@@ -464,6 +491,51 @@
                         Test API Keys
                     </button>
                 </div>
+                
+                <!-- Prompts Config Section -->
+                <div style="border-top: 1px solid var(--border-color); padding-top: 12px; margin-top: 12px;">
+                    <span style="font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 6px;">AI Prompts Configuration:</span>
+                    <div style="display: flex; flex-direction: column; gap: 6px;">
+                        <label style="display: flex; flex-direction: column; gap: 3px; font-size: 10px;">
+                            <span style="color: var(--text-muted);">PhD Quant Optimizer Prompt:</span>
+                            <textarea id="prompt-quant-text" style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 6px; padding: 6px; font-family: inherit; font-size: 10px; height: 50px; resize: vertical; outline: none;"></textarea>
+                        </label>
+                        <label style="display: flex; flex-direction: column; gap: 3px; font-size: 10px;">
+                            <span style="color: var(--text-muted);">AI Self-Dev Prompt:</span>
+                            <textarea id="prompt-dev-text" style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 6px; padding: 6px; font-family: inherit; font-size: 10px; height: 50px; resize: vertical; outline: none;"></textarea>
+                        </label>
+                        <label style="display: flex; flex-direction: column; gap: 3px; font-size: 10px;">
+                            <span style="color: var(--text-muted);">Weekly Blogger Prompt:</span>
+                            <textarea id="prompt-blog-text" style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 6px; padding: 6px; font-family: inherit; font-size: 10px; height: 50px; resize: vertical; outline: none;"></textarea>
+                        </label>
+                        <button class="btn btn-primary" id="save-prompts-btn" style="padding: 6px 12px; font-size: 11px; justify-content: center; font-family: inherit; margin-top: 2px;">
+                            Save AI Prompts
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Agent Scheduling Section -->
+                <div style="border-top: 1px solid var(--border-color); padding-top: 12px; margin-top: 12px;">
+                    <span style="font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 6px;">AI Agent Automation Schedule:</span>
+                    <div style="display: flex; flex-direction: column; gap: 6px;">
+                        <label style="display: flex; justify-content: space-between; align-items: center; font-size: 10px;">
+                            <span style="color: var(--text-muted);">Daily Quant Agent Hour (0-23):</span>
+                            <input type="number" id="sched-daily-hour" min="0" max="23" style="width: 55px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 4px; padding: 3px 6px; text-align: center; font-family: inherit;">
+                        </label>
+                        <label style="display: flex; justify-content: space-between; align-items: center; font-size: 10px;">
+                            <span style="color: var(--text-muted);">Weekly Blogger Day (0-6, 0=Sun):</span>
+                            <input type="number" id="sched-weekly-day" min="0" max="6" style="width: 55px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 4px; padding: 3px 6px; text-align: center; font-family: inherit;">
+                        </label>
+                        <label style="display: flex; justify-content: space-between; align-items: center; font-size: 10px;">
+                            <span style="color: var(--text-muted);">Weekly Blogger Hour (0-23):</span>
+                            <input type="number" id="sched-weekly-hour" min="0" max="23" style="width: 55px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 4px; padding: 3px 6px; text-align: center; font-family: inherit;">
+                        </label>
+                        <button class="btn btn-primary" id="save-schedule-btn" style="padding: 6px 12px; font-size: 11px; justify-content: center; font-family: inherit; margin-top: 2px;">
+                            Save Schedule Settings
+                        </button>
+                    </div>
+                </div>
+
                 <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 8px;">
                     <span style="font-size: 11px; color: var(--text-secondary);">Manual Actions:</span>
                     <div style="display: flex; gap: 6px; flex-wrap: wrap;">
@@ -471,7 +543,10 @@
                             Feeds Opt
                         </button>
                         <button class="btn" id="trigger-opt-params-btn" style="flex: 1; min-width: 75px; padding: 6px 8px; font-size: 10px; justify-content: center; border-color: rgba(168, 85, 247, 0.2); font-family: inherit; color: var(--neon-purple);">
-                            Backtest Opt
+                            Quant Opt
+                        </button>
+                        <button class="btn" id="trigger-self-dev-btn" style="flex: 1; min-width: 85px; padding: 6px 8px; font-size: 10px; justify-content: center; border-color: rgba(0, 240, 255, 0.2); font-family: inherit; color: var(--neon-blue);">
+                            AI Self-Dev
                         </button>
                         <button class="btn" id="trigger-reset-cooldowns-btn" style="flex: 1; min-width: 90px; padding: 6px 8px; font-size: 10px; justify-content: center; border-color: rgba(244, 63, 94, 0.2); font-family: inherit; color: var(--neon-red);">
                             Clear Cooldowns
@@ -485,10 +560,19 @@
     </div>
 
     <!-- App Logic -->
-    <script src="/dashboard/app.js"></script>
+    <script src="/dashboard/app_v2.js"></script>
     <script>
         // Init Lucide Icons
         lucide.createIcons();
+
+        // Register Service Worker for PWA installation
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(reg => console.log('Service Worker registered successfully!', reg))
+                    .catch(err => console.error('Service Worker registration failed:', err));
+            });
+        }
     </script>
 </body>
 </html>

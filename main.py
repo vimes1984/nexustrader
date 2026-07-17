@@ -1,7 +1,7 @@
 import json
 import logging
 import asyncio
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import uvicorn
@@ -31,10 +31,20 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 
 app = FastAPI(title="NexusTrader API", version="1.0.0")
 
+@app.middleware("http")
+async def add_no_cache_headers(request: Request, call_next):
+    response = await call_next(request)
+    path = request.url.path
+    if path == "/" or path.endswith(".html") or path.endswith(".js") or path.endswith(".css"):
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
+
 # Central orchestrator state supporting multi-asset portfolio operations
 class NexusTraderOrchestrator:
     def __init__(self):
-        self.tickers = ['ETH-EUR', 'SOL-EUR', 'BTC-EUR', 'DOGE-EUR', 'XRP-EUR']
+        self.tickers = ['ETH-USD', 'SOL-USD', 'BTC-USD', 'DOGE-USD', 'XRP-USD']
         self.data_ingestions = {}
         self.strategy_ensembles = {}
         self.learning_engines = {}
@@ -105,6 +115,25 @@ class NexusTraderOrchestrator:
                     logging.error(f"Error loading Policy Network weights for {ticker}: {e}")
             else:
                 ensemble.weights = (np.ones(num_strats) / num_strats).tolist()
+
+            # Save initial weights history point if empty to ensure the line chart displays
+            try:
+                if not database.load_weights_history(ticker, limit=1):
+                    # Point 1: Baseline equal weights 2 hours ago
+                    equal_weights = {
+                        ensemble.strategies[i].name: float(1.0 / num_strats)
+                        for i in range(num_strats)
+                    }
+                    database.save_weights_history(time.time() - 7200, ticker, equal_weights)
+                    
+                    # Point 2: Loaded weights now
+                    start_weights = {
+                        ensemble.strategies[i].name: float(ensemble.weights[i])
+                        for i in range(len(ensemble.weights))
+                    }
+                    database.save_weights_history(time.time(), ticker, start_weights)
+            except Exception as e:
+                logging.error(f"Error pre-populating weights history: {e}")
                 
             self.data_ingestions[ticker] = ingestor
             self.strategy_ensembles[ticker] = ensemble
@@ -143,8 +172,27 @@ class NexusTraderOrchestrator:
         # Write back to strategy ensemble
         ensemble.weights = new_weights
         
-        # Save updated network parameters to database
-        database.save_setting(f"policy_net_weights_{ticker}", learner.policy_net.to_json())
+        # Save updated network parameters to database and track training statistics
+        weights_json = learner.policy_net.to_json()
+        database.save_setting(f"policy_net_weights_{ticker}", weights_json)
+        
+        # Calculate unique Model DNA signature from network weight parameters
+        import hashlib
+        dna_hash = hashlib.md5(weights_json.encode('utf-8')).hexdigest()[:8].upper()
+        model_dna = f"NN-{dna_hash}"
+        
+        # Increment and save lifetime training steps
+        steps_key = f"lifetime_training_steps_{ticker}"
+        steps = int(database.load_setting(steps_key, "0")) + 1
+        database.save_setting(steps_key, str(steps))
+        last_save_time = time.strftime('%H:%M:%S', time.localtime())
+        
+        # Save weights to weights history table
+        weights_dict = {
+            ensemble.strategies[i].name: float(new_weights[i])
+            for i in range(len(new_weights))
+        }
+        database.save_weights_history(time.time(), ticker, weights_dict)
         
         # Push update to WebSocket clients immediately
         self._run_async(self.broadcast_message({
@@ -154,7 +202,10 @@ class NexusTraderOrchestrator:
                 ensemble.strategies[i].name: new_weights[i]
                 for i in range(len(new_weights))
             },
-            "pnl": pnl_percent
+            "pnl": pnl_percent,
+            "lifetime_steps": steps,
+            "model_dna": model_dna,
+            "last_save_time": last_save_time
         }))
 
     def process_tick(self, row, ticker):
@@ -310,6 +361,22 @@ class NexusTraderOrchestrator:
                                 "equity": current_equity
                             }))
 
+        # Check Loss Cooldown status
+        cooldown_end = float(database.load_setting(f"cooldown_end_{ticker}", "0.0"))
+        cooldown_active = time.time() < cooldown_end
+        cooldown_remaining = max(0, int((cooldown_end - time.time()) / 60)) if cooldown_active else 0
+
+        # Load lifetime steps and model DNA for visual confirmation
+        steps_key = f"lifetime_training_steps_{ticker}"
+        steps = int(database.load_setting(steps_key, "0"))
+        db_net_str = database.load_setting(f"policy_net_weights_{ticker}")
+        if db_net_str:
+            import hashlib
+            dna_hash = hashlib.md5(db_net_str.encode('utf-8')).hexdigest()[:8].upper()
+            model_dna = f"NN-{dna_hash}"
+        else:
+            model_dna = "NN-DEFAULT"
+
         # 4. Broadcast real-time update to all clients
         self._run_async(self.broadcast_message({
             "type": "tick",
@@ -323,6 +390,12 @@ class NexusTraderOrchestrator:
             "equity": current_equity,
             "position": self.execution_engine.active_positions.get(ticker, None),
             "neural_state": state,
+            "cooldown_active": cooldown_active,
+            "cooldown_remaining": cooldown_remaining,
+            "trading_mode": self.execution_engine.trading_mode,
+            "broker": self.execution_engine.config.get("broker", "kraken"),
+            "lifetime_steps": steps,
+            "model_dna": model_dna,
             "indicators": {
                 "rsi": float(row.get('rsi', 50)),
                 "macd": float(row.get('macd', 0)),
@@ -525,7 +598,7 @@ def get_portfolio_history(timeframe: str = "1W"):
             label_format = "%H:%M"
         elif timeframe == "1W":
             cutoff = now - 7 * 86400
-            label_format = "%m-%d"
+            label_format = "%m-%d %H:%M"
         elif timeframe == "1M":
             cutoff = now - 30 * 86400
             label_format = "%m-%d"
@@ -533,22 +606,31 @@ def get_portfolio_history(timeframe: str = "1W"):
             cutoff = now - 365 * 86400
             label_format = "%Y-%m"
         else:
-            cutoff = 0
+            conn_temp = sqlite3.connect(database.DB_PATH)
+            cursor_temp = conn_temp.cursor()
+            cursor_temp.execute("SELECT MIN(exit_time) FROM trades")
+            row = cursor_temp.fetchone()
+            first_trade_time = row[0] if row and row[0] else None
+            conn_temp.close()
+            
+            if first_trade_time:
+                cutoff = float(first_trade_time)
+            else:
+                cutoff = now - 86400
             label_format = "%Y-%m-%d"
             
         conn = sqlite3.connect(database.DB_PATH)
         cursor = conn.cursor()
         
         cursor.execute(
-            "SELECT timestamp, equity, pnl FROM portfolio_history WHERE timestamp >= ? ORDER BY timestamp ASC",
-            (cutoff,)
+            "SELECT timestamp, equity, pnl FROM portfolio_history ORDER BY timestamp ASC"
         )
         rows = cursor.fetchall()
         
-        points = []
+        event_points = []
         if len(rows) > 1:
             for r_time, r_eq, r_pnl in rows:
-                points.append({
+                event_points.append({
                     "timestamp": float(r_time),
                     "equity": float(r_eq),
                     "pnl": float(r_pnl)
@@ -558,7 +640,7 @@ def get_portfolio_history(timeframe: str = "1W"):
             trades = cursor.fetchall()
             
             current_equity = init_bal
-            all_points = [{"timestamp": 0.0, "equity": init_bal, "pnl": 0.0}]
+            event_points = [{"timestamp": 0.0, "equity": init_bal, "pnl": 0.0}]
             
             cumulative_pnl = 0.0
             for t_time, pnl in trades:
@@ -566,35 +648,50 @@ def get_portfolio_history(timeframe: str = "1W"):
                     continue
                 cumulative_pnl += pnl
                 current_equity = init_bal + cumulative_pnl
-                all_points.append({
+                event_points.append({
                     "timestamp": float(t_time),
                     "equity": current_equity,
                     "pnl": cumulative_pnl
                 })
                 
-            points = [p for p in all_points if p["timestamp"] >= cutoff or p["timestamp"] == 0]
-            
-            if len(points) <= 1:
-                start_equity = init_bal
-                start_pnl = 0.0
-                for p in all_points:
-                    if p["timestamp"] < cutoff:
-                        start_equity = p["equity"]
-                        start_pnl = p["pnl"]
-                points = [
-                    {"timestamp": cutoff, "equity": start_equity, "pnl": start_pnl},
-                    {"timestamp": now, "equity": current_equity, "pnl": cumulative_pnl}
-                ]
-                
         conn.close()
         
+        # Resample logic to prevent X axis distortion and speed up rendering
+        num_points = 50
+        resampled_points = []
+        
+        if event_points:
+            # Find the starting equity at cutoff
+            starting_equity = event_points[0]["equity"]
+            starting_pnl = event_points[0]["pnl"]
+            for p in event_points:
+                if p["timestamp"] <= cutoff:
+                    starting_equity = p["equity"]
+                    starting_pnl = p["pnl"]
+            
+            points_after = [p for p in event_points if p["timestamp"] > cutoff]
+            step = (now - cutoff) / (num_points - 1)
+            
+            current_idx = 0
+            current_equity = starting_equity
+            current_pnl = starting_pnl
+            
+            for i in range(num_points):
+                target_t = cutoff + i * step
+                while current_idx < len(points_after) and points_after[current_idx]["timestamp"] <= target_t:
+                    current_equity = points_after[current_idx]["equity"]
+                    current_pnl = points_after[current_idx]["pnl"]
+                    current_idx += 1
+                
+                resampled_points.append({
+                    "timestamp": target_t,
+                    "equity": current_equity,
+                    "pnl": current_pnl
+                })
+                
         formatted = []
-        for p in points:
-            t_val = p["timestamp"]
-            if t_val == 0.0 or t_val == cutoff:
-                t_struct = time.localtime(cutoff if cutoff > 0 else now)
-            else:
-                t_struct = time.localtime(t_val)
+        for p in resampled_points:
+            t_struct = time.localtime(p["timestamp"])
             label = time.strftime(label_format, t_struct)
             formatted.append({
                 "label": label,
@@ -608,7 +705,7 @@ def get_portfolio_history(timeframe: str = "1W"):
         return []
 
 @app.get("/api/history")
-def get_ticker_history(ticker: str = "ETH-EUR"):
+def get_ticker_history(ticker: str = "ETH-USD"):
     if ticker not in orchestrator.data_ingestions:
         return []
     
@@ -631,14 +728,39 @@ def get_ticker_history(ticker: str = "ETH-EUR"):
     return history
 
 @app.get("/api/weights")
-def get_weights(ticker: str = "ETH-EUR"):
+def get_weights(ticker: str = "ETH-USD"):
     if ticker not in orchestrator.strategy_ensembles:
         return {}
     ensemble = orchestrator.strategy_ensembles[ticker]
+    
+    # Calculate DNA and load steps
+    steps_key = f"lifetime_training_steps_{ticker}"
+    steps = int(database.load_setting(steps_key, "0"))
+    
+    db_net_str = database.load_setting(f"policy_net_weights_{ticker}")
+    if db_net_str:
+        import hashlib
+        dna_hash = hashlib.md5(db_net_str.encode('utf-8')).hexdigest()[:8].upper()
+        model_dna = f"NN-{dna_hash}"
+    else:
+        model_dna = "NN-DEFAULT"
+        
     return {
-        ensemble.strategies[i].name: float(ensemble.weights[i])
-        for i in range(len(ensemble.weights))
+        "weights": {
+            ensemble.strategies[i].name: float(ensemble.weights[i])
+            for i in range(len(ensemble.weights))
+        },
+        "lifetime_steps": steps,
+        "model_dna": model_dna
     }
+
+@app.get("/api/weights/history")
+def get_weights_history(ticker: str = "ETH-USD"):
+    try:
+        return database.load_weights_history(ticker)
+    except Exception as e:
+        logging.error(f"Error loading weights history: {e}")
+        return []
 
 @app.post("/api/control")
 def control_simulation(action: str, speed: float = 0.2, mode: str = "live"):
@@ -977,6 +1099,146 @@ def trigger_parameter_optimization():
         logging.error(f"Error in manual parameter optimization: {e}")
         return {"status": "error", "error": str(e)}
 
+@app.post("/api/system/optimize/self_dev")
+def trigger_self_development():
+    try:
+        from agent_self_developer import run_self_developer
+        res = run_self_developer()
+        if res.startswith("Success"):
+            return {"status": "success", "log": res}
+        else:
+            return {"status": "error", "error": res}
+    except Exception as e:
+        logging.error(f"Error in manual AI self-development: {e}")
+        return {"status": "error", "error": str(e)}
+
+DEFAULT_PROMPT_QUANT = """You are a world-class Quantitative Researcher, PhD in Mathematical Finance, and elite risk manager critically evaluating the performance of the NexusTrader self-learning ensemble bot.
+
+Our core operational mandate is to scale net returns to a stable, risk-adjusted target of $1,000 USD per day while strictly minimizing maximum drawdown (MDD) and tail risk.
+
+Analyze the provided dataset using rigorous statistical methods:
+1. Volatility Regime Profiling: Analyze the average true range (ATR), recent volatility shifts, and risk-reward ratios.
+2. Trade Return Skewness: Critique the win/loss distribution. Are the losses fat-tailed? Is the Sharpe/Sortino ratio optimal?
+3. Ensemble Synergy: Evaluate the interaction of the strategy ensemble (RSI Reversion, Kalman filter trends, ML models). Ensure weights do not create unhedged systemic beta exposure.
+4. Optimal Stopping Theory: Review the Take Profit (TP) and Stop Loss (SL) ATR multipliers. Formulate if current boundaries reflect optimal stopping boundaries under a drift-diffusion model.
+
+Provide a high-fidelity quantitative assessment, detailing:
+- A mathematical critique of the current strategy parameters.
+- 2-3 specific equations, models, or quantitative adjustments to enhance the bot's mathematical edge.
+
+At the very end of your response, output a strict JSON block specifying the exact configuration parameters to save to our execution settings:
+```json
+{
+  "recommended_risk_mode": "conservative" | "aggressive" | "hyper_growth",
+  "recommended_tp_multiplier": float,
+  "recommended_sl_multiplier": float
+}
+```"""
+
+DEFAULT_PROMPT_DEV = """You are Antigravity, an elite autonomous AI software engineer. Your goal is to improve the NexusTrader algorithmic trading bot codebase.
+Our mission is to build features and UI visualizations that help the bot consistently earn $1,000 USD a day by giving the trader better indicators, diagnostic data, or performance controls.
+
+Identify ONE specific, clean, non-breaking improvement or feature to implement. 
+Return your response STRICTLY in JSON format containing "explanation" and "modifications" find-and-replace rules.
+"""
+
+DEFAULT_PROMPT_BLOG = """You are an expert quantitative researcher, financial blogger, and algorithmic trading editor. 
+Our mission is to help the NexusTrader bot scale to a target of earning $1,000 USD a day.
+
+Rewrite the raw report data into a highly detailed, witty, professional, and engaging market-commentary blog post.
+Analyze metrics, explain profit factors, detail policy weights, and discuss the bot's mathematical evolution.
+Keep all quantitative tables intact."""
+
+@app.get("/api/system/prompts")
+def get_prompts():
+    return {
+        "prompt_quant": database.load_setting("prompt_self_improvement", DEFAULT_PROMPT_QUANT),
+        "prompt_dev": database.load_setting("prompt_self_developer", DEFAULT_PROMPT_DEV),
+        "prompt_blog": database.load_setting("prompt_blog_agent", DEFAULT_PROMPT_BLOG)
+    }
+
+@app.post("/api/system/prompts")
+def update_prompts(prompt_quant: str, prompt_dev: str, prompt_blog: str):
+    try:
+        database.save_setting("prompt_self_improvement", prompt_quant)
+        database.save_setting("prompt_self_developer", prompt_dev)
+        database.save_setting("prompt_blog_agent", prompt_blog)
+        return {"status": "success"}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+def update_crontab_schedule():
+    try:
+        daily_hour = int(database.load_setting("daily_agent_hour", "0"))
+        weekly_day = int(database.load_setting("weekly_agent_day", "0"))  # 0=Sunday
+        weekly_hour = int(database.load_setting("weekly_agent_hour", "23"))
+        
+        # Generate cron commands
+        daily_line = f"0 {daily_hour} * * * cd /home/chris/nexustrader && ./daily_agent.sh >> daily_agent.log 2>&1"
+        weekly_line = f"59 {weekly_hour} * * {weekly_day} cd /home/chris/nexustrader && /usr/bin/python3 blog_agent.py >> blog_agent.log 2>&1"
+        
+        # Read current crontab
+        import subprocess
+        try:
+            res = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
+            lines = res.stdout.splitlines() if res.returncode == 0 else []
+        except Exception:
+            lines = []
+            
+        new_lines = []
+        for line in lines:
+            if "daily_agent.sh" not in line and "blog_agent.py" not in line:
+                new_lines.append(line)
+                
+        new_lines.append(daily_line)
+        new_lines.append(weekly_line)
+        
+        # Write back to crontab
+        cron_content = "\n".join(new_lines) + "\n"
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
+            f.write(cron_content)
+            temp_name = f.name
+            
+        try:
+            subprocess.run(["crontab", temp_name])
+        finally:
+            try:
+                os.unlink(temp_name)
+            except Exception:
+                pass
+    except Exception as e:
+        logging.error(f"Error updating crontab schedule: {e}")
+
+@app.get("/api/system/schedule")
+def get_system_schedule():
+    return {
+        "daily_agent_hour": int(database.load_setting("daily_agent_hour", "0")),
+        "weekly_agent_day": int(database.load_setting("weekly_agent_day", "0")),
+        "weekly_agent_hour": int(database.load_setting("weekly_agent_hour", "23"))
+    }
+
+@app.post("/api/system/schedule")
+def update_system_schedule(daily_agent_hour: int, weekly_agent_day: int, weekly_agent_hour: int):
+    try:
+        if not (0 <= daily_agent_hour <= 23):
+            return {"status": "error", "error": "Daily hour must be between 0 and 23"}
+        if not (0 <= weekly_agent_day <= 6):
+            return {"status": "error", "error": "Weekly day must be between 0 and 6"}
+        if not (0 <= weekly_agent_hour <= 23):
+            return {"status": "error", "error": "Weekly hour must be between 0 and 23"}
+            
+        database.save_setting("daily_agent_hour", str(daily_agent_hour))
+        database.save_setting("weekly_agent_day", str(weekly_agent_day))
+        database.save_setting("weekly_agent_hour", str(weekly_agent_hour))
+        
+        # Update system crontab dynamically
+        update_crontab_schedule()
+        return {"status": "success"}
+    except Exception as e:
+        logging.error(f"Error in manual schedule update: {e}")
+        return {"status": "error", "error": str(e)}
+
 @app.get("/api/blog/config")
 def get_blog_config():
     return {
@@ -1029,6 +1291,18 @@ async def websocket_endpoint(websocket: WebSocket):
         # Send initial configuration and state (defaults to first ticker weights for basic UI compatibility)
         first_ticker = orchestrator.tickers[0]
         ensemble = orchestrator.strategy_ensembles.get(first_ticker, None)
+        
+        # Calculate DNA signature on startup for initial state
+        steps_key = f"lifetime_training_steps_{first_ticker}"
+        steps = int(database.load_setting(steps_key, "0"))
+        db_net_str = database.load_setting(f"policy_net_weights_{first_ticker}")
+        if db_net_str:
+            import hashlib
+            dna_hash = hashlib.md5(db_net_str.encode('utf-8')).hexdigest()[:8].upper()
+            model_dna = f"NN-{dna_hash}"
+        else:
+            model_dna = "NN-DEFAULT"
+            
         init_state = {
             "type": "init",
             "tickers": orchestrator.tickers,
@@ -1043,7 +1317,9 @@ async def websocket_endpoint(websocket: WebSocket):
             } if ensemble else {},
             "risk_mode": orchestrator.probability_engine.risk_mode,
             "strategies": [s.name for s in ensemble.strategies] if ensemble else [],
-            "trades": orchestrator.execution_engine.closed_trades
+            "trades": orchestrator.execution_engine.closed_trades,
+            "lifetime_steps": steps,
+            "model_dna": model_dna
         }
         await websocket.send_text(json.dumps(init_state))
         
@@ -1061,7 +1337,30 @@ async def websocket_endpoint(websocket: WebSocket):
 # Serve Frontend SPA
 @app.get("/")
 def read_root():
-    return FileResponse(get_resource_path("dashboard/index.html"))
+    headers = {
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0"
+    }
+    return FileResponse(get_resource_path("dashboard/index.html"), headers=headers)
+
+@app.get("/sw.js")
+def get_service_worker():
+    headers = {
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0"
+    }
+    return FileResponse(get_resource_path("dashboard/sw.js"), media_type="application/javascript", headers=headers)
+
+@app.get("/manifest.json")
+def get_manifest():
+    headers = {
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0"
+    }
+    return FileResponse(get_resource_path("dashboard/manifest.json"), media_type="application/json", headers=headers)
 
 app.mount("/dashboard", StaticFiles(directory=get_resource_path("dashboard")), name="dashboard")
 

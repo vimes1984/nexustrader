@@ -667,25 +667,31 @@ if __name__ == "__main__":
     blog_created = False
     
     if ai_enabled and api_key:
-        prompt = f"""
-You are an expert quantitative researcher and algorithmic trading engineer. 
-I have a trading system named "NexusTrader" that uses a Policy Gradient Neural Network to weight 6 strategies (EMA Crossover, RSI Reversion, BB Breakout, ML Random Forest, Kalman Trend, Psych Sweep) based on Ornstein-Uhlenbeck process parameters and market indicators.
+        db_prompt = settings.get("prompt_blog_agent")
+        if not db_prompt:
+            db_prompt = """You are an expert quantitative researcher, financial blogger, and algorithmic trading editor. 
+Our mission is to help the NexusTrader bot scale to a target of earning $1,000 USD a day.
 
-The operational mode of the system for this reporting period is: {op_mode_desc}. Make sure to clearly and explicitly mention this mode in your opening commentary and executive summary, describing whether this represents mock demo data, live forward simulated paper trading, or live capital with real money at risk, so that the reader has full context of the financial stakes involved.
+Rewrite the raw report data into a highly detailed, witty, professional, and engaging market-commentary blog post.
+Analyze metrics, explain profit factors, detail policy weights, and discuss the bot's mathematical evolution.
+Keep all quantitative tables intact."""
 
-Here is the raw data and structured markdown for this week's report:
+        prompt = f"""{db_prompt}
+
+Reporting Context:
+- The operational mode for this reporting period is: {op_mode_desc}. (Make sure to clearly and explicitly mention this mode in your opening commentary and executive summary).
+- Raw data and structured markdown for this week's report:
 ```markdown
 {base_markdown}
-```
-
-Write a highly detailed, witty, professional, and engaging blog post based on this data.
-Keep ALL of the markdown tables and key-value sections exactly as they are so the data isn't lost, but rewrite the opening introduction, system insights, trade diagnostics, and conclusion. Add comments about what the metrics imply (e.g. why the profit factor is good or bad, what the network weights say about current market conditions, and how the policy gradient learned). Make it sound like a premium market commentary from a high-frequency trading firm. Ensure the output is formatted in clean Github Markdown. Do not include standard greetings or explanations of what you did—only output the final markdown text.
-"""
+```"""
         styled_markdown = query_gemini_api(api_key, prompt)
         if styled_markdown:
             write_blog_post(styled_markdown, date_str)
             print("Blog post created successfully with AI styling!")
             blog_created = True
+            
+            # Run meta-prompt optimization to evolve Blogger prompt
+            optimize_own_prompt(settings, api_key)
             
     if not blog_created:
         # Fallback to base markdown if API fails, key is missing, or AI is disabled
@@ -696,4 +702,62 @@ Keep ALL of the markdown tables and key-value sections exactly as they are so th
     git_push_enabled = settings.get("blog_git_push_enabled", "true") == "true"
     if git_push_enabled:
         push_to_github()
+
+def optimize_own_prompt(settings, api_key):
+    try:
+        db_prompt = settings.get("prompt_blog_agent", "")
+        
+        # Read PhD Quant and Developer logs from weekly_self_improvement.md
+        quant_summary = ""
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        report_path = os.path.join(base_dir, "blog", "daily_summaries", "weekly_self_improvement.md")
+        if os.path.exists(report_path):
+            with open(report_path, "r") as f:
+                quant_summary = f.read()[-4000:]
+                
+        prompt = f"""
+You are the Blogger agent for the NexusTrader self-learning trading bot system. 
+Part of your meta-cognition routine is to evaluate your own prompt template and optimize it based on:
+1. Your current prompt template.
+2. The outputs of the PhD Quant Optimizer agent (which optimizes parameters).
+3. The outputs of the AI Software Developer agent (which builds new features).
+
+Our mission is to make the bot consistently earn $1,000 USD a day.
+
+Current Prompt Template:
+\"\"\"{db_prompt}\"\"\"
+
+Recent Quant & Developer Logs:
+\"\"\"{quant_summary}\"\"\"
+
+Critically analyze this context. Redesign your own prompt template to focus it even more tightly on achieving $1,000 USD/day, ensuring it asks for engaging market commentary and keeps all tables intact.
+Return ONLY a JSON block containing the key "revised_prompt_blog_agent" with your improved prompt template as the value (do not include markdown wrappers like ```json).
+"""
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
+        data = json.dumps({"contents": [{"parts": [{"text": prompt}]}]}).encode("utf-8")
+        req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            res_json = json.loads(resp.read().decode("utf-8"))
+            raw_text = res_json["candidates"][0]["content"]["parts"][0]["text"].strip()
+            if raw_text.startswith("```json"):
+                raw_text = raw_text[7:]
+            if raw_text.endswith("```"):
+                raw_text = raw_text[:-3]
+            raw_text = raw_text.strip()
+            
+            res_data = json.loads(raw_text)
+            revised = res_data.get("revised_prompt_blog_agent")
+            if revised:
+                # Save setting helper
+                import sqlite3
+                conn = sqlite3.connect(os.path.expanduser("~/.nexustrader/nexustrader.db"))
+                c = conn.cursor()
+                c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", ("prompt_blog_agent", str(revised)))
+                conn.commit()
+                conn.close()
+                print("Meta-optimization: Successfully updated prompt_blog_agent in database settings.")
+                return revised
+    except Exception as e:
+        print(f"Failed to meta-optimize prompt_blog_agent: {e}")
+    return None
 

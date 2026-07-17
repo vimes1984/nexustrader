@@ -13,7 +13,7 @@ const ema12Data = [];
 const ema26Data = [];
 
 // App State
-let activeTicker = "ETH-EUR";
+let activeTicker = "ETH-USD";
 let isPortfolioMode = false;
 let activePortfolioTimeframe = "1W";
 const tickerLatest = {};
@@ -26,6 +26,9 @@ let completedTrades = [];
 let totalClosedPnL = 0.0;
 let isStopped = false;
 let currentWeights = {};
+let globalTradingMode = "paper";
+let globalBrokerName = "kraken";
+let weightsHistoryChart = null;
 
 // Colors mapping for strategies
 const strategyColors = {
@@ -34,7 +37,8 @@ const strategyColors = {
     "BB Breakout": "#a855f7",
     "ML Random Forest": "#f43f5e",
     "Kalman Filter Trend": "#10b981",
-    "Psych Liquidity Sweep": "#f59e0b"
+    "Psych Liquidity Sweep": "#f59e0b",
+    "News Sentiment": "#ec4899"
 };
 
 // DOM elements
@@ -202,6 +206,16 @@ function handleInitState(data) {
         initialBalance = data.initial_balance;
     }
     
+    // Update initial neural memory diagnostic badge
+    const elEpochs = document.getElementById("neural-lifetime-epochs");
+    const elDna = document.getElementById("neural-model-dna");
+    if (elEpochs && data.lifetime_steps !== undefined) {
+        elEpochs.textContent = `${data.lifetime_steps} epochs`;
+    }
+    if (elDna && data.model_dna !== undefined) {
+        elDna.textContent = data.model_dna;
+    }
+    
     // Initialize neural policy engine status log
     const logBox = document.getElementById("neural-log");
     if (logBox) {
@@ -232,7 +246,7 @@ function handleInitState(data) {
             btn.setAttribute("data-ticker", t);
             btn.innerHTML = `
                 <span class="ticker-tab-name">${t}</span>
-                <span class="ticker-tab-price" id="tab-price-${t}">€0.00</span>
+                <span class="ticker-tab-price" id="tab-price-${t}">$0.00</span>
             `;
             btn.addEventListener("click", () => switchTicker(t));
             switcherEl.appendChild(btn);
@@ -244,23 +258,23 @@ function handleInitState(data) {
         portBtn.id = "tab-portfolio";
         portBtn.innerHTML = `
             <span class="ticker-tab-name" style="color: var(--neon-purple); font-weight: bold;">💼 Portfolio</span>
-            <span class="ticker-tab-price" id="tab-portfolio-equity">€${equity.toFixed(2)}</span>
+            <span class="ticker-tab-price" id="tab-portfolio-equity">$${equity.toFixed(2)}</span>
         `;
         portBtn.addEventListener("click", () => switchPortfolioMode(true));
         switcherEl.appendChild(portBtn);
     }
 
     // Toggle controls and status badges based on trading mode (live vs paper)
-    const tradingMode = data.trading_mode || "paper";
-    const brokerName = data.broker || "kraken";
+    globalTradingMode = data.trading_mode || "paper";
+    globalBrokerName = data.broker || "kraken";
     const statusTextEl = document.getElementById("status-text");
     const botStatusEl = document.getElementById("bot-status");
     const speedEl = document.getElementById("speed-slider") ? document.getElementById("speed-slider").parentElement : null;
     const playPauseBtn = document.getElementById("play-pause-btn");
     const resetBtn = document.getElementById("reset-btn");
     
-    if (tradingMode === "live") {
-        if (statusTextEl) statusTextEl.textContent = `Live (${brokerName.toUpperCase()})`;
+    if (globalTradingMode === "live") {
+        if (statusTextEl) statusTextEl.textContent = `Live (${globalBrokerName.toUpperCase()})`;
         if (botStatusEl) {
             botStatusEl.className = "status-badge live";
         }
@@ -315,24 +329,64 @@ function handleTick(data) {
     // Update ticker price shown on switcher tab
     const tabPriceEl = document.getElementById(`tab-price-${data.ticker}`);
     if (tabPriceEl) {
-        tabPriceEl.textContent = `€${data.price.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        tabPriceEl.textContent = `$${data.price.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
     }
     // Update global balance & equity values whenever ANY tick arrives
     if (data.balance !== undefined) {
         balance = data.balance;
-        elBalance.textContent = `€${balance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        elBalance.textContent = `$${balance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
     }
     if (data.equity !== undefined) {
         equity = data.equity;
-        elEquity.textContent = `€${equity.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        elEquity.textContent = `$${equity.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
         const portEqEl = document.getElementById("tab-portfolio-equity");
         if (portEqEl) {
-            portEqEl.textContent = `€${equity.toFixed(2)}`;
+            portEqEl.textContent = `$${equity.toFixed(2)}`;
         }
     }
     
     // Update performance KPIs (realized + unrealized profit) in real-time
     updatePerformanceKPIs(completedTrades, equity);
+
+    // Update cooldown status badge if it is active ticker
+    if (data.ticker === activeTicker) {
+        // Update neural memory diagnostics
+        const elEpochs = document.getElementById("neural-lifetime-epochs");
+        const elDna = document.getElementById("neural-model-dna");
+        if (elEpochs && data.lifetime_steps !== undefined) {
+            elEpochs.textContent = `${data.lifetime_steps} epochs`;
+        }
+        if (elDna && data.model_dna !== undefined) {
+            elDna.textContent = data.model_dna;
+        }
+
+        const statusTextEl = document.getElementById("status-text");
+        const botStatusEl = document.getElementById("bot-status");
+        if (data.cooldown_active) {
+            if (statusTextEl) statusTextEl.textContent = `Cooldown (${data.cooldown_remaining}m)`;
+            if (botStatusEl) {
+                botStatusEl.className = "status-badge stopped";
+                botStatusEl.style.borderColor = "#f59e0b";
+                botStatusEl.style.color = "#f59e0b";
+            }
+        } else {
+            if (globalTradingMode === "live") {
+                if (statusTextEl) statusTextEl.textContent = `Live (${globalBrokerName.toUpperCase()})`;
+                if (botStatusEl) {
+                    botStatusEl.className = "status-badge live";
+                    botStatusEl.style.borderColor = "";
+                    botStatusEl.style.color = "";
+                }
+            } else {
+                if (statusTextEl) statusTextEl.textContent = "Simulating";
+                if (botStatusEl) {
+                    botStatusEl.className = "status-badge";
+                    botStatusEl.style.borderColor = "";
+                    botStatusEl.style.color = "";
+                }
+            }
+        }
+    }
 
     // If this tick belongs to another ticker, do not update the main chart or details cards
     if (data.ticker !== activeTicker) {
@@ -340,7 +394,7 @@ function handleTick(data) {
     }
     
     currentPrice = data.price;
-    elPrice.textContent = `€${currentPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    elPrice.textContent = `$${currentPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
     
     // Update unrealized calculations
     activePosition = data.position;
@@ -359,12 +413,12 @@ function handleTick(data) {
         const cost = entry * qty;
         const unrealizedPercent = (unrealizedDollar / cost) * 100;
         
-        elUnrealized.textContent = `Active Trade Profit: ${unrealizedDollar >= 0 ? '+' : ''}€${unrealizedDollar.toFixed(2)} (${unrealizedPercent.toFixed(2)}%)`;
+        elUnrealized.textContent = `Active Trade Profit: ${unrealizedDollar >= 0 ? '+' : ''}$${unrealizedDollar.toFixed(2)} (${unrealizedPercent.toFixed(2)}%)`;
         elUnrealized.className = unrealizedDollar >= 0 ? "kpi-sub color-green" : "kpi-sub color-red";
         
         renderActivePosition(activePosition, unrealizedDollar, unrealizedPercent);
     } else {
-        elUnrealized.textContent = `Active Trade Profit: €0.00 (0.00%)`;
+        elUnrealized.textContent = `Active Trade Profit: $0.00 (0.00%)`;
         elUnrealized.className = "kpi-sub";
         elPositionDetails.innerHTML = `<p style="font-size: 13px; color: var(--text-muted); text-align: center; padding: 20px;">No Trade Currently Open</p>`;
     }
@@ -373,21 +427,23 @@ function handleTick(data) {
         updateEvaluationWidget(data.evaluation, data.weighted_signal);
     }
 
-    // Push chart data
-    const timeLabel = data.timestamp.split(" ")[1] || data.timestamp.split("T")[1]?.slice(0, 5) || data.timestamp;
-    chartLabels.push(timeLabel);
-    priceData.push(currentPrice);
-    bbUpperData.push(data.indicators.bb_upper);
-    bbLowerData.push(data.indicators.bb_lower);
+    // Push chart data if not in portfolio mode
+    if (!isPortfolioMode) {
+        const timeLabel = data.timestamp.split(" ")[1] || data.timestamp.split("T")[1]?.slice(0, 5) || data.timestamp;
+        chartLabels.push(timeLabel);
+        priceData.push(currentPrice);
+        bbUpperData.push(data.indicators.bb_upper);
+        bbLowerData.push(data.indicators.bb_lower);
 
-    if (chartLabels.length > maxChartPoints) {
-        chartLabels.shift();
-        priceData.shift();
-        bbUpperData.shift();
-        bbLowerData.shift();
+        if (chartLabels.length > maxChartPoints) {
+            chartLabels.shift();
+            priceData.shift();
+            bbUpperData.shift();
+            bbLowerData.shift();
+        }
+
+        chart.update('none'); // Update without full recalculation transition for smooth updates
     }
-
-    chart.update('none'); // Update without full recalculation transition for smooth updates
 
     // Update Neural State inputs if present in tick
     if (data.neural_state) {
@@ -494,19 +550,32 @@ function switchTicker(ticker) {
     // Fetch weights for this ticker
     fetch(`/api/weights?ticker=${ticker}&t=${Date.now()}`)
         .then(res => res.json())
-        .then(weights => {
-            currentWeights = weights;
+        .then(data => {
+            currentWeights = data.weights || data; // handle fallback for old structural format
             renderWeights(currentWeights);
+            
+            // Update neural diagnostics
+            const elEpochs = document.getElementById("neural-lifetime-epochs");
+            const elDna = document.getElementById("neural-model-dna");
+            if (elEpochs && data.lifetime_steps !== undefined) {
+                elEpochs.textContent = `${data.lifetime_steps} epochs`;
+            }
+            if (elDna && data.model_dna !== undefined) {
+                elDna.textContent = data.model_dna;
+            }
         })
         .catch(err => console.error("Error loading weights:", err));
+
+    // Fetch weights history
+    loadWeightsHistory(ticker);
         
     // Update active position/evaluation display for the new ticker from latest socket tick
     const tick = tickerLatest[ticker];
     if (tick) {
         handleTick(tick);
     } else {
-        elPrice.textContent = "€0.00";
-        elUnrealized.textContent = "Active Trade Profit: €0.00 (0.00%)";
+        elPrice.textContent = "$0.00";
+        elUnrealized.textContent = "Active Trade Profit: $0.00 (0.00%)";
         elUnrealized.className = "kpi-sub";
         elPositionDetails.innerHTML = `<p style="font-size: 13px; color: var(--text-muted); text-align: center; padding: 20px;">No Trade Currently Open</p>`;
     }
@@ -532,16 +601,16 @@ function switchPortfolioMode(enable) {
     // Modify Chart.js dataset config
     if (chart && chart.data && chart.data.datasets) {
         if (chart.data.datasets[0]) {
-            chart.data.datasets[0].label = 'Total Equity (€)';
+            chart.data.datasets[0].label = 'Total Equity ($)';
             chart.data.datasets[0].borderColor = '#00f0ff';
         }
         if (chart.data.datasets[1]) {
-            chart.data.datasets[1].label = 'Cumulative PnL (€)';
+            chart.data.datasets[1].label = 'Cumulative PnL ($)';
             chart.data.datasets[1].borderColor = '#10b981'; // green for profit
             chart.data.datasets[1].borderDash = []; // solid line
         }
         if (chart.data.datasets[2]) {
-            chart.data.datasets[2].label = 'Initial Capital (€)';
+            chart.data.datasets[2].label = 'Initial Capital ($)';
             chart.data.datasets[2].borderColor = '#f59e0b'; // amber
             chart.data.datasets[2].borderDash = [4, 4]; // dashed line
         }
@@ -578,8 +647,8 @@ function handleTradeOpened(data) {
     activePosition = data.position;
     balance = data.balance;
     equity = data.equity !== undefined ? data.equity : data.balance;
-    elBalance.textContent = `€${balance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-    elEquity.textContent = `€${equity.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    elBalance.textContent = `$${balance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    elEquity.textContent = `$${equity.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
     
     // Pulse card glow
     const card = document.getElementById("equity-card");
@@ -591,8 +660,8 @@ function handleTradeClosed(data) {
     activePosition = null;
     balance = data.balance;
     equity = data.equity !== undefined ? data.equity : data.balance;
-    elBalance.textContent = `€${balance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-    elEquity.textContent = `€${equity.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    elBalance.textContent = `$${balance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    elEquity.textContent = `$${equity.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
     
     // Add trade to execution log and update stats
     renderTradeClosedState(data.trade);
@@ -602,24 +671,29 @@ function handleLearningUpdate(data) {
     currentWeights = data.weights;
     renderWeights(currentWeights);
     
-    // Log weight update in diagnostics panel
-    const logBox = document.getElementById("neural-log");
-    if (logBox) {
-        const timeStr = new Date().toLocaleTimeString();
-        const pnl = data.pnl ? (data.pnl * 100).toFixed(2) + "%" : "0.00%";
-        const pnlColor = data.pnl >= 0 ? "var(--neon-green)" : "var(--neon-red)";
+    // Update memory diagnostics UI
+    if (data.ticker === activeTicker) {
+        const elEpochs = document.getElementById("neural-lifetime-epochs");
+        const elDna = document.getElementById("neural-model-dna");
+        const elFooter = document.getElementById("neural-memory-footer");
         
-        const entry = document.createElement("div");
-        entry.style.marginBottom = "6px";
-        entry.style.borderBottom = "1px solid rgba(255,255,255,0.02)";
-        entry.style.paddingBottom = "4px";
-        entry.innerHTML = `<span style="color:var(--text-muted)">[${timeStr}]</span> <span style="font-weight:600;color:var(--neon-blue)">${data.ticker}</span> weights updated (Reward: <span style="color:${pnlColor};font-weight:600;">${pnl}</span>)`;
-        
-        if (logBox.textContent.trim().startsWith("Waiting")) {
-            logBox.innerHTML = "";
+        if (elEpochs && data.lifetime_steps !== undefined) {
+            elEpochs.textContent = `${data.lifetime_steps} epochs`;
+        }
+        if (elDna && data.model_dna !== undefined) {
+            elDna.textContent = data.model_dna;
+        }
+        if (elFooter && data.last_save_time !== undefined) {
+            elFooter.textContent = `Weights saved to local SQLite DB at ${data.last_save_time}.`;
+            elFooter.style.color = "var(--neon-green)";
+            setTimeout(() => {
+                elFooter.textContent = "Weights synchronized to local SQLite DB.";
+                elFooter.style.color = "var(--text-muted)";
+            }, 5000);
         }
         
-        logBox.insertBefore(entry, logBox.firstChild);
+        // Reload history line chart and rebuild Policy Update Log dynamically from database
+        loadWeightsHistory(data.ticker);
     }
 }
 
@@ -662,19 +736,19 @@ function renderActivePosition(pos, unrlDollar, unrlPct) {
         </div>
         <div class="pos-row">
             <span>Entry Price</span>
-            <span>€${pos.entry_price.toFixed(2)}</span>
+            <span>$${pos.entry_price.toFixed(2)}</span>
         </div>
         <div class="pos-row">
             <span>Profit Target</span>
-            <span class="color-green">€${pos.take_profit.toFixed(2)}</span>
+            <span class="color-green">$${pos.take_profit.toFixed(2)}</span>
         </div>
         <div class="pos-row">
             <span>Max Loss Limit</span>
-            <span class="color-red">€${pos.stop_loss.toFixed(2)}</span>
+            <span class="color-red">$${pos.stop_loss.toFixed(2)}</span>
         </div>
         <div class="pos-row" style="background: rgba(255,255,255,0.05); font-weight:600;">
             <span>Current Profit</span>
-            <span class="${isProfit ? 'color-green' : 'color-red'}">${isProfit ? '+' : ''}€${unrlDollar.toFixed(2)} (${unrlPct.toFixed(2)}%)</span>
+            <span class="${isProfit ? 'color-green' : 'color-red'}">${isProfit ? '+' : ''}$${unrlDollar.toFixed(2)} (${unrlPct.toFixed(2)}%)</span>
         </div>
     `;
 }
@@ -684,7 +758,7 @@ function updateEvaluationWidget(eval, signal) {
     elProbGauge.style.setProperty("--gauge-percent", `${(winProbPct / 100) * 360}deg`);
     elProbValue.textContent = `${winProbPct}%`;
     
-    elValEv.textContent = `${eval.expected_value >= 0 ? '+' : ''}€${eval.expected_value.toFixed(2)}`;
+    elValEv.textContent = `${eval.expected_value >= 0 ? '+' : ''}$${eval.expected_value.toFixed(2)}`;
     elValEv.className = eval.expected_value >= 0 ? "color-green" : "color-red";
     
     elValRr.textContent = `1 : ${eval.risk_reward_ratio.toFixed(1)}`;
@@ -730,10 +804,10 @@ function renderTradeLog(trades) {
             <td>${t.symbol}</td>
             <td style="color: ${t.direction === 'BUY' ? 'var(--neon-green)' : 'var(--neon-red)'}; font-weight:600;">${t.direction}</td>
             <td>${t.quantity.toFixed(4)}</td>
-            <td>€${t.entry_price.toFixed(2)}</td>
-            <td>€${t.exit_price.toFixed(2)}</td>
+            <td>$${t.entry_price.toFixed(2)}</td>
+            <td>$${t.exit_price.toFixed(2)}</td>
             <td>72%</td> <!-- Estimated base -->
-            <td class="${pnlColor}" style="font-weight:600;">${sign}€${t.pnl.toFixed(2)} (${(t.pnl_percent*100).toFixed(2)}%)</td>
+            <td class="${pnlColor}" style="font-weight:600;">${sign}$${t.pnl.toFixed(2)} (${(t.pnl_percent*100).toFixed(2)}%)</td>
             <td><span style="background: ${outcomeColor}; color: ${t.pnl >= 0 ? 'var(--neon-green)' : 'var(--neon-red)'}; padding: 4px 8px; border-radius: 4px; font-size:11px; font-weight:600;">${t.exit_reason.toUpperCase()}</span></td>
         `;
         elTradeLogBody.appendChild(row);
@@ -776,7 +850,7 @@ function updatePerformanceKPIs(trades, currentEquity) {
     const netPnL = realizedPnL + unrealizedPnL;
     const netPct = initialBalance > 0 ? (netPnL / initialBalance) * 100 : 0.0;
     
-    elTotalPnL.textContent = `${netPnL >= 0 ? '+' : ''}€${netPnL.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    elTotalPnL.textContent = `${netPnL >= 0 ? '+' : ''}$${netPnL.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
     elTotalPnLPercent.textContent = `${netPnL >= 0 ? '+' : ''}${netPct.toFixed(2)}% growth`;
     
     elTotalPnL.className = netPnL >= 0 ? "kpi-value color-green" : "kpi-value color-red";
@@ -838,9 +912,9 @@ elResetBtn.addEventListener("click", () => {
                 
                 // Re-establish stats
                 balance = 100.0;
-                elBalance.textContent = "€100.00";
-                elEquity.textContent = "€100.00";
-                elUnrealized.textContent = "Active Trade Profit: €0.00 (0.00%)";
+                elBalance.textContent = "$100.00";
+                elEquity.textContent = "$100.00";
+                elUnrealized.textContent = "Active Trade Profit: $0.00 (0.00%)";
                 elUnrealized.className = "kpi-sub";
                 
                 // Reset the DOM trades log table
@@ -923,6 +997,32 @@ function loadBlogConfig() {
             if (elSlMultiplierInput) elSlMultiplierInput.value = data.sl_multiplier || 1.5;
         })
         .catch(err => console.error("Error loading system config:", err));
+
+    // 3. Fetch Prompts configurations
+    fetch(`/api/system/prompts?t=${Date.now()}`)
+        .then(res => res.json())
+        .then(data => {
+            const elQuant = document.getElementById("prompt-quant-text");
+            const elDev = document.getElementById("prompt-dev-text");
+            const elBlog = document.getElementById("prompt-blog-text");
+            if (elQuant && data.prompt_quant) elQuant.value = data.prompt_quant;
+            if (elDev && data.prompt_dev) elDev.value = data.prompt_dev;
+            if (elBlog && data.prompt_blog) elBlog.value = data.prompt_blog;
+        })
+        .catch(err => console.error("Error loading prompt config:", err));
+
+    // 4. Fetch Scheduling configurations
+    fetch(`/api/system/schedule?t=${Date.now()}`)
+        .then(res => res.json())
+        .then(data => {
+            const elDailyHour = document.getElementById("sched-daily-hour");
+            const elWeeklyDay = document.getElementById("sched-weekly-day");
+            const elWeeklyHour = document.getElementById("sched-weekly-hour");
+            if (elDailyHour) elDailyHour.value = data.daily_agent_hour;
+            if (elWeeklyDay) elWeeklyDay.value = data.weekly_agent_day;
+            if (elWeeklyHour) elWeeklyHour.value = data.weekly_agent_hour;
+        })
+        .catch(err => console.error("Error loading schedule config:", err));
 }
 
 if (elSaveBlogConfigBtn) {
@@ -969,6 +1069,80 @@ if (elSaveBlogConfigBtn) {
             elBlogStatusMsg.className = "color-red";
             console.error(err);
         });
+    });
+}
+
+const elSavePromptsBtn = document.getElementById("save-prompts-btn");
+if (elSavePromptsBtn) {
+    elSavePromptsBtn.addEventListener("click", () => {
+        const elQuant = document.getElementById("prompt-quant-text");
+        const elDev = document.getElementById("prompt-dev-text");
+        const elBlog = document.getElementById("prompt-blog-text");
+        
+        elBlogStatusMsg.textContent = "Saving prompt templates...";
+        elBlogStatusMsg.className = "color-blue";
+        elSavePromptsBtn.disabled = true;
+        
+        const qVal = encodeURIComponent(elQuant ? elQuant.value : "");
+        const dVal = encodeURIComponent(elDev ? elDev.value : "");
+        const bVal = encodeURIComponent(elBlog ? elBlog.value : "");
+        
+        fetch(`/api/system/prompts?prompt_quant=${qVal}&prompt_dev=${dVal}&prompt_blog=${bVal}`, { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                elSavePromptsBtn.disabled = false;
+                if (data.status === "success") {
+                    elBlogStatusMsg.textContent = "AI Prompts saved successfully!";
+                    elBlogStatusMsg.className = "color-green";
+                    setTimeout(() => { elBlogStatusMsg.textContent = ""; }, 5000);
+                } else {
+                    elBlogStatusMsg.textContent = `Error: ${data.error || "failed"}`;
+                    elBlogStatusMsg.className = "color-red";
+                }
+            })
+            .catch(err => {
+                elSavePromptsBtn.disabled = false;
+                elBlogStatusMsg.textContent = "Error saving prompts.";
+                elBlogStatusMsg.className = "color-red";
+                console.error(err);
+            });
+    });
+}
+
+const elSaveScheduleBtn = document.getElementById("save-schedule-btn");
+if (elSaveScheduleBtn) {
+    elSaveScheduleBtn.addEventListener("click", () => {
+        const elDailyHour = document.getElementById("sched-daily-hour");
+        const elWeeklyDay = document.getElementById("sched-weekly-day");
+        const elWeeklyHour = document.getElementById("sched-weekly-hour");
+        
+        elBlogStatusMsg.textContent = "Saving schedule configuration...";
+        elBlogStatusMsg.className = "color-blue";
+        elSaveScheduleBtn.disabled = true;
+        
+        const dhVal = elDailyHour ? parseInt(elDailyHour.value) : 0;
+        const wdVal = elWeeklyDay ? parseInt(elWeeklyDay.value) : 0;
+        const whVal = elWeeklyHour ? parseInt(elWeeklyHour.value) : 23;
+        
+        fetch(`/api/system/schedule?daily_agent_hour=${dhVal}&weekly_agent_day=${wdVal}&weekly_agent_hour=${whVal}`, { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                elSaveScheduleBtn.disabled = false;
+                if (data.status === "success") {
+                    elBlogStatusMsg.textContent = "Schedule updated & applied to crontab!";
+                    elBlogStatusMsg.className = "color-green";
+                    setTimeout(() => { elBlogStatusMsg.textContent = ""; }, 5000);
+                } else {
+                    elBlogStatusMsg.textContent = `Error: ${data.error || "failed"}`;
+                    elBlogStatusMsg.className = "color-red";
+                }
+            })
+            .catch(err => {
+                elSaveScheduleBtn.disabled = false;
+                elBlogStatusMsg.textContent = "Error saving schedule.";
+                elBlogStatusMsg.className = "color-red";
+                console.error(err);
+            });
     });
 }
 
@@ -1073,6 +1247,37 @@ if (elOptParamsBtn) {
     });
 }
 
+const elSelfDevBtn = document.getElementById("trigger-self-dev-btn");
+if (elSelfDevBtn) {
+    elSelfDevBtn.addEventListener("click", () => {
+        elBlogStatusMsg.textContent = "Autonomous AI Software Agent designing and building new feature...";
+        elBlogStatusMsg.className = "color-blue";
+        elSelfDevBtn.disabled = true;
+
+        fetch("/api/system/optimize/self_dev", { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                elSelfDevBtn.disabled = false;
+                if (data.status === "success") {
+                    elBlogStatusMsg.textContent = "AI Feature Built & Deployed!";
+                    elBlogStatusMsg.className = "color-green";
+                    alert("AI Self-Development session completed successfully!\n\n" + data.log);
+                    setTimeout(() => { elBlogStatusMsg.textContent = ""; }, 5000);
+                } else {
+                    elBlogStatusMsg.textContent = `Error: ${data.error || "failed"}`;
+                    elBlogStatusMsg.className = "color-red";
+                    alert("Self-Development failed: " + data.error);
+                }
+            })
+            .catch(err => {
+                elSelfDevBtn.disabled = false;
+                elBlogStatusMsg.textContent = "Error running self-developer agent.";
+                elBlogStatusMsg.className = "color-red";
+                console.error(err);
+            });
+    });
+}
+
 // 1. Test Broker API Connection Listener
 const elTestBrokerBtn = document.getElementById("test-broker-api-btn");
 if (elTestBrokerBtn) {
@@ -1138,10 +1343,164 @@ if (elResetCooldownsBtn) {
     });
 }
 
+// Weights History Chart helper functions
+function initWeightsHistoryChart() {
+    const canvas = document.getElementById('weights-history-chart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    
+    const datasets = Object.keys(strategyColors).map(stratName => {
+        return {
+            label: stratName,
+            data: [],
+            borderColor: strategyColors[stratName],
+            backgroundColor: strategyColors[stratName] + "11",
+            borderWidth: 1.5,
+            tension: 0.2,
+            pointRadius: 0,
+            fill: false
+        };
+    });
+
+    weightsHistoryChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false
+                }
+            },
+            scales: {
+                x: {
+                    display: false,
+                    grid: {
+                        display: false
+                    }
+                },
+                y: {
+                    min: 0,
+                    max: 1.0,
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.03)'
+                    },
+                    ticks: {
+                        color: '#64748b',
+                        callback: function(value) {
+                            return (value * 100).toFixed(0) + "%";
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function renderNeuralUpdateLog(history) {
+    const logBox = document.getElementById("neural-log");
+    if (!logBox) return;
+    
+    if (!Array.isArray(history) || history.length === 0) {
+        logBox.innerHTML = `<div style="color:var(--text-muted); text-align:center; padding-top:20px;">No training steps recorded yet.</div>`;
+        return;
+    }
+    
+    logBox.innerHTML = "";
+    
+    // Sort chronological and process diffs (newest logs first)
+    for (let i = history.length - 1; i >= 0; i--) {
+        const current = history[i];
+        const prev = i > 0 ? history[i-1] : null;
+        const timeStr = new Date(current.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        
+        let logText = "";
+        if (!prev) {
+            logText = "Model initialized with baseline equal weights.";
+        } else {
+            // Find the biggest change
+            let shifts = [];
+            Object.keys(current.weights).forEach(strat => {
+                const currentWeight = current.weights[strat];
+                const prevWeight = prev.weights[strat] !== undefined ? prev.weights[strat] : 0;
+                const diff = (currentWeight - prevWeight) * 100;
+                if (Math.abs(diff) >= 0.05) {
+                    shifts.push({ name: strat, diff: diff });
+                }
+            });
+            
+            // Sort by absolute change magnitude
+            shifts.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
+            
+            if (shifts.length === 0) {
+                logText = "Model updated. No significant strategy weight shift.";
+            } else {
+                // Format top 2 shifts
+                const formattedShifts = shifts.slice(0, 2).map(s => {
+                    const sign = s.diff >= 0 ? "+" : "";
+                    const color = s.diff >= 0 ? "var(--neon-green)" : "var(--neon-red)";
+                    return `${s.name} (<span style="color: ${color}; font-weight:600;">${sign}${s.diff.toFixed(1)}%</span>)`;
+                });
+                logText = `Model trained. Shifts: ${formattedShifts.join(", ")}`;
+            }
+        }
+        
+        const entry = document.createElement("div");
+        entry.style.marginBottom = "6px";
+        entry.style.borderBottom = "1px solid rgba(255,255,255,0.02)";
+        entry.style.paddingBottom = "4px";
+        entry.style.lineHeight = "1.4";
+        entry.innerHTML = `<span style="color:var(--text-muted)">[${timeStr}]</span> ${logText}`;
+        logBox.appendChild(entry);
+    }
+}
+
+function loadWeightsHistory(ticker) {
+    if (!weightsHistoryChart) return;
+    
+    fetch(`/api/weights/history?ticker=${ticker}&t=${Date.now()}`)
+        .then(res => res.json())
+        .then(history => {
+            if (Array.isArray(history)) {
+                weightsHistoryChart.data.labels = [];
+                weightsHistoryChart.data.datasets.forEach(ds => {
+                    ds.data = [];
+                });
+                
+                history.forEach((step, index) => {
+                    const timeLabel = new Date(step.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    weightsHistoryChart.data.labels.push(timeLabel);
+                    
+                    weightsHistoryChart.data.datasets.forEach(ds => {
+                        const stratName = ds.label;
+                        const val = step.weights[stratName] !== undefined ? step.weights[stratName] : 0;
+                        ds.data.push(val);
+                    });
+                });
+                
+                weightsHistoryChart.update();
+                
+                // Rebuild policy log with persistent learning data
+                renderNeuralUpdateLog(history);
+            }
+        })
+        .catch(err => console.error("Error loading weights history:", err));
+}
+
 // App Startup
 initChart();
+initWeightsHistoryChart();
 connectWebSocket();
 loadBlogConfig();
+loadWeightsHistory(activeTicker);
 
 // Toggle Blog API Key visibility
 const btnToggleKey = document.getElementById("toggle-blog-api-key-visibility");
@@ -1199,23 +1558,23 @@ function updateExchangeStatus() {
             if (!data.holdings || data.holdings.length === 0) {
                 elHoldingsContainer.innerHTML = `<p style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 10px;">No holdings found.</p>`;
             } else {
-                let totalEur = 0;
+                let totalUsd = 0;
                 data.holdings.forEach(h => {
-                    totalEur += h.value_eur;
+                    totalUsd += h.value_usd;
                 });
                 
                 data.holdings.forEach(h => {
-                    const share = totalEur > 0 ? ((h.value_eur / totalEur) * 100).toFixed(1) : "0.0";
+                    const share = totalUsd > 0 ? ((h.value_usd / totalUsd) * 100).toFixed(1) : "0.0";
                     const row = document.createElement("div");
                     row.style.cssText = "display: flex; flex-direction: column; gap: 4px; padding: 8px 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 8px; font-size: 12px; transition: var(--transition);";
                     row.innerHTML = `
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <span style="font-weight: 600; color: var(--text-primary);">${h.asset}</span>
-                            <span style="font-weight: 600; color: var(--neon-blue);">€${h.value_eur.toFixed(2)}</span>
+                            <span style="font-weight: 600; color: var(--neon-blue);">$${h.value_usd.toFixed(2)}</span>
                         </div>
                         <div style="display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: var(--text-muted);">
                             <span>Qty: <span style="font-family: monospace;">${h.quantity.toFixed(4)}</span></span>
-                            <span>Price: €${h.price_eur.toFixed(2)} (${share}%)</span>
+                            <span>Price: $${h.price_usd.toFixed(2)} (${share}%)</span>
                         </div>
                     `;
                     elHoldingsContainer.appendChild(row);
@@ -1226,7 +1585,7 @@ function updateExchangeStatus() {
                 totalRow.style.cssText = "display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; margin-top: 6px; background: rgba(0, 240, 255, 0.04); border: 1px solid rgba(0, 240, 255, 0.15); border-radius: 8px; font-size: 12px; font-weight: 600;";
                 totalRow.innerHTML = `
                     <span style="color: var(--text-primary);">Total Holdings Value</span>
-                    <span style="color: var(--neon-blue); font-family: monospace;">€${totalEur.toFixed(2)}</span>
+                    <span style="color: var(--neon-blue); font-family: monospace;">$${totalUsd.toFixed(2)}</span>
                 `;
                 elHoldingsContainer.appendChild(totalRow);
             }
@@ -1245,11 +1604,11 @@ function updateExchangeStatus() {
                     row.innerHTML = `
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <span style="font-weight: 600; color: var(--text-primary);">${p.symbol} <span style="font-size: 9px; padding: 2px 4px; border-radius: 4px; background: ${p.side === 'BUY' || p.side === 'LONG' ? 'rgba(16,185,129,0.1)' : 'rgba(244,63,94,0.1)'}; color: ${p.side === 'BUY' || p.side === 'LONG' ? 'var(--neon-green)' : 'var(--neon-red)'}; font-weight: bold;">${p.side}</span></span>
-                            <span style="font-weight: 600; color: ${pnlColor};">${pnlSign}€${pnl.toFixed(2)}</span>
+                            <span style="font-weight: 600; color: ${pnlColor};">${pnlSign}$${pnl.toFixed(2)}</span>
                         </div>
                         <div style="display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: var(--text-muted);">
-                            <span>Entry: <span style="font-family: monospace;">€${p.entryPrice ? p.entryPrice.toFixed(2) : '-'}</span></span>
-                            <span>Mark: <span style="font-family: monospace;">€${p.markPrice ? p.markPrice.toFixed(2) : '-'}</span> (${p.leverage ? p.leverage + 'x' : '1x'})</span>
+                            <span>Entry: <span style="font-family: monospace;">$${p.entryPrice ? p.entryPrice.toFixed(2) : '-'}</span></span>
+                            <span>Mark: <span style="font-family: monospace;">$${p.markPrice ? p.markPrice.toFixed(2) : '-'}</span> (${p.leverage ? p.leverage + 'x' : '1x'})</span>
                         </div>
                     `;
                     elPositionsContainer.appendChild(row);
@@ -1267,7 +1626,7 @@ function updateExchangeStatus() {
                     row.innerHTML = `
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <span style="font-weight: 600; color: var(--text-primary);">${o.symbol} <span style="font-size: 9px; padding: 2px 4px; border-radius: 4px; background: ${o.side === 'BUY' ? 'rgba(16,185,129,0.1)' : 'rgba(244,63,94,0.1)'}; color: ${o.side === 'BUY' ? 'var(--neon-green)' : 'var(--neon-red)'};">${o.side}</span></span>
-                            <span style="font-weight: 600; color: var(--neon-blue);">€${o.price ? o.price.toFixed(2) : 'Market'}</span>
+                            <span style="font-weight: 600; color: var(--neon-blue);">$${o.price ? o.price.toFixed(2) : 'Market'}</span>
                         </div>
                         <div style="display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: var(--text-muted);">
                             <span>Qty: <span style="font-family: monospace;">${o.amount.toFixed(4)}</span></span>
