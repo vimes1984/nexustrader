@@ -239,7 +239,8 @@ function handleInitState(data) {
     if (data.ticker && !activeTicker) {
         activeTicker = data.ticker;
     }
-    document.getElementById("chart-ticker-title").textContent = activeTicker;
+    const elTitle = document.getElementById("chart-ticker-title");
+    if (elTitle) elTitle.textContent = activeTicker;
     
     // Render Ticker Switcher tabs
     const switcherEl = document.getElementById("ticker-switcher-bar");
@@ -515,7 +516,8 @@ function switchTicker(ticker) {
     const portTab = document.getElementById("tab-portfolio");
     if (portTab) portTab.classList.remove("active");
     
-    document.getElementById("chart-ticker-title").textContent = ticker;
+    const elTitle = document.getElementById("chart-ticker-title");
+    if (elTitle) elTitle.textContent = ticker;
     
     // Reset Chart.js dataset config
     if (chart && chart.data && chart.data.datasets) {
@@ -607,7 +609,8 @@ function switchPortfolioMode(enable) {
     const portTab = document.getElementById("tab-portfolio");
     if (portTab) portTab.classList.add("active");
     
-    document.getElementById("chart-ticker-title").textContent = "Portfolio Equity & PnL";
+    const elTitle = document.getElementById("chart-ticker-title");
+    if (elTitle) elTitle.textContent = "Portfolio Equity & PnL";
     
     // Modify Chart.js dataset config
     if (chart && chart.data && chart.data.datasets) {
