@@ -20,19 +20,35 @@ fi
 
 # If still not found, mount using udisksctl
 if [ -z "$BOOT_PATH" ] || [ -z "$ROOTFS_PATH" ]; then
-    echo "Scanning block devices..."
-    BOOT_DEV=$(lsblk -o NAME,FSTYPE,LABEL | grep -v "nvme" | grep -E "vfat" | awk '{print $1}' | tr -d '└─├─') || true
-    ROOT_DEV=$(lsblk -o NAME,FSTYPE,LABEL | grep -v "nvme" | grep -E "ext4" | awk '{print $1}' | tr -d '└─├─') || true
+    # Explicitly check for standard SD card devices first
+    if [ -b "/dev/mmcblk0p1" ]; then
+        BOOT_DEV="mmcblk0p1"
+    elif [ -b "/dev/sdb1" ]; then
+        BOOT_DEV="sdb1"
+    else
+        BOOT_DEV=$(lsblk -o NAME,FSTYPE,LABEL | grep -v "nvme" | grep -E "vfat" | awk '{print $1}' | tr -d '└─├─') || true
+    fi
+
+    if [ -b "/dev/mmcblk0p2" ]; then
+        ROOT_DEV="mmcblk0p2"
+    elif [ -b "/dev/sdb2" ]; then
+        ROOT_DEV="sdb2"
+    else
+        ROOT_DEV=$(lsblk -o NAME,FSTYPE,LABEL | grep -v "nvme" | grep -v "ubuntu--vg" | grep -E "ext4" | awk '{print $1}' | tr -d '└─├─') || true
+    fi
     
     if [ -n "$BOOT_DEV" ]; then
         echo "Mounting boot partition /dev/$BOOT_DEV..."
         udisksctl mount -b "/dev/$BOOT_DEV" || true
-        BOOT_PATH="/media/chris/boot"
+        # Extract mount point from udisksctl or default
+        BOOT_PATH=$(mount | grep "/dev/$BOOT_DEV" | awk '{print $3}')
+        [ -z "$BOOT_PATH" ] && BOOT_PATH="/media/chris/boot"
     fi
     if [ -n "$ROOT_DEV" ]; then
         echo "Mounting rootfs partition /dev/$ROOT_DEV..."
         udisksctl mount -b "/dev/$ROOT_DEV" || true
-        ROOTFS_PATH="/media/chris/rootfs"
+        ROOTFS_PATH=$(mount | grep "/dev/$ROOT_DEV" | awk '{print $3}')
+        [ -z "$ROOTFS_PATH" ] && ROOTFS_PATH="/media/chris/rootfs"
     fi
 fi
 
