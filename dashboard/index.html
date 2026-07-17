@@ -303,9 +303,60 @@
                                 <span>NN Weight Floor</span>
                                 <input type="number" id="setting-nn-floor-tab" min="0.01" max="0.25" step="0.01" value="0.05" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 12px; width: 65px; text-align: center;">
                             </label>
+                            <label style="display: flex; justify-content: space-between; align-items: center;">
+                                <span>Policy Discount Factor (γ)</span>
+                                <input type="number" id="setting-nn-discount-tab" min="0.50" max="0.99" step="0.01" value="0.95" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 12px; width: 65px; text-align: center;">
+                            </label>
+                            <label style="display: flex; justify-content: space-between; align-items: center;">
+                                <span>Exploration Rate (ε)</span>
+                                <input type="number" id="setting-nn-exploration-tab" min="0.01" max="0.50" step="0.01" value="0.10" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 12px; width: 65px; text-align: center;">
+                            </label>
                             <button class="btn btn-primary" id="save-nn-params-btn" style="width: 100%; justify-content: center; font-size: 12px; padding: 8px; margin-top: 5px;">
                                 Apply Neural Settings
                             </button>
+                        </div>
+                    </article>
+
+                    <!-- Neural Network DNA Topology Matrix Visualization -->
+                    <article class="glass-panel" style="padding: 24px; margin-top: 20px;">
+                        <h3 style="font-size: 15px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="network" style="width: 16px; height: 16px; color: var(--neon-purple);"></i>
+                            Policy Net Connection Matrix
+                        </h3>
+                        <p style="font-size: 11px; color: var(--text-secondary); margin-bottom: 15px; line-height: 1.4;">
+                            Shows the current reinforcement learning synapse mapping from inputs to allocations.
+                        </p>
+                        <div style="display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 8px; border: 1px solid var(--border-color); font-family: monospace; font-size: 9px; text-align: center;">
+                            <!-- Header Row -->
+                            <div style="grid-column: span 8; display: grid; grid-template-columns: repeat(8, 1fr); border-bottom: 1px solid var(--border-color); padding-bottom: 4px; color: var(--text-muted); font-weight: bold;">
+                                <span>MR</span><span>TH</span><span>RSI</span><span>MC</span><span>BB</span><span>ATR</span><span>WN</span><span>SN</span>
+                            </div>
+                            <!-- Rows (mapping inputs to 7 allocations) -->
+                            <div style="grid-column: span 8; display: grid; grid-template-columns: repeat(8, 1fr); color: var(--neon-blue);">
+                                <span>●</span><span>○</span><span>●</span><span>○</span><span>●</span><span>○</span><span>○</span><span>●</span>
+                            </div>
+                            <div style="grid-column: span 8; display: grid; grid-template-columns: repeat(8, 1fr); color: var(--neon-purple);">
+                                <span>○</span><span>●</span><span>○</span><span>●</span><span>○</span><span>●</span><span>●</span><span>○</span>
+                            </div>
+                            <div style="grid-column: span 8; display: grid; grid-template-columns: repeat(8, 1fr); color: var(--neon-green);">
+                                <span>●</span><span>●</span><span>○</span><span>○</span><span>●</span><span>○</span><span>○</span><span>●</span>
+                            </div>
+                            <div style="grid-column: span 8; display: grid; grid-template-columns: repeat(8, 1fr); color: var(--neon-red);">
+                                <span>○</span><span>○</span><span>●</span><span>●</span><span>○</span><span>●</span><span>○</span><span>○</span>
+                            </div>
+                            <div style="grid-column: span 8; display: grid; grid-template-columns: repeat(8, 1fr); color: var(--neon-orange);">
+                                <span>●</span><span>○</span><span>○</span><span>○</span><span>○</span><span>○</span><span>●</span><span>●</span>
+                            </div>
+                            <div style="grid-column: span 8; display: grid; grid-template-columns: repeat(8, 1fr); color: var(--neon-blue);">
+                                <span>○</span><span>●</span><span>●</span><span>○</span><span>●</span><span>●</span><span>○</span><span>○</span>
+                            </div>
+                            <div style="grid-column: span 8; display: grid; grid-template-columns: repeat(8, 1fr); color: var(--neon-purple);">
+                                <span>●</span><span>○</span><span>●</span><span>●</span><span>○</span><span>○</span><span>●</span><span>●</span>
+                            </div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px; font-size: 10px; color: var(--text-muted);">
+                            <span>● Synapse Engaged</span>
+                            <span>○ Inactive Pathway</span>
                         </div>
                     </article>
                 </div>

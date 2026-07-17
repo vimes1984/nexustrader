@@ -53,7 +53,7 @@ const elTotalPnL = document.getElementById("val-total-pnl");
 const elTotalPnLPercent = document.getElementById("val-total-pnl-percent");
 const elWeightsContainer = document.getElementById("weights-container");
 const elPositionDetails = document.getElementById("position-details-container");
-const elTradeLogBody = document.getElementById("trade-log-body");
+const elTradeLogBody = document.getElementById("recent-trades-list");
 const elProbGauge = document.getElementById("prob-gauge");
 const elProbValue = document.getElementById("prob-value");
 const elValEv = document.getElementById("val-ev");
@@ -395,7 +395,7 @@ function handleTick(data) {
     }
     
     currentPrice = data.price;
-    elPrice.textContent = `$${currentPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    if (elPrice) elPrice.textContent = `$${currentPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
     
     // Update unrealized calculations
     activePosition = data.position;
@@ -575,7 +575,7 @@ function switchTicker(ticker) {
     if (tick) {
         handleTick(tick);
     } else {
-        elPrice.textContent = "$0.00";
+        if (elPrice) elPrice.textContent = "$0.00";
         elUnrealized.textContent = "Active Trade Profit: $0.00 (0.00%)";
         elUnrealized.className = "kpi-sub";
         elPositionDetails.innerHTML = `<p style="font-size: 13px; color: var(--text-muted); text-align: center; padding: 20px;">No Trade Currently Open</p>`;
@@ -756,26 +756,38 @@ function renderActivePosition(pos, unrlDollar, unrlPct) {
 
 function updateEvaluationWidget(eval, signal) {
     const winProbPct = Math.round(eval.win_probability * 100);
-    elProbGauge.style.setProperty("--gauge-percent", `${(winProbPct / 100) * 360}deg`);
-    elProbValue.textContent = `${winProbPct}%`;
+    if (elProbGauge) elProbGauge.style.setProperty("--gauge-percent", `${(winProbPct / 100) * 360}deg`);
+    if (elProbValue) elProbValue.textContent = `${winProbPct}%`;
     
-    elValEv.textContent = `${eval.expected_value >= 0 ? '+' : ''}$${eval.expected_value.toFixed(2)}`;
-    elValEv.className = eval.expected_value >= 0 ? "color-green" : "color-red";
+    // Update BUY and SELL odds
+    const elProbBuy = document.getElementById("val-prob-buy");
+    const elProbSell = document.getElementById("val-prob-sell");
+    const buyOdds = eval.direction === "BUY" ? winProbPct : (100 - winProbPct);
+    const sellOdds = eval.direction === "SELL" ? winProbPct : (100 - winProbPct);
+    if (elProbBuy) elProbBuy.textContent = `${buyOdds}%`;
+    if (elProbSell) elProbSell.textContent = `${sellOdds}%`;
     
-    elValRr.textContent = `1 : ${eval.risk_reward_ratio.toFixed(1)}`;
-    elValKelly.textContent = `${(eval.kelly_fraction * 100).toFixed(1)}%`;
-    elValSigStrength.textContent = `${Math.abs(signal * 100).toFixed(0)}%`;
+    if (elValEv) {
+        elValEv.textContent = `${eval.expected_value >= 0 ? '+' : ''}$${eval.expected_value.toFixed(2)}`;
+        elValEv.className = eval.expected_value >= 0 ? "color-green" : "color-red";
+    }
     
-    if (eval.is_viable) {
-        elViabilityBadge.textContent = "YES - Highly viable trade setup";
-        elViabilityBadge.style.background = "rgba(16, 185, 129, 0.1)";
-        elViabilityBadge.style.border = "1px solid var(--neon-green)";
-        elViabilityBadge.style.color = "var(--neon-green)";
-    } else {
-        elViabilityBadge.textContent = "NO - Safe to stand aside";
-        elViabilityBadge.style.background = "rgba(244, 63, 94, 0.05)";
-        elViabilityBadge.style.border = "1px solid rgba(244, 63, 94, 0.2)";
-        elViabilityBadge.style.color = "var(--text-muted)";
+    if (elValRr) elValRr.textContent = `1 : ${eval.risk_reward_ratio.toFixed(1)}`;
+    if (elValKelly) elValKelly.textContent = `${(eval.kelly_fraction * 100).toFixed(1)}%`;
+    if (elValSigStrength) elValSigStrength.textContent = `${Math.abs(signal * 100).toFixed(0)}%`;
+    
+    if (elViabilityBadge) {
+        if (eval.is_viable) {
+            elViabilityBadge.textContent = "YES - Highly viable trade setup";
+            elViabilityBadge.style.background = "rgba(16, 185, 129, 0.1)";
+            elViabilityBadge.style.border = "1px solid var(--neon-green)";
+            elViabilityBadge.style.color = "var(--neon-green)";
+        } else {
+            elViabilityBadge.textContent = "NO - Safe to stand aside";
+            elViabilityBadge.style.background = "rgba(244, 63, 94, 0.05)";
+            elViabilityBadge.style.border = "1px solid rgba(244, 63, 94, 0.2)";
+            elViabilityBadge.style.color = "var(--text-muted)";
+        }
     }
 }
 
@@ -1000,6 +1012,11 @@ function loadBlogConfig() {
             const elNnFloor = document.getElementById("setting-nn-floor");
             if (elNnLr) elNnLr.value = data.nn_lr || 0.15;
             if (elNnFloor) elNnFloor.value = data.nn_floor || 0.05;
+            
+            const elNnDiscountTab = document.getElementById("setting-nn-discount-tab");
+            const elNnExplorationTab = document.getElementById("setting-nn-exploration-tab");
+            if (elNnDiscountTab) elNnDiscountTab.value = data.nn_discount || 0.95;
+            if (elNnExplorationTab) elNnExplorationTab.value = data.nn_exploration || 0.10;
         })
         .catch(err => console.error("Error loading system config:", err));
 
@@ -1765,6 +1782,11 @@ if (elSaveNnParamsBtn) {
         const lrVal = parseFloat(elLrInput.value);
         const floorVal = parseFloat(elFloorInput.value);
         
+        const elDiscountInput = document.getElementById("setting-nn-discount-tab");
+        const elExplorationInput = document.getElementById("setting-nn-exploration-tab");
+        const discountVal = elDiscountInput ? parseFloat(elDiscountInput.value) : 0.95;
+        const explorationVal = elExplorationInput ? parseFloat(elExplorationInput.value) : 0.10;
+        
         // Re-read other settings from dashboard controls or state to avoid overwriting them
         const tradingMode = document.getElementById("setting-trading-mode")?.value || "paper";
         const broker = document.getElementById("setting-broker")?.value || "kraken";
@@ -1785,7 +1807,7 @@ if (elSaveNnParamsBtn) {
         if (elNnLrOrig) elNnLrOrig.value = lrVal;
         if (elNnFloorOrig) elNnFloorOrig.value = floorVal;
 
-        fetch(`/api/system/config?trading_mode=${tradingMode}&risk_mode=${riskMode}&max_drawdown=${maxDrawdown}&broker=${broker}&api_key=${encodeURIComponent(exchangeApiKey)}&api_secret=${encodeURIComponent(exchangeApiSecret)}&trailing_stop=${trailingStop}&cooldown=${cooldown}&tp_multiplier=${tpMultiplier}&sl_multiplier=${slMultiplier}&nn_lr=${lrVal}&nn_floor=${floorVal}`, {
+        fetch(`/api/system/config?trading_mode=${tradingMode}&risk_mode=${riskMode}&max_drawdown=${maxDrawdown}&broker=${broker}&api_key=${encodeURIComponent(exchangeApiKey)}&api_secret=${encodeURIComponent(exchangeApiSecret)}&trailing_stop=${trailingStop}&cooldown=${cooldown}&tp_multiplier=${tpMultiplier}&sl_multiplier=${slMultiplier}&nn_lr=${lrVal}&nn_floor=${floorVal}&nn_discount=${discountVal}&nn_exploration=${explorationVal}`, {
             method: 'POST'
         })
         .then(res => res.json())

@@ -843,11 +843,13 @@ def get_system_config():
         "risk_mode": database.load_setting("risk_mode", "conservative"),
         "max_drawdown": float(database.load_setting("max_daily_drawdown", "5.0")),
         "nn_lr": float(database.load_setting("nn_learning_rate", "0.15")),
-        "nn_floor": float(database.load_setting("nn_weight_floor", "0.05"))
+        "nn_floor": float(database.load_setting("nn_weight_floor", "0.05")),
+        "nn_discount": float(database.load_setting("nn_discount_factor", "0.95")),
+        "nn_exploration": float(database.load_setting("nn_exploration_rate", "0.10"))
     }
 
 @app.post("/api/system/config")
-def update_system_config(trading_mode: str, risk_mode: str, max_drawdown: float, broker: str = "kraken", api_key: str = "", api_secret: str = "", trailing_stop: bool = False, cooldown: float = 4.0, tp_multiplier: float = 2.5, sl_multiplier: float = 1.5, nn_lr: float = 0.15, nn_floor: float = 0.05):
+def update_system_config(trading_mode: str, risk_mode: str, max_drawdown: float, broker: str = "kraken", api_key: str = "", api_secret: str = "", trailing_stop: bool = False, cooldown: float = 4.0, tp_multiplier: float = 2.5, sl_multiplier: float = 1.5, nn_lr: float = 0.15, nn_floor: float = 0.05, nn_discount: float = 0.95, nn_exploration: float = 0.10):
     # 1. Update config.json
     config_path = os.path.expanduser("~/.nexustrader/config.json")
     cfg = {}
@@ -897,7 +899,9 @@ def update_system_config(trading_mode: str, risk_mode: str, max_drawdown: float,
     database.save_setting("opt_sl_multiplier", str(sl_multiplier))
     database.save_setting("nn_learning_rate", str(nn_lr))
     database.save_setting("nn_weight_floor", str(nn_floor))
-    logging.info(f"Trailing Stop: {trailing_stop}, Cooldown: {cooldown}h, TP mult: {tp_multiplier}x, SL mult: {sl_multiplier}x, NN lr: {nn_lr}, NN floor: {nn_floor} updated.")
+    database.save_setting("nn_discount_factor", str(nn_discount))
+    database.save_setting("nn_exploration_rate", str(nn_exploration))
+    logging.info(f"Trailing Stop: {trailing_stop}, Cooldown: {cooldown}h, TP mult: {tp_multiplier}x, SL mult: {sl_multiplier}x, NN lr: {nn_lr}, NN floor: {nn_floor}, NN discount: {nn_discount}, NN exploration: {nn_exploration} updated.")
     
     return {"status": "success"}
 
