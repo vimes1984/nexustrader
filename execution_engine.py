@@ -123,8 +123,9 @@ class ExecutionEngine:
             self.last_known_prices = prices
             
             # Update initial balance if not set
+            is_custom = database.load_setting("initial_balance_is_custom") == "true"
             db_init_balance = database.load_setting("initial_portfolio_balance")
-            if db_init_balance is None or float(db_init_balance) == 100.0:
+            if not is_custom and (db_init_balance is None or float(db_init_balance) == 100.0):
                 self.initial_balance = total_value_usd
                 database.save_setting("initial_portfolio_balance", str(total_value_usd))
                 logging.info(f"[LIVE BALANCE] Set initial portfolio baseline to: ${total_value_usd:.2f}")

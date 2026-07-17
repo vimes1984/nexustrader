@@ -1291,6 +1291,9 @@ function loadBlogConfig() {
             const elNnExplorationTab = document.getElementById("setting-nn-exploration-tab");
             if (elNnDiscountTab) elNnDiscountTab.value = data.nn_discount || 0.95;
             if (elNnExplorationTab) elNnExplorationTab.value = data.nn_exploration || 0.10;
+            
+            const elStartingCapital = document.getElementById("setting-starting-capital");
+            if (elStartingCapital) elStartingCapital.value = data.initial_balance !== undefined ? data.initial_balance : 100.0;
         })
         .catch(err => console.error("Error loading system config:", err));
 
@@ -1385,10 +1388,13 @@ if (elSaveSystemConfigBtn) {
         const riskMode = elRiskSelect ? elRiskSelect.value : "conservative";
         const maxDrawdown = elMaxDrawdownInput ? parseFloat(elMaxDrawdownInput.value) : 5.0;
         
+        const elStartingCapital = document.getElementById("setting-starting-capital");
+        const startingCapital = elStartingCapital ? parseFloat(elStartingCapital.value) : 100.0;
+
         elSaveSystemConfigBtn.disabled = true;
         showToast("Saving Broker & Risk boundaries...", "info");
         
-        fetch(`/api/system/config?trading_mode=${tradingMode}&risk_mode=${riskMode}&max_drawdown=${maxDrawdown}&broker=${broker}&api_key=${encodeURIComponent(exchangeApiKey)}&api_secret=${encodeURIComponent(exchangeApiSecret)}&trailing_stop=${trailingStop}&cooldown=${cooldown}&tp_multiplier=${tpMultiplier}&sl_multiplier=${slMultiplier}&nn_lr=${nnLr}&nn_floor=${nnFloor}`, {
+        fetch(`/api/system/config?trading_mode=${tradingMode}&risk_mode=${riskMode}&max_drawdown=${maxDrawdown}&broker=${broker}&api_key=${encodeURIComponent(exchangeApiKey)}&api_secret=${encodeURIComponent(exchangeApiSecret)}&trailing_stop=${trailingStop}&cooldown=${cooldown}&tp_multiplier=${tpMultiplier}&sl_multiplier=${slMultiplier}&nn_lr=${nnLr}&nn_floor=${nnFloor}&initial_balance=${startingCapital}`, {
             method: 'POST'
         })
         .then(res => res.json())
@@ -2075,6 +2081,9 @@ if (elSaveNnParamsBtn) {
         const riskMode = document.getElementById("risk-mode-select")?.value || "conservative";
         const maxDrawdown = document.getElementById("setting-max-drawdown")?.value ? parseFloat(document.getElementById("setting-max-drawdown").value) : 5.0;
 
+        const elStartingCapital = document.getElementById("setting-starting-capital");
+        const startingCapital = elStartingCapital ? parseFloat(elStartingCapital.value) : 100.0;
+
         elSaveNnParamsBtn.disabled = true;
         showToast("Saving Neural Hyperparameters...", "info");
         
@@ -2084,7 +2093,7 @@ if (elSaveNnParamsBtn) {
         if (elNnLrOrig) elNnLrOrig.value = lrVal;
         if (elNnFloorOrig) elNnFloorOrig.value = floorVal;
 
-        fetch(`/api/system/config?trading_mode=${tradingMode}&risk_mode=${riskMode}&max_drawdown=${maxDrawdown}&broker=${broker}&api_key=${encodeURIComponent(exchangeApiKey)}&api_secret=${encodeURIComponent(exchangeApiSecret)}&trailing_stop=${trailingStop}&cooldown=${cooldown}&tp_multiplier=${tpMultiplier}&sl_multiplier=${slMultiplier}&nn_lr=${lrVal}&nn_floor=${floorVal}&nn_discount=${discountVal}&nn_exploration=${explorationVal}`, {
+        fetch(`/api/system/config?trading_mode=${tradingMode}&risk_mode=${riskMode}&max_drawdown=${maxDrawdown}&broker=${broker}&api_key=${encodeURIComponent(exchangeApiKey)}&api_secret=${encodeURIComponent(exchangeApiSecret)}&trailing_stop=${trailingStop}&cooldown=${cooldown}&tp_multiplier=${tpMultiplier}&sl_multiplier=${slMultiplier}&nn_lr=${lrVal}&nn_floor=${floorVal}&nn_discount=${discountVal}&nn_exploration=${explorationVal}&initial_balance=${startingCapital}`, {
             method: 'POST'
         })
         .then(res => res.json())

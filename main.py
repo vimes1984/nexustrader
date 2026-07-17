@@ -845,11 +845,12 @@ def get_system_config():
         "nn_lr": float(database.load_setting("nn_learning_rate", "0.15")),
         "nn_floor": float(database.load_setting("nn_weight_floor", "0.05")),
         "nn_discount": float(database.load_setting("nn_discount_factor", "0.95")),
-        "nn_exploration": float(database.load_setting("nn_exploration_rate", "0.10"))
+        "nn_exploration": float(database.load_setting("nn_exploration_rate", "0.10")),
+        "initial_balance": float(database.load_setting("initial_portfolio_balance", "100.0"))
     }
 
 @app.post("/api/system/config")
-def update_system_config(trading_mode: str, risk_mode: str, max_drawdown: float, broker: str = "kraken", api_key: str = "", api_secret: str = "", trailing_stop: bool = False, cooldown: float = 4.0, tp_multiplier: float = 2.5, sl_multiplier: float = 1.5, nn_lr: float = 0.15, nn_floor: float = 0.05, nn_discount: float = 0.95, nn_exploration: float = 0.10):
+def update_system_config(trading_mode: str, risk_mode: str, max_drawdown: float, broker: str = "kraken", api_key: str = "", api_secret: str = "", trailing_stop: bool = False, cooldown: float = 4.0, tp_multiplier: float = 2.5, sl_multiplier: float = 1.5, nn_lr: float = 0.15, nn_floor: float = 0.05, nn_discount: float = 0.95, nn_exploration: float = 0.10, initial_balance: float = None):
     # 1. Update config.json
     config_path = os.path.expanduser("~/.nexustrader/config.json")
     cfg = {}
@@ -901,6 +902,13 @@ def update_system_config(trading_mode: str, risk_mode: str, max_drawdown: float,
     database.save_setting("nn_weight_floor", str(nn_floor))
     database.save_setting("nn_discount_factor", str(nn_discount))
     database.save_setting("nn_exploration_rate", str(nn_exploration))
+    
+    if initial_balance is not None:
+        database.save_setting("initial_portfolio_balance", str(initial_balance))
+        database.save_setting("initial_balance_is_custom", "true")
+        orchestrator.execution_engine.initial_balance = float(initial_balance)
+        logging.info(f"Initial portfolio balance baseline updated to: ${initial_balance:.2f}")
+
     logging.info(f"Trailing Stop: {trailing_stop}, Cooldown: {cooldown}h, TP mult: {tp_multiplier}x, SL mult: {sl_multiplier}x, NN lr: {nn_lr}, NN floor: {nn_floor}, NN discount: {nn_discount}, NN exploration: {nn_exploration} updated.")
     
     return {"status": "success"}
