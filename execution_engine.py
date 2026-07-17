@@ -234,7 +234,9 @@ class ExecutionEngine:
             # For live trading, execute immediately on the broker API
             success, actual_qty = self.execute_order_on_broker(symbol, direction.lower(), quantity, entry_price)
             if not success:
-                logging.error(f"Could not execute entry order for {symbol} on live broker. Position aborted.")
+                logging.error(f"Could not execute entry order for {symbol} on live broker. Position aborted. Placing on temporary 5-minute retry cooldown.")
+                # Set a 5-minute retry cooldown to prevent tight infinite loop API spamming
+                database.save_setting(f"cooldown_end_{symbol}", str(time.time() + 300))
                 return False
                 
             self.balance -= fee

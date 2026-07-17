@@ -1507,35 +1507,7 @@ if (elTestBrokerBtn) {
     });
 }
 
-// 2. Clear Loss Cooldowns Listener
-const elResetCooldownsBtn = document.getElementById("trigger-reset-cooldowns-btn");
-if (elResetCooldownsBtn) {
-    elResetCooldownsBtn.addEventListener("click", () => {
-        elResetCooldownsBtn.disabled = true;
-        elBlogStatusMsg.textContent = "Clearing all loss cooldowns...";
-        elBlogStatusMsg.className = "color-blue";
-        
-        fetch("/api/system/reset_cooldowns", { method: 'POST' })
-            .then(res => res.json())
-            .then(data => {
-                elResetCooldownsBtn.disabled = false;
-                if (data.status === "success") {
-                    elBlogStatusMsg.textContent = data.message;
-                    elBlogStatusMsg.className = "color-green";
-                    setTimeout(() => { elBlogStatusMsg.textContent = ""; }, 5000);
-                } else {
-                    elBlogStatusMsg.textContent = `Error: ${data.message || "failed"}`;
-                    elBlogStatusMsg.className = "color-red";
-                }
-            })
-            .catch(err => {
-                elResetCooldownsBtn.disabled = false;
-                elBlogStatusMsg.textContent = "Error resetting cooldowns.";
-                elBlogStatusMsg.className = "color-red";
-                console.error(err);
-            });
-    });
-}
+// Loss Cooldowns Listener is defined above with the -tab suffix.
 
 // Weights History Chart helper functions
 function initWeightsHistoryChart() {
