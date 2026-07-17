@@ -458,6 +458,10 @@ async def startup_event():
     await orchestrator.initialize()
     # Auto-start live stream on startup (true live data)
     orchestrator.start_stream(mode="live", poll_interval=5)
+    try:
+        update_crontab_schedule()
+    except Exception as e:
+        logging.error(f"Failed to initialize crontab on startup: {e}")
 
 @app.on_event("shutdown")
 async def shutdown_event():
