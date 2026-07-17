@@ -17,571 +17,703 @@
 <body>
     <div class="dashboard-container">
         <!-- App Header -->
-        <header class="glass-panel">
-        <div class="brand">
-            <i data-lucide="cpu" style="color: var(--neon-blue); width: 32px; height: 32px;"></i>
-            <div>
-                <h1>NexusTrader</h1>
-                <p style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px;">AI Quantitative Suite</p>
-            </div>
-        </div>
-
-        <div class="controls-bar">
-            <div class="slider-container">
-                <span>Risk Profile:</span>
-                <select id="risk-mode-select" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 12px; border-radius: 8px; cursor: pointer; outline: none; font-size:13px; font-family:inherit;">
-                    <option value="conservative" style="background:#0f172a;">Conservative (Safe)</option>
-                    <option value="aggressive" style="background:#0f172a;">Aggressive (Fast)</option>
-                    <option value="hyper_growth" style="background:#0f172a;">Hyper-Growth (Max)</option>
-                </select>
-            </div>
-            <div class="slider-container">
-                <span>Speed:</span>
-                <input type="range" id="speed-slider" min="0.05" max="1.5" step="0.05" value="0.2">
-                <span id="speed-label">0.2s</span>
-            </div>
-            <button class="btn" id="play-pause-btn">
-                <i data-lucide="pause"></i>
-                <span id="play-pause-text">Pause</span>
-            </button>
-            <button class="btn" id="reset-btn" style="border-color: rgba(244, 63, 94, 0.3);">
-                <i data-lucide="rotate-ccw" style="color: var(--neon-red);"></i>
-                Reset Sim
-            </button>
-            <div class="status-badge" id="bot-status">
-                <span class="dot"></span>
-                <span id="status-text">Simulating</span>
-            </div>
-        </div>
-    </header>
-
-    <!-- KPI Grid -->
-    <section class="dashboard-grid" aria-label="Key Performance Indicators">
-        <div class="glass-panel kpi-card" id="equity-card">
-            <div class="kpi-title">Total Portfolio Value</div>
-            <div class="kpi-value" id="val-equity">$100.00</div>
-            <div class="kpi-sub" id="val-unrealized-pnl">Active Trade Profit: $0.00 (0.00%)</div>
-        </div>
-        <div class="glass-panel kpi-card" id="balance-card">
-            <div class="kpi-title">Cash Ready to Invest</div>
-            <div class="kpi-value" id="val-balance">$100.00</div>
-            <div class="kpi-sub">Ready to deploy</div>
-        </div>
-        <div class="glass-panel kpi-card" id="winrate-card">
-            <div class="kpi-title">Success Rate (Wins)</div>
-            <div class="kpi-value" id="val-winrate">0.0%</div>
-            <div class="kpi-sub" id="val-trade-count">0 trades completed</div>
-        </div>
-        <div class="glass-panel kpi-card" id="totalpnl-card">
-            <div class="kpi-title">Total Profit</div>
-            <div class="kpi-value" id="val-total-pnl">$0.00</div>
-            <div class="kpi-sub" id="val-total-pnl-percent">0.00% growth</div>
-        </div>
-    </section>
-
-    <!-- Main Content Row -->
-    <main class="main-content">
-        <!-- Left Column -->
-        <div class="main-left-column">
-            <!-- Chart Section -->
-            <article class="glass-panel chart-panel">
-            <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center; gap: 15px; flex-wrap: wrap; margin-bottom: 16px;">
-                <h2 class="panel-title" style="margin: 0;">
-                    <i data-lucide="trending-up" style="color: var(--neon-blue)"></i>
-                    <span id="chart-ticker-title">ETH-USD</span> Live Feed
-                </h2>
-                
-                <!-- Portfolio Timeframe Selector (hidden by default) -->
-                <div id="portfolio-timeframes" style="display: none; gap: 6px; background: rgba(0, 0, 0, 0.2); padding: 2px; border: 1px solid var(--border-color); border-radius: 6px;">
-                    <button class="tf-btn" data-tf="1D" style="background: transparent; border: none; color: var(--text-secondary); padding: 4px 8px; font-size: 11px; font-weight: 600; border-radius: 4px; cursor: pointer; font-family: inherit; transition: var(--transition); outline: none;">1D</button>
-                    <button class="tf-btn active" data-tf="1W" style="background: rgba(0, 240, 255, 0.1); border: none; color: var(--neon-blue); padding: 4px 8px; font-size: 11px; font-weight: 600; border-radius: 4px; cursor: pointer; font-family: inherit; transition: var(--transition); outline: none;">1W</button>
-                    <button class="tf-btn" data-tf="1M" style="background: transparent; border: none; color: var(--text-secondary); padding: 4px 8px; font-size: 11px; font-weight: 600; border-radius: 4px; cursor: pointer; font-family: inherit; transition: var(--transition); outline: none;">1M</button>
-                    <button class="tf-btn" data-tf="1Y" style="background: transparent; border: none; color: var(--text-secondary); padding: 4px 8px; font-size: 11px; font-weight: 600; border-radius: 4px; cursor: pointer; font-family: inherit; transition: var(--transition); outline: none;">1Y</button>
-                </div>
-
-                <div id="ticker-price-container" style="font-size: 14px; font-weight: 600; font-family: 'Space Grotesk', sans-serif;">
-                    Price: <span id="ticker-price" class="color-blue">$0.00</span>
-                </div>
-            </div>
-            
-            <!-- Ticker Switcher Tabs -->
-            <div id="ticker-switcher-bar" style="display: flex; flex-shrink: 0; gap: 8px; padding: 0 0 12px 0; border-bottom: 1px solid var(--border-color); margin-bottom: 12px; overflow-x: auto; scrollbar-width: none;">
-                <!-- Filled dynamically by JS -->
-            </div>
-            
-            <div class="chart-container">
-                <canvas id="main-chart"></canvas>
-            </div>
-        </article>
-
-        
-
-            <!-- Lower Panels Grid -->
-    <section class="bottom-content" aria-label="Trade History and Statistical Analysis">
-        <!-- Table Log -->
-        <article class="glass-panel table-panel">
-            <h2 class="panel-title" style="margin-bottom: 16px;">
-                <i data-lucide="list" style="color: var(--neon-blue)"></i>
-                Completed Trades History
-            </h2>
-            <div class="table-scroll">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Time</th>
-                            <th>Stock</th>
-                            <th>Buy/Sell</th>
-                            <th>Shares</th>
-                            <th>Buy Price</th>
-                            <th>Sell Price</th>
-                            <th>AI Win Chance</th>
-                            <th>Earnings ($)</th>
-                            <th>Why it Closed</th>
-                        </tr>
-                    </thead>
-                    <tbody id="trade-log-body">
-                        <!-- Dynamic trade items go here -->
-                        <tr>
-                            <td colspan="9" style="text-align: center; color: var(--text-muted); padding: 40px;">No trades completed yet. Watching the market for opportunities...</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </article>
-
-        <!-- Neural Diagnostics Panel -->
-        <article class="glass-panel neural-diagnostics" style="display: flex; flex-direction: column;">
-            <h2 class="panel-title" style="margin-bottom: 15px;">
-                <i data-lucide="network" style="color: var(--neon-purple)"></i>
-                Neural Policy Engine
-            </h2>
-            <p style="font-size: 11px; color: var(--text-secondary); line-height: 1.4; margin-bottom: 15px;">
-                Real-time parameters fed into the Policy Gradient Neural Network.
-            </p>
-            <div class="details-grid" style="font-size: 12px; gap: 8px; flex-grow: 1; display: flex; flex-direction: column; justify-content: center;">
-                <div class="pos-row" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 6px;">
-                    <span>Market Regime:</span>
-                    <span id="neural-val-regime" class="color-blue" style="font-weight:600;">Trending</span>
-                </div>
-                <div class="pos-row" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 6px;">
-                    <span>Reversion Rate (&theta;):</span>
-                    <span id="neural-val-theta" style="font-weight:600;">0.00</span>
-                </div>
-                <div class="pos-row" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 6px;">
-                    <span>RSI Momentum:</span>
-                    <span id="neural-val-rsi" style="font-weight:600;">0.00</span>
-                </div>
-                <div class="pos-row" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 6px;">
-                    <span>MACD Divergence:</span>
-                    <span id="neural-val-macd" style="font-weight:600;">0.00</span>
-                </div>
-                <div class="pos-row" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 6px;">
-                    <span>Bollinger Band Pos:</span>
-                    <span id="neural-val-bb" style="font-weight:600;">0.00</span>
-                </div>
-                <div class="pos-row" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 6px;">
-                    <span>ATR Volatility:</span>
-                    <span id="neural-val-atr" style="font-weight:600;">0.00</span>
-                </div>
-                <div class="pos-row" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 6px;">
-                    <span>Recent Win Trend:</span>
-                    <span id="neural-val-wintrend" style="font-weight:600;">50.0%</span>
-                </div>
-            </div>
-            
-            <!-- Memory & Persistence Diagnostics -->
-            <div style="margin-top: 15px; padding: 12px; background: rgba(168, 85, 247, 0.05); border: 1px solid rgba(168, 85, 247, 0.2); border-radius: 12px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <span style="font-size: 11px; font-weight: 700; color: var(--neon-purple); text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 4px;">
-                        <i data-lucide="cpu" style="width: 12px; height: 12px;"></i>
-                        AI Brain Memory
-                    </span>
-                    <span id="neural-memory-badge" style="font-size: 10px; padding: 2px 6px; border-radius: 4px; background: rgba(16, 185, 129, 0.15); color: var(--neon-green); font-weight: 700; border: 1px solid rgba(16, 185, 129, 0.3);">
-                        SECURE & PERSISTENT
-                    </span>
-                </div>
-                <div style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 8px; font-size: 11px;">
-                    <div style="display: flex; flex-direction: column; gap: 2px;">
-                        <span style="color: var(--text-muted);">Lifetime Training Epochs:</span>
-                        <span id="neural-lifetime-epochs" style="font-weight: 700; color: var(--text-primary);">0 epochs</span>
-                    </div>
-                    <div style="display: flex; flex-direction: column; gap: 2px; text-align: right;">
-                        <span style="color: var(--text-muted);">Model DNA Signature:</span>
-                        <span id="neural-model-dna" style="font-family: monospace; font-weight: 700; color: var(--neon-blue);">NN-DEFAULT</span>
-                    </div>
-                </div>
-                <div id="neural-memory-footer" style="font-size: 9px; color: var(--text-muted); margin-top: 6px; text-align: center; border-top: 1px dashed rgba(168, 85, 247, 0.15); padding-top: 6px;">
-                    Weights synchronized to local SQLite DB.
-                </div>
-            </div>
-
-            <div style="margin-top: 15px;">
-                <label style="font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 6px;">Policy Update Log:</label>
-                <div id="neural-log" style="font-size: 11px; font-family: monospace; color: #a855f7; background: rgba(0,0,0,0.25); border: 1px solid var(--border-color); padding: 8px; border-radius: 8px; height: 80px; overflow-y: auto; line-height: 1.4;">
-                    Waiting for training updates...
-                </div>
-            </div>
-        </article>
-
-        <!-- Probability Engine details -->
-        <article class="glass-panel probability-details">
-            <h2 class="panel-title">
-                <i data-lucide="shield-alert" style="color: var(--neon-orange)"></i>
-                AI Trade Evaluation
-            </h2>
-            
-            <div class="metric-gauge">
-                <div class="gauge-circle" id="prob-gauge" style="--gauge-percent: 0deg;">
-                    <span id="prob-value">0%</span>
-                    <label>Winning Chance</label>
-                </div>
-            </div>
-
-            <div class="details-grid" id="prob-details-grid">
-                <div class="pos-row">
-                    <span>Estimated Profit</span>
-                    <span id="val-ev" class="color-blue">-</span>
-                </div>
-                <div class="pos-row">
-                    <span>Risk vs Reward</span>
-                    <span id="val-rr">-</span>
-                </div>
-                <div class="pos-row">
-                    <span>Recommended Trade Size</span>
-                    <span id="val-kelly">-</span>
-                </div>
-                <div class="pos-row">
-                    <span>Strategy Confidence</span>
-                    <span id="val-sig-strength">-</span>
-                </div>
-            </div>
-            
-            <div id="viability-badge" style="margin-top: 20px; padding: 12px; text-align: center; border-radius: 8px; font-weight: 600; font-size: 14px; background: rgba(255,255,255,0.02); color: var(--text-muted);">
-                Analyzing market data for next trade...
-            </div>
-        </article>
-    </section>
-        </div><div class="sidebar-container" style="display: grid; grid-template-columns: 1fr; gap: 20px;">
-            <!-- Learning weights -->
-            <article class="glass-panel weights-panel">
+        <header class="glass-panel" style="margin-bottom: 12px; padding: 15px 25px;">
+            <div class="brand">
+                <i data-lucide="cpu" style="color: var(--neon-blue); width: 32px; height: 32px;"></i>
                 <div>
-                    <h2 class="panel-title" style="margin-bottom: 20px;">
-                        <i data-lucide="brain" style="color: var(--neon-purple)"></i>
-                        Strategy Popularity (AI Learning)
-                    </h2>
-                    <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 24px; line-height: 1.4;">
-                        The bot automatically shifts more trust (weight) to the strategies that are currently making money in this market.
-                    </p>
-                    <div id="weights-container">
-                        <!-- Dynamic weight bars go here -->
-                    </div>
+                    <h1 style="font-size: 22px; font-weight: 700; letter-spacing: -0.5px;">NexusTrader</h1>
+                    <p style="font-size: 10px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px;">AI Neuro-Quantitative Suite</p>
                 </div>
-                
-                <div style="border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 16px;">
-                    <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
-                        <i data-lucide="trending-up" style="width: 14px; height: 14px; color: var(--neon-purple);"></i>
-                        Neural Weights Evolution (Learning History)
-                    </h3>
-                    <div style="position: relative; height: 160px; width: 100%; margin-top: 10px;">
-                        <canvas id="weights-history-chart"></canvas>
-                    </div>
+            </div>
+
+            <div class="controls-bar">
+                <div class="slider-container">
+                    <span>Risk Profile:</span>
+                    <select id="risk-mode-select" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); color: var(--text-primary); padding: 6px 12px; border-radius: 8px; cursor: pointer; outline: none; font-size:12px; font-family:inherit;">
+                        <option value="conservative" style="background:#0f172a;">Conservative (Safe)</option>
+                        <option value="aggressive" style="background:#0f172a;">Aggressive (Fast)</option>
+                        <option value="hyper_growth" style="background:#0f172a;">Hyper-Growth (Max)</option>
+                    </select>
+                </div>
+                <div class="slider-container">
+                    <span>Speed:</span>
+                    <input type="range" id="speed-slider" min="0.05" max="1.5" step="0.05" value="0.2">
+                    <span id="speed-label">0.2s</span>
+                </div>
+                <button class="btn" id="play-pause-btn" style="padding: 6px 12px; font-size: 12px;">
+                    <i data-lucide="pause" style="width: 14px; height: 14px;"></i>
+                    <span id="play-pause-text">Pause</span>
+                </button>
+                <button class="btn" id="reset-btn" style="border-color: rgba(244, 63, 94, 0.3); padding: 6px 12px; font-size: 12px;">
+                    <i data-lucide="rotate-ccw" style="color: var(--neon-red); width: 14px; height: 14px;"></i>
+                    Reset Sim
+                </button>
+                <div class="status-badge" id="bot-status">
+                    <span class="dot"></span>
+                    <span id="status-text">Simulating</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Menu Navigation Tabs -->
+        <nav class="nav-tabs" style="display: flex; gap: 8px; margin-bottom: 20px; padding: 4px; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-color); border-radius: 12px;">
+            <button class="nav-tab active" data-tab="tab-dashboard" style="flex: 1; min-width: 90px; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 12px; background: transparent; border: 1px solid transparent; color: var(--text-secondary); border-radius: 8px; font-family: inherit; font-size: 12px; font-weight: 500; cursor: pointer; transition: var(--transition);">
+                <i data-lucide="layout-dashboard" style="width: 16px; height: 16px;"></i>
+                Dashboard
+            </button>
+            <button class="nav-tab" data-tab="tab-neural" style="flex: 1; min-width: 90px; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 12px; background: transparent; border: 1px solid transparent; color: var(--text-secondary); border-radius: 8px; font-family: inherit; font-size: 12px; font-weight: 500; cursor: pointer; transition: var(--transition);">
+                <i data-lucide="brain-circuit" style="width: 16px; height: 16px;"></i>
+                Neural Core
+            </button>
+            <button class="nav-tab" data-tab="tab-agents" style="flex: 1; min-width: 90px; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 12px; background: transparent; border: 1px solid transparent; color: var(--text-secondary); border-radius: 8px; font-family: inherit; font-size: 12px; font-weight: 500; cursor: pointer; transition: var(--transition);">
+                <i data-lucide="bot" style="width: 16px; height: 16px;"></i>
+                AI Agent Nexus
+            </button>
+            <button class="nav-tab" data-tab="tab-settings" style="flex: 1; min-width: 90px; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 12px; background: transparent; border: 1px solid transparent; color: var(--text-secondary); border-radius: 8px; font-family: inherit; font-size: 12px; font-weight: 500; cursor: pointer; transition: var(--transition);">
+                <i data-lucide="sliders" style="width: 16px; height: 16px;"></i>
+                Trading System
+            </button>
+            <button class="nav-tab" data-tab="tab-architecture" style="flex: 1; min-width: 90px; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 12px; background: transparent; border: 1px solid transparent; color: var(--text-secondary); border-radius: 8px; font-family: inherit; font-size: 12px; font-weight: 500; cursor: pointer; transition: var(--transition);">
+                <i data-lucide="network" style="width: 16px; height: 16px;"></i>
+                Architecture
+            </button>
+        </nav>
+
+        <!-- KPI Grid (Global to active tabs) -->
+        <section class="dashboard-grid" aria-label="Key Performance Indicators" style="margin-bottom: 20px;">
+            <div class="glass-panel kpi-card" id="equity-card">
+                <div class="kpi-title">Total Portfolio Value</div>
+                <div class="kpi-value" id="val-equity">$100.00</div>
+                <div class="kpi-sub" id="val-unrealized-pnl">Active Trade Profit: $0.00 (0.00%)</div>
+            </div>
+            <div class="glass-panel kpi-card" id="balance-card">
+                <div class="kpi-title">Cash Ready to Invest</div>
+                <div class="kpi-value" id="val-balance">$100.00</div>
+                <div class="kpi-sub">Ready to deploy</div>
+            </div>
+            <div class="glass-panel kpi-card" id="winrate-card">
+                <div class="kpi-title">Success Rate (Wins)</div>
+                <div class="kpi-value" id="val-winrate">0.0%</div>
+                <div class="kpi-sub" id="val-trade-count">0 trades completed</div>
+            </div>
+            <div class="glass-panel kpi-card" id="totalpnl-card">
+                <div class="kpi-title">Total Profit</div>
+                <div class="kpi-value" id="val-total-pnl">$0.00</div>
+                <div class="kpi-sub" id="val-total-pnl-percent">0.00% growth</div>
+            </div>
+        </section>
+
+        <!-- TAB CONTENT 1: DASHBOARD -->
+        <div id="tab-dashboard" class="tab-content active">
+            <main class="main-content">
+                <div class="main-left-column">
+                    <!-- Live Chart Card -->
+                    <article class="glass-panel chart-panel">
+                        <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center; gap: 15px; flex-wrap: wrap; margin-bottom: 16px;">
+                            <h2 class="panel-title" style="margin: 0; display: flex; align-items: center; gap: 8px;">
+                                <i data-lucide="trending-up" style="color: var(--neon-blue)"></i>
+                                Live Trading Market
+                            </h2>
+                            <div class="ticker-selector" id="ticker-selector" style="display: flex; gap: 6px;">
+                                <!-- Symbols are filled dynamically -->
+                            </div>
+                        </div>
+                        <div class="chart-container" style="position: relative; height: 350px; width: 100%;">
+                            <canvas id="trading-chart"></canvas>
+                        </div>
+                    </article>
+
+                    <!-- Trade Probability Card -->
+                    <article class="glass-panel prob-panel" style="margin-top: 20px;">
+                        <h2 class="panel-title" style="margin-bottom: 20px; display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="activity" style="color: var(--neon-blue)"></i>
+                            Real-Time Probability Estimation
+                        </h2>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+                            <div class="gauge-section" style="display: flex; flex-direction: column; gap: 12px;">
+                                <div class="pos-row">
+                                    <span>Signal Odds (BUY / BULLISH)</span>
+                                    <span id="val-prob-buy" style="color: var(--neon-green); font-weight: 700;">-</span>
+                                </div>
+                                <div class="pos-row">
+                                    <span>Signal Odds (SELL / BEARISH)</span>
+                                    <span id="val-prob-sell" style="color: var(--neon-red); font-weight: 700;">-</span>
+                                </div>
+                            </div>
+                            <div class="gauge-section" style="display: flex; flex-direction: column; gap: 12px;">
+                                <div class="pos-row">
+                                    <span>Recommended Trade Size</span>
+                                    <span id="val-kelly" style="font-weight: 700;">-</span>
+                                </div>
+                                <div class="pos-row">
+                                    <span>Strategy Confidence</span>
+                                    <span id="val-sig-strength" style="font-weight: 700;">-</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="viability-badge" style="margin-top: 20px; padding: 12px; text-align: center; border-radius: 8px; font-weight: 600; font-size: 14px; background: rgba(255,255,255,0.02); color: var(--text-muted);">
+                            Analyzing market data for next trade...
+                        </div>
+                    </article>
+
+                    <!-- Recent Closed Trades -->
+                    <article class="glass-panel" style="margin-top: 20px; padding: 24px;">
+                        <h2 class="panel-title" style="margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="list-checks" style="color: var(--neon-green)"></i>
+                            Recent Closed Trades Log
+                        </h2>
+                        <div style="overflow-x: auto;">
+                            <table style="width: 100%; border-collapse: collapse; font-size: 13px; text-align: left;">
+                                <thead>
+                                    <tr style="border-bottom: 1px solid var(--border-color); color: var(--text-muted);">
+                                        <th style="padding: 10px 5px;">ID</th>
+                                        <th style="padding: 10px 5px;">Asset</th>
+                                        <th style="padding: 10px 5px;">Direction</th>
+                                        <th style="padding: 10px 5px;">Entry</th>
+                                        <th style="padding: 10px 5px;">Exit</th>
+                                        <th style="padding: 10px 5px;">PnL ($)</th>
+                                        <th style="padding: 10px 5px;">Reason</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="recent-trades-list">
+                                    <!-- Rendered dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </article>
                 </div>
 
-                <div style="border-top: 1px solid var(--border-color); padding-top: 16px; margin-top: 16px;">
-                    <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 8px;">Active Trade Status</h3>
-                    <div id="position-details-container" class="active-pos-details">
-                        <p style="font-size: 13px; color: var(--text-muted); text-align: center; padding: 20px;">No Trade Currently Open</p>
-                    </div>
+                <div class="main-right-column">
+                    <!-- Active Position Details -->
+                    <article class="glass-panel" style="padding: 24px; margin-bottom: 20px;">
+                        <h2 class="panel-title" style="margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="shield-alert" style="color: var(--neon-orange);"></i>
+                            Active Tactical Position
+                        </h2>
+                        <div id="position-details-container" class="active-pos-details">
+                            <p style="font-size: 13px; color: var(--text-muted); text-align: center; padding: 20px;">No Active Position Open</p>
+                        </div>
+                    </article>
+
+                    <!-- Exchange Live Portfolio -->
+                    <article class="glass-panel" style="padding: 24px; display: flex; flex-direction: column; gap: 15px;" id="portfolio-card">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <h2 class="panel-title" style="display: flex; align-items: center; gap: 8px;">
+                                <i data-lucide="wallet" style="color: var(--neon-blue)"></i>
+                                Exchange Wallet
+                            </h2>
+                        </div>
+                        
+                        <!-- Portfolio Tabs Switcher -->
+                        <div style="display: flex; background: rgba(0, 0, 0, 0.25); border: 1px solid var(--border-color); border-radius: 8px; padding: 2px;">
+                            <button class="portfolio-tab active" data-tab="assets" style="flex: 1; background: transparent; border: none; color: var(--text-secondary); padding: 6px 12px; font-size: 11px; font-weight: 600; border-radius: 6px; cursor: pointer; outline: none; transition: var(--transition); font-family: inherit;">Assets</button>
+                            <button class="portfolio-tab" data-tab="positions" style="flex: 1; background: transparent; border: none; color: var(--text-secondary); padding: 6px 12px; font-size: 11px; font-weight: 600; border-radius: 6px; cursor: pointer; outline: none; transition: var(--transition); font-family: inherit;">Positions</button>
+                            <button class="portfolio-tab" data-tab="orders" style="flex: 1; background: transparent; border: none; color: var(--text-secondary); padding: 6px 12px; font-size: 11px; font-weight: 600; border-radius: 6px; cursor: pointer; outline: none; transition: var(--transition); font-family: inherit;">Orders</button>
+                        </div>
+                        
+                        <!-- Assets Tab Content -->
+                        <div id="tab-assets" class="portfolio-tab-content">
+                            <div id="holdings-list-container" style="display: flex; flex-direction: column; gap: 8px;">
+                                <p style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 10px;">Loading exchange balances...</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Positions Tab Content -->
+                        <div id="tab-positions" class="portfolio-tab-content" style="display: none;">
+                            <div id="positions-list-container" style="display: flex; flex-direction: column; gap: 8px;">
+                                <p style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 10px;">Loading open positions...</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Orders Tab Content -->
+                        <div id="tab-orders" class="portfolio-tab-content" style="display: none;">
+                            <div id="open-orders-list-container" style="display: flex; flex-direction: column; gap: 8px;">
+                                <p style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 10px;">Loading open orders...</p>
+                            </div>
+                        </div>
+                    </article>
                 </div>
-            </article>
+            </main>
+        </div>
 
-            <!-- Live Exchange Portfolio Panel -->
-            <article class="glass-panel" style="padding: 24px; display: flex; flex-direction: column; gap: 15px;" id="portfolio-card">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <h2 class="panel-title">
-                        <i data-lucide="wallet" style="color: var(--neon-blue)"></i>
-                        Exchange Portfolio
-                    </h2>
+        <!-- TAB CONTENT 2: NEURAL CORE -->
+        <div id="tab-neural" class="tab-content">
+            <main class="main-content">
+                <div class="main-left-column">
+                    <!-- Policy net popularity weights -->
+                    <article class="glass-panel weights-panel" style="padding: 24px;">
+                        <h2 class="panel-title" style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="brain-circuit" style="color: var(--neon-purple)"></i>
+                            Strategy Weight Allocation (Active Policy)
+                        </h2>
+                        <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 24px; line-height: 1.4;">
+                            NeuralCore dynamically allocates trust weights among the strategies based on backpropagation reinforcement feedback.
+                        </p>
+                        <div id="weights-container" style="margin-bottom: 30px;">
+                            <!-- Dynamic weight bars go here -->
+                        </div>
+
+                        <div style="border-top: 1px solid var(--border-color); padding-top: 20px;">
+                            <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+                                <i data-lucide="line-chart" style="width: 14px; height: 14px; color: var(--neon-purple);"></i>
+                                Policy Weight Convergence History
+                            </h3>
+                            <div style="position: relative; height: 260px; width: 100%;">
+                                <canvas id="weights-history-chart"></canvas>
+                            </div>
+                        </div>
+                    </article>
                 </div>
-                <p style="font-size: 11px; color: var(--text-secondary); margin: -5px 0 5px 0; line-height: 1.4;">
-                    Real-time status of your assets, leverage positions, and open limit orders directly from Kraken.
-                </p>
-                
-                <!-- Portfolio Tabs Switcher -->
-                <div style="display: flex; background: rgba(0, 0, 0, 0.25); border: 1px solid var(--border-color); border-radius: 8px; padding: 2px;">
-                    <button class="portfolio-tab active" data-tab="assets" style="flex: 1; background: transparent; border: none; color: var(--text-secondary); padding: 6px 12px; font-size: 11px; font-weight: 600; border-radius: 6px; cursor: pointer; outline: none; transition: var(--transition); font-family: inherit;">Assets</button>
-                    <button class="portfolio-tab" data-tab="positions" style="flex: 1; background: transparent; border: none; color: var(--text-secondary); padding: 6px 12px; font-size: 11px; font-weight: 600; border-radius: 6px; cursor: pointer; outline: none; transition: var(--transition); font-family: inherit;">Positions</button>
-                    <button class="portfolio-tab" data-tab="orders" style="flex: 1; background: transparent; border: none; color: var(--text-secondary); padding: 6px 12px; font-size: 11px; font-weight: 600; border-radius: 6px; cursor: pointer; outline: none; transition: var(--transition); font-family: inherit;">Orders</button>
-                </div>
-                
-                <!-- Assets Tab Content -->
-                <div id="tab-assets" class="portfolio-tab-content">
-                    <div id="holdings-list-container" style="display: flex; flex-direction: column; gap: 8px;">
-                        <p style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 10px;">Loading exchange balances...</p>
-                    </div>
-                </div>
-                
-                <!-- Positions Tab Content -->
-                <div id="tab-positions" class="portfolio-tab-content" style="display: none;">
-                    <div id="positions-list-container" style="display: flex; flex-direction: column; gap: 8px;">
-                        <p style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 10px;">Loading open positions...</p>
-                    </div>
-                </div>
-                
-                <!-- Orders Tab Content -->
-                <div id="tab-orders" class="portfolio-tab-content" style="display: none;">
-                    <div id="open-orders-list-container" style="display: flex; flex-direction: column; gap: 8px;">
-                        <p style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 10px;">Loading open orders...</p>
-                    </div>
-                </div>
-            </article>
 
-            <!-- System Configurations Panel -->
-            <article class="glass-panel blog-panel" style="padding: 24px; display: flex; flex-direction: column; gap: 15px;">
-                <h2 class="panel-title" style="margin-bottom: 5px;">
-                    <i data-lucide="settings" style="color: var(--neon-blue)"></i>
-                    System Settings
-                </h2>
-                <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.4;">
-                    Configure risk rules, execution modes, and weekly blogging updates.
-                </p>
-                
-                <div style="display: flex; flex-direction: column; gap: 12px; font-size: 13px;">
-                    <!-- Engine Mode -->
-                    <label style="display: flex; justify-content: space-between; align-items: center;">
-                        <span class="tooltip" data-tooltip="Live executes trades on exchange via API; Paper simulates orders.">
-                            Trading Mode
-                            <i data-lucide="info" class="tooltip-icon"></i>
-                        </span>
-                        <select id="setting-trading-mode" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 12px; outline: none; cursor: pointer;">
-                            <option value="paper">Paper Trading</option>
-                            <option value="live">Live Capital</option>
-                        </select>
-                    </label>
+                <div class="main-right-column">
+                    <!-- Policy Net Persona / Profile Card -->
+                    <article class="glass-panel persona-card persona-bot" style="padding: 24px; flex-direction: column; text-align: center; gap: 12px; margin-bottom: 20px;">
+                        <div class="persona-avatar" style="width: 64px; height: 64px; font-size: 24px;">🧠</div>
+                        <div>
+                            <h3 style="font-size: 18px; font-weight: 700; color: var(--text-primary);">NeuralCore Engine</h3>
+                            <span style="font-size: 11px; color: var(--neon-red); text-transform: uppercase; font-weight: 600; letter-spacing: 1px;">Policy Gradient Engine</span>
+                        </div>
+                        <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.4; margin-top: 5px;">
+                            "I am the central synthetic nervous system. By analyzing multi-dimensional market inputs, I continually adjust our allocation policy. Every closed trade updates my weights dynamically, ensuring our systems stay aligned with current market structures."
+                        </p>
+                        <div style="width: 100%; border-top: 1px solid var(--border-color); margin-top: 10px; padding-top: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 12px;">
+                            <div style="background: rgba(255,255,255,0.01); padding: 8px; border-radius: 8px; border: 1px solid var(--border-color);">
+                                <span style="display: block; color: var(--text-muted); font-size: 10px;">MODEL SIGNATURE</span>
+                                <strong id="val-model-dna" style="color: var(--neon-blue); font-family: monospace;">NN-ARCH-E5C7D9</strong>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.01); padding: 8px; border-radius: 8px; border: 1px solid var(--border-color);">
+                                <span style="display: block; color: var(--text-muted); font-size: 10px;">LIFETIME LEARNING STEPS</span>
+                                <strong id="val-lifetime-steps" style="color: var(--neon-green);">0</strong>
+                            </div>
+                        </div>
+                    </article>
 
-                    <!-- Exchange Broker selection -->
-                    <label style="display: flex; justify-content: space-between; align-items: center;">
-                        <span class="tooltip" data-tooltip="The exchange where live trades are executed via CCXT client.">
-                            Exchange Broker
-                            <i data-lucide="info" class="tooltip-icon"></i>
-                        </span>
-                        <select id="setting-broker" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 12px; outline: none; cursor: pointer;">
-                            <option value="kraken">Kraken</option>
-                            <option value="binance">Binance</option>
-                            <option value="coinbase">Coinbase</option>
-                        </select>
-                    </label>
-
-                    <!-- API Credentials container -->
-                    <div id="exchange-credentials-container" style="display: flex; flex-direction: column; gap: 8px; margin-top: 4px; padding: 10px; background: rgba(255,255,255,0.01); border: 1px dashed var(--border-color); border-radius: 8px;">
-                        <label style="display: flex; flex-direction: column; gap: 4px;">
-                            <span class="tooltip" data-tooltip="API Key provided by your exchange account.">
-                                Exchange API Key
-                                <i data-lucide="info" class="tooltip-icon"></i>
-                            </span>
-                            <input type="password" id="setting-api-key" placeholder="Enter API key..." style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 6px 10px; border-radius: 6px; font-family: inherit; font-size: 11px; outline: none;">
-                        </label>
-                        <label style="display: flex; flex-direction: column; gap: 4px;">
-                            <span class="tooltip" data-tooltip="Private API Secret key provided by your exchange.">
-                                Exchange API Secret
-                                <i data-lucide="info" class="tooltip-icon"></i>
-                            </span>
-                            <input type="password" id="setting-api-secret" placeholder="Enter API secret..." style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 6px 10px; border-radius: 6px; font-family: inherit; font-size: 11px; outline: none;">
-                        </label>
-                    </div>
-
-                    <!-- Trailing Stop -->
-                    <label style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
-                        <span class="tooltip" data-tooltip="Trailing stops adjust the stop-loss upward as the trade price increases.">
-                            Trailing Stop-Loss
-                            <i data-lucide="info" class="tooltip-icon"></i>
-                        </span>
-                        <input type="checkbox" id="setting-trailing-stop" style="accent-color: var(--neon-blue); cursor: pointer;">
-                    </label>
-
-                    <!-- Cooldown -->
-                    <label style="display: flex; justify-content: space-between; align-items: center;">
-                        <span class="tooltip" data-tooltip="Pause window (in hours) to halt trading after a closed loss.">
-                            Loss Cooldown (hours)
-                            <i data-lucide="info" class="tooltip-icon"></i>
-                        </span>
-                        <input type="number" id="setting-cooldown" min="0" max="48" value="4" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 12px; width: 60px; outline: none; text-align: center;">
-                    </label>
-
-                    <!-- Take Profit ATR Multiplier -->
-                    <label style="display: flex; justify-content: space-between; align-items: center;">
-                        <span class="tooltip" data-tooltip="Take-profit target boundary multiplier (calculated via price volatility ATR).">
-                            Take Profit (x ATR)
-                            <i data-lucide="info" class="tooltip-icon"></i>
-                        </span>
-                        <input type="number" id="setting-tp-multiplier" min="1.0" max="5.0" step="0.1" value="2.5" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 12px; width: 60px; outline: none; text-align: center;">
-                    </label>
-
-                    <!-- Stop Loss ATR Multiplier -->
-                    <label style="display: flex; justify-content: space-between; align-items: center;">
-                        <span class="tooltip" data-tooltip="Stop-loss protection boundary multiplier (calculated via price volatility ATR).">
-                            Stop Loss (x ATR)
-                            <i data-lucide="info" class="tooltip-icon"></i>
-                        </span>
-                        <input type="number" id="setting-sl-multiplier" min="0.5" max="3.0" step="0.1" value="1.5" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 12px; width: 60px; outline: none; text-align: center;">
-                    </label>
-
-                    <!-- Max Drawdown -->
-                    <label style="display: flex; justify-content: space-between; align-items: center;">
-                        <span class="tooltip" data-tooltip="Maximum daily portfolio value draw-down limit. Halts engine.">
-                            Max Daily Loss (%)
-                            <i data-lucide="info" class="tooltip-icon"></i>
-                        </span>
-                        <input type="number" id="setting-max-drawdown" min="1" max="25" value="5" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 12px; width: 60px; outline: none; text-align: center;">
-                    </label>
-
-                    <!-- Neural Net Learning Rate -->
-                    <label style="display: flex; justify-content: space-between; align-items: center;">
-                        <span class="tooltip" data-tooltip="Policy Gradient Neural Network backpropagation learning rate.">
-                            NN Learning Rate
-                            <i data-lucide="info" class="tooltip-icon"></i>
-                        </span>
-                        <input type="number" id="setting-nn-lr" min="0.01" max="0.99" step="0.01" value="0.15" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 12px; width: 60px; outline: none; text-align: center;">
-                    </label>
-
-                    <!-- Neural Net Weight Floor -->
-                    <label style="display: flex; justify-content: space-between; align-items: center;">
-                        <span class="tooltip" data-tooltip="Minimum strategy weight allocation floor to ensure continuous exploration.">
-                            NN Weight Floor
-                            <i data-lucide="info" class="tooltip-icon"></i>
-                        </span>
-                        <input type="number" id="setting-nn-floor" min="0.01" max="0.25" step="0.01" value="0.05" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 12px; width: 60px; outline: none; text-align: center;">
-                    </label>
-
-                    <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 4px 0;">
-
-                    <!-- Weekly Blog Settings -->
-                    <label style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
-                        <span class="tooltip" data-tooltip="Triggers weekly AI analysis report blogging posts.">
-                            Enable Weekly Blog
-                            <i data-lucide="info" class="tooltip-icon"></i>
-                        </span>
-                        <input type="checkbox" id="blog-enabled-check" style="accent-color: var(--neon-blue); cursor: pointer;">
-                    </label>
-                    
-                    <label style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
-                        <span class="tooltip" data-tooltip="Automatically pushes weekly blogs to your GitHub repository.">
-                            Auto-Push to GitHub
-                            <i data-lucide="info" class="tooltip-icon"></i>
-                        </span>
-                        <input type="checkbox" id="blog-git-push-check" style="accent-color: var(--neon-blue); cursor: pointer;">
-                    </label>
-                    
-                    <label style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
-                        <span class="tooltip" data-tooltip="Enables professional styling of AI blogs using Gemini API models.">
-                            Use AI Styling (Gemini)
-                            <i data-lucide="info" class="tooltip-icon"></i>
-                        </span>
-                        <input type="checkbox" id="blog-ai-check" style="accent-color: var(--neon-blue); cursor: pointer;">
-                    </label>
-                    
-                    <div id="blog-key-container" style="display: flex; flex-direction: column; gap: 6px; margin-top: 4px;">
-                        <span class="tooltip" data-tooltip="Developer API key for Google Gemini services.">
-                            Gemini API Key
-                            <i data-lucide="info" class="tooltip-icon"></i>
-                        </span>
-                        <div style="position: relative; display: flex; align-items: center; width: 100%;">
-                            <input type="password" id="blog-api-key" placeholder="Enter API key..." style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 36px 8px 12px; border-radius: 8px; font-size:12px; font-family:inherit; outline:none; transition: var(--transition); width: 100%;">
-                            <button type="button" id="toggle-blog-api-key-visibility" style="position: absolute; right: 10px; background: transparent; border: none; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; outline: none; padding: 0;">
-                                <i data-lucide="eye" style="width: 16px; height: 16px;"></i>
+                    <!-- Neural Network Parameters -->
+                    <article class="glass-panel" style="padding: 24px;">
+                        <h3 style="font-size: 15px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="sliders" style="width: 16px; height: 16px; color: var(--neon-blue);"></i>
+                            Neural Hyperparameters
+                        </h3>
+                        <div style="display: flex; flex-direction: column; gap: 12px; font-size: 13px;">
+                            <label style="display: flex; justify-content: space-between; align-items: center;">
+                                <span>NN Learning Rate</span>
+                                <input type="number" id="setting-nn-lr-tab" min="0.01" max="0.99" step="0.01" value="0.15" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 12px; width: 65px; text-align: center;">
+                            </label>
+                            <label style="display: flex; justify-content: space-between; align-items: center;">
+                                <span>NN Weight Floor</span>
+                                <input type="number" id="setting-nn-floor-tab" min="0.01" max="0.25" step="0.01" value="0.05" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 12px; width: 65px; text-align: center;">
+                            </label>
+                            <button class="btn btn-primary" id="save-nn-params-btn" style="width: 100%; justify-content: center; font-size: 12px; padding: 8px; margin-top: 5px;">
+                                Apply Neural Settings
                             </button>
                         </div>
-                    </div>
+                    </article>
                 </div>
-                
-                <div style="display: flex; gap: 10px; margin-top: 5px;">
-                    <button class="btn btn-primary" id="save-blog-config-btn" style="flex: 1; padding: 8px 12px; font-size: 12px; justify-content: center; font-family: inherit;">
-                        Save Settings
-                    </button>
-                    <button class="btn" id="trigger-blog-btn" style="flex: 1; padding: 8px 12px; font-size: 12px; justify-content: center; border-color: rgba(0, 240, 255, 0.2); font-family: inherit;">
-                        <i data-lucide="sparkles" style="width: 14px; height: 14px; color: var(--neon-blue);"></i>
-                        Blog Now
-                    </button>
-                </div>
-                <div style="display: flex; gap: 10px; margin-top: 5px;">
-                    <button class="btn" id="test-broker-api-btn" style="flex: 1; padding: 8px 12px; font-size: 12px; justify-content: center; border-color: rgba(0, 240, 255, 0.2); font-family: inherit;">
-                        <i data-lucide="check-circle" style="width: 14px; height: 14px; color: var(--neon-blue); margin-right: 4px;"></i>
-                        Test API Keys
-                    </button>
-                </div>
-                
-                <!-- Prompts Config Section -->
-                <div style="border-top: 1px solid var(--border-color); padding-top: 12px; margin-top: 12px;">
-                    <span style="font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 6px;">AI Prompts Configuration:</span>
-                    <div style="display: flex; flex-direction: column; gap: 6px;">
-                        <label style="display: flex; flex-direction: column; gap: 3px; font-size: 10px;">
-                            <span style="color: var(--text-muted);">PhD Quant Optimizer Prompt:</span>
-                            <textarea id="prompt-quant-text" style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 6px; padding: 6px; font-family: inherit; font-size: 10px; height: 50px; resize: vertical; outline: none;"></textarea>
-                        </label>
-                        <label style="display: flex; flex-direction: column; gap: 3px; font-size: 10px;">
-                            <span style="color: var(--text-muted);">AI Self-Dev Prompt:</span>
-                            <textarea id="prompt-dev-text" style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 6px; padding: 6px; font-family: inherit; font-size: 10px; height: 50px; resize: vertical; outline: none;"></textarea>
-                        </label>
-                        <label style="display: flex; flex-direction: column; gap: 3px; font-size: 10px;">
-                            <span style="color: var(--text-muted);">Weekly Blogger Prompt:</span>
-                            <textarea id="prompt-blog-text" style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 6px; padding: 6px; font-family: inherit; font-size: 10px; height: 50px; resize: vertical; outline: none;"></textarea>
-                        </label>
-                        <label style="display: flex; flex-direction: column; gap: 3px; font-size: 10px;">
-                            <span style="color: var(--text-muted);">NN Optimizer Prompt:</span>
-                            <textarea id="prompt-nn-text" style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 6px; padding: 6px; font-family: inherit; font-size: 10px; height: 50px; resize: vertical; outline: none;"></textarea>
-                        </label>
-                        <button class="btn btn-primary" id="save-prompts-btn" style="padding: 6px 12px; font-size: 11px; justify-content: center; font-family: inherit; margin-top: 2px;">
-                            Save AI Prompts
-                        </button>
-                    </div>
+            </main>
+        </div>
+
+        <!-- TAB CONTENT 3: AI AGENTS -->
+        <div id="tab-agents" class="tab-content">
+            <main class="main-content" style="grid-template-columns: 2fr 1fr;">
+                <div class="main-left-column" style="display: flex; flex-direction: column; gap: 20px;">
+                    <!-- Persona Panel Grid -->
+                    <article class="glass-panel" style="padding: 24px;">
+                        <h2 class="panel-title" style="margin-bottom: 20px; display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="users" style="color: var(--neon-purple)"></i>
+                            The Autonomous Quant Team
+                        </h2>
+                        
+                        <div style="display: flex; flex-direction: column; gap: 20px;">
+                            <!-- Persona 1: Quant PhD -->
+                            <div class="persona-card persona-quant">
+                                <div class="persona-avatar">📊</div>
+                                <div style="flex: 1;">
+                                    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap;">
+                                        <div>
+                                            <h3 style="font-size: 15px; font-weight: 600; color: var(--text-primary);">NexusQuant PhD</h3>
+                                            <span style="font-size: 10px; color: var(--neon-purple); text-transform: uppercase; font-weight: 600;">Ensemble Risk & parameter Optimizer</span>
+                                        </div>
+                                        <button class="btn" id="trigger-opt-params-btn-tab" style="padding: 4px 8px; font-size: 10px; border-color: rgba(168,85,247,0.3); color: var(--neon-purple);">Optimize Quant</button>
+                                    </div>
+                                    <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.4; margin-top: 6px;">
+                                        "I evaluate trades, win rates, and profit volatility. Leveraging drift-diffusion optimal stopping theory, I refine ATR multipliers and risk limits daily."
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Persona 2: AI Developer -->
+                            <div class="persona-card persona-dev">
+                                <div class="persona-avatar">⚙️</div>
+                                <div style="flex: 1;">
+                                    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap;">
+                                        <div>
+                                            <h3 style="font-size: 15px; font-weight: 600; color: var(--text-primary);">NexusDev Architect</h3>
+                                            <span style="font-size: 10px; color: var(--neon-blue); text-transform: uppercase; font-weight: 600;">Autonomous Systems Developer</span>
+                                        </div>
+                                        <button class="btn" id="trigger-self-dev-btn-tab" style="padding: 4px 8px; font-size: 10px; border-color: rgba(0,240,255,0.3); color: var(--neon-blue);">Run Self-Dev</button>
+                                    </div>
+                                    <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.4; margin-top: 6px;">
+                                        "I optimize code structure, develop interface diagnostic assets, and write visual analytics components, running build tests prior to deploy."
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Persona 3: Blogger -->
+                            <div class="persona-card persona-blog">
+                                <div class="persona-avatar">📝</div>
+                                <div style="flex: 1;">
+                                    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap;">
+                                        <div>
+                                            <h3 style="font-size: 15px; font-weight: 600; color: var(--text-primary);">NexusReporter AI</h3>
+                                            <span style="font-size: 10px; color: var(--neon-green); text-transform: uppercase; font-weight: 600;">Performance Journalist & Blogger</span>
+                                        </div>
+                                        <button class="btn" id="trigger-blog-btn-tab" style="padding: 4px 8px; font-size: 10px; border-color: rgba(16,185,129,0.3); color: var(--neon-green);">Blog Reports</button>
+                                    </div>
+                                    <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.4; margin-top: 6px;">
+                                        "I compile trading telemetry, model evolution weights, and portfolio scaling paths into premium quantitative commentary and articles."
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Persona 4: NN Optimizer -->
+                            <div class="persona-card persona-nn">
+                                <div class="persona-avatar">🎓</div>
+                                <div style="flex: 1;">
+                                    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap;">
+                                        <div>
+                                            <h3 style="font-size: 15px; font-weight: 600; color: var(--text-primary);">NeuralCore Optimizer</h3>
+                                            <span style="font-size: 10px; color: var(--neon-orange); text-transform: uppercase; font-weight: 600;">Deep Learning Tuner</span>
+                                        </div>
+                                        <button class="btn" id="trigger-opt-nn-btn-tab" style="padding: 4px 8px; font-size: 10px; border-color: rgba(245,158,11,0.3); color: var(--neon-orange);">Optimize Neural</button>
+                                    </div>
+                                    <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.4; margin-top: 6px;">
+                                        "I evaluate gradient parameters, steps, and weights convergence to tune learning rates and explore strategy allocation floors."
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </article>
+
+                    <!-- Prompts Config Textareas -->
+                    <article class="glass-panel" style="padding: 24px;">
+                        <h2 class="panel-title" style="margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="edit-3" style="color: var(--neon-blue);"></i>
+                            Agent Mental Models (Prompt Editors)
+                        </h2>
+                        <div style="display: flex; flex-direction: column; gap: 15px;">
+                            <label style="display: flex; flex-direction: column; gap: 5px;">
+                                <span style="font-size: 12px; font-weight: 600; color: var(--neon-purple);">PhD Quant Optimizer Prompt:</span>
+                                <textarea id="prompt-quant-text" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 8px; padding: 10px; font-family: monospace; font-size: 11px; height: 70px; resize: vertical; outline: none;"></textarea>
+                            </label>
+                            <label style="display: flex; flex-direction: column; gap: 5px;">
+                                <span style="font-size: 12px; font-weight: 600; color: var(--neon-blue);">AI Self-Dev Prompt:</span>
+                                <textarea id="prompt-dev-text" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 8px; padding: 10px; font-family: monospace; font-size: 11px; height: 70px; resize: vertical; outline: none;"></textarea>
+                            </label>
+                            <label style="display: flex; flex-direction: column; gap: 5px;">
+                                <span style="font-size: 12px; font-weight: 600; color: var(--neon-green);">Weekly Blogger Prompt:</span>
+                                <textarea id="prompt-blog-text" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 8px; padding: 10px; font-family: monospace; font-size: 11px; height: 70px; resize: vertical; outline: none;"></textarea>
+                            </label>
+                            <label style="display: flex; flex-direction: column; gap: 5px;">
+                                <span style="font-size: 12px; font-weight: 600; color: var(--neon-orange);">NN Optimizer Prompt:</span>
+                                <textarea id="prompt-nn-text" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 8px; padding: 10px; font-family: monospace; font-size: 11px; height: 70px; resize: vertical; outline: none;"></textarea>
+                            </label>
+                            <button class="btn btn-primary" id="save-prompts-btn" style="width: 100%; justify-content: center; padding: 10px; font-size: 12px;">
+                                <i data-lucide="save" style="width: 16px; height: 16px; margin-right: 4px;"></i>
+                                Save All Agent Prompts
+                            </button>
+                        </div>
+                    </article>
                 </div>
 
-                <!-- Agent Scheduling Section -->
-                <div style="border-top: 1px solid var(--border-color); padding-top: 12px; margin-top: 12px;">
-                    <span style="font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 6px;">AI Agent Automation Schedule:</span>
-                    <div style="display: flex; flex-direction: column; gap: 6px;">
-                        <label style="display: flex; justify-content: space-between; align-items: center; font-size: 10px;">
-                            <span style="color: var(--text-muted);">Daily Quant Agent Hour (0-23):</span>
-                            <input type="number" id="sched-daily-hour" min="0" max="23" style="width: 55px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 4px; padding: 3px 6px; text-align: center; font-family: inherit;">
-                        </label>
-                        <label style="display: flex; justify-content: space-between; align-items: center; font-size: 10px;">
-                            <span style="color: var(--text-muted);">Weekly Blogger Day (0-6, 0=Sun):</span>
-                            <input type="number" id="sched-weekly-day" min="0" max="6" style="width: 55px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 4px; padding: 3px 6px; text-align: center; font-family: inherit;">
-                        </label>
-                        <label style="display: flex; justify-content: space-between; align-items: center; font-size: 10px;">
-                            <span style="color: var(--text-muted);">Weekly Blogger Hour (0-23):</span>
-                            <input type="number" id="sched-weekly-hour" min="0" max="23" style="width: 55px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 4px; padding: 3px 6px; text-align: center; font-family: inherit;">
-                        </label>
-                        <button class="btn btn-primary" id="save-schedule-btn" style="padding: 6px 12px; font-size: 11px; justify-content: center; font-family: inherit; margin-top: 2px;">
-                            Save Schedule Settings
-                        </button>
-                    </div>
+                <div class="main-right-column">
+                    <!-- Scheduler Control -->
+                    <article class="glass-panel" style="padding: 24px; margin-bottom: 20px;">
+                        <h2 class="panel-title" style="margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="clock" style="color: var(--neon-blue);"></i>
+                            Agent Automation
+                        </h2>
+                        <div style="display: flex; flex-direction: column; gap: 12px; font-size: 13px;">
+                            <label style="display: flex; justify-content: space-between; align-items: center;">
+                                <span>Daily Quant Hour (0-23):</span>
+                                <input type="number" id="sched-daily-hour" min="0" max="23" style="width: 60px; background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 6px; padding: 4px; text-align: center;">
+                            </label>
+                            <label style="display: flex; justify-content: space-between; align-items: center;">
+                                <span>Weekly Blog Day (0-6, 0=Sun):</span>
+                                <input type="number" id="sched-weekly-day" min="0" max="6" style="width: 60px; background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 6px; padding: 4px; text-align: center;">
+                            </label>
+                            <label style="display: flex; justify-content: space-between; align-items: center;">
+                                <span>Weekly Blog Hour (0-23):</span>
+                                <input type="number" id="sched-weekly-hour" min="0" max="23" style="width: 60px; background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 6px; padding: 4px; text-align: center;">
+                            </label>
+                            <label style="display: flex; justify-content: space-between; align-items: center;">
+                                <span>NN Optimizer Hour (0-23):</span>
+                                <input type="number" id="sched-nn-hour" min="0" max="23" style="width: 60px; background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 6px; padding: 4px; text-align: center;">
+                            </label>
+                            <button class="btn btn-primary" id="save-schedule-btn" style="width: 100%; justify-content: center; padding: 8px; font-size: 12px; margin-top: 5px;">
+                                Save Schedule Settings
+                            </button>
+                        </div>
+                    </article>
+
+                    <!-- Feeds & Cooldown Panel -->
+                    <article class="glass-panel" style="padding: 24px;">
+                        <h2 class="panel-title" style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="shield" style="color: var(--neon-red);"></i>
+                            Direct Directives
+                        </h2>
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                            <button class="btn" id="trigger-opt-sentiment-btn-tab" style="width: 100%; justify-content: center; border-color: rgba(168,85,247,0.3); color: var(--neon-purple); font-size: 11px; padding: 8px;">
+                                Optimize Sentiment Feeds
+                            </button>
+                            <button class="btn" id="trigger-reset-cooldowns-btn-tab" style="width: 100%; justify-content: center; border-color: rgba(244,63,94,0.3); color: var(--neon-red); font-size: 11px; padding: 8px;">
+                                Clear System Cooldowns
+                            </button>
+                        </div>
+                    </article>
+                    
+                    <div id="blog-status-msg" style="font-size: 11px; text-align: center; color: var(--text-muted); min-height: 15px; margin-top: 10px;"></div>
+                </div>
+            </main>
+        </div>
+
+        <!-- TAB CONTENT 4: TRADING SYSTEM SETTINGS -->
+        <div id="tab-settings" class="tab-content">
+            <main class="main-content" style="grid-template-columns: 2fr 1fr;">
+                <div class="main-left-column">
+                    <!-- Exchange Broker and Api Settings -->
+                    <article class="glass-panel" style="padding: 24px; display: flex; flex-direction: column; gap: 20px;">
+                        <h2 class="panel-title" style="display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="wallet" style="color: var(--neon-blue)"></i>
+                            Broker Credentials
+                        </h2>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                            <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px;">
+                                <span>Trading Mode Selection</span>
+                                <select id="setting-trading-mode" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 12px; border-radius: 8px; font-family: inherit; font-size: 12px; outline: none; cursor: pointer;">
+                                    <option value="paper">Paper Simulation</option>
+                                    <option value="live">Live Capital Trading</option>
+                                </select>
+                            </label>
+                            <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px;">
+                                <span>Exchange Broker Selection</span>
+                                <select id="setting-broker" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 12px; border-radius: 8px; font-family: inherit; font-size: 12px; outline: none; cursor: pointer;">
+                                    <option value="kraken">Kraken</option>
+                                    <option value="binance">Binance</option>
+                                    <option value="coinbase">Coinbase</option>
+                                </select>
+                            </label>
+                        </div>
+
+                        <div id="exchange-credentials-container" style="display: flex; flex-direction: column; gap: 15px; padding: 15px; background: rgba(255,255,255,0.01); border: 1px dashed var(--border-color); border-radius: 8px; margin-top: 10px;">
+                            <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px;">
+                                <span>Exchange API Key</span>
+                                <input type="password" id="setting-api-key" placeholder="Enter exchange API key..." style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 12px; border-radius: 8px; font-family: inherit; font-size: 12px; outline: none; width: 100%;">
+                            </label>
+                            <label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px;">
+                                <span>Exchange API Secret Key</span>
+                                <input type="password" id="setting-api-secret" placeholder="Enter exchange API secret..." style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 12px; border-radius: 8px; font-family: inherit; font-size: 12px; outline: none; width: 100%;">
+                            </label>
+                        </div>
+                    </article>
+
+                    <!-- Risk boundaries settings -->
+                    <article class="glass-panel" style="padding: 24px; margin-top: 20px;">
+                        <h2 class="panel-title" style="margin-bottom: 20px; display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="shield-alert" style="color: var(--neon-red)"></i>
+                            Risk boundaries & Multipliers
+                        </h2>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; font-size: 13px;">
+                            <label style="display: flex; justify-content: space-between; align-items: center;">
+                                <span>Trailing Stop-Loss Protection</span>
+                                <input type="checkbox" id="setting-trailing-stop" style="accent-color: var(--neon-blue); cursor: pointer; width: 16px; height: 16px;">
+                            </label>
+                            <label style="display: flex; justify-content: space-between; align-items: center;">
+                                <span>Loss Cooldown Hold (hours)</span>
+                                <input type="number" id="setting-cooldown" min="0" max="48" value="4" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 6px; border-radius: 6px; width: 60px; text-align: center;">
+                            </label>
+                            <label style="display: flex; justify-content: space-between; align-items: center;">
+                                <span>Take Profit Target (x ATR)</span>
+                                <input type="number" id="setting-tp-multiplier" min="1.0" max="5.0" step="0.1" value="2.5" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 6px; border-radius: 6px; width: 60px; text-align: center;">
+                            </label>
+                            <label style="display: flex; justify-content: space-between; align-items: center;">
+                                <span>Stop Loss Boundary (x ATR)</span>
+                                <input type="number" id="setting-sl-multiplier" min="0.5" max="3.0" step="0.1" value="1.5" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 6px; border-radius: 6px; width: 60px; text-align: center;">
+                            </label>
+                            <label style="display: flex; justify-content: space-between; align-items: center;">
+                                <span>Max Daily Drawdown Loss (%)</span>
+                                <input type="number" id="setting-max-drawdown" min="1" max="25" value="5" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 6px; border-radius: 6px; width: 60px; text-align: center;">
+                            </label>
+                        </div>
+                    </article>
                 </div>
 
-                <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 8px;">
-                    <span style="font-size: 11px; color: var(--text-secondary);">Manual Actions:</span>
-                    <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-                        <button class="btn" id="trigger-opt-sentiment-btn" style="flex: 1; min-width: 70px; padding: 6px 8px; font-size: 10px; justify-content: center; border-color: rgba(168, 85, 247, 0.2); font-family: inherit; color: var(--neon-purple);">
-                            Feeds Opt
+                <div class="main-right-column" style="display: flex; flex-direction: column; gap: 20px;">
+                    <!-- Weekly blogging settings -->
+                    <article class="glass-panel" style="padding: 24px;">
+                        <h2 class="panel-title" style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="sparkles" style="color: var(--neon-blue)"></i>
+                            Automated Blogging
+                        </h2>
+                        
+                        <div style="display: flex; flex-direction: column; gap: 12px; font-size: 13px;">
+                            <label style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
+                                <span>Enable Weekly Blog</span>
+                                <input type="checkbox" id="blog-enabled-check" style="accent-color: var(--neon-blue); cursor: pointer;">
+                            </label>
+                            <label style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
+                                <span>Auto-Push to GitHub</span>
+                                <input type="checkbox" id="blog-git-push-check" style="accent-color: var(--neon-blue); cursor: pointer;">
+                            </label>
+                            <label style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
+                                <span>Use AI Styling (Gemini)</span>
+                                <input type="checkbox" id="blog-ai-check" style="accent-color: var(--neon-blue); cursor: pointer;">
+                            </label>
+                            
+                            <div id="blog-key-container" style="display: flex; flex-direction: column; gap: 6px; margin-top: 4px;">
+                                <span>Gemini API Key</span>
+                                <div style="position: relative; display: flex; align-items: center; width: 100%;">
+                                    <input type="password" id="blog-api-key" placeholder="Enter API key..." style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 36px 8px 12px; border-radius: 8px; font-size:12px; font-family:inherit; outline:none; width: 100%;">
+                                    <button type="button" id="toggle-blog-api-key-visibility" style="position: absolute; right: 10px; background: transparent; border: none; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; outline: none; padding: 0;">
+                                        <i data-lucide="eye" style="width: 16px; height: 16px;"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </article>
+
+                    <!-- Save and Test buttons -->
+                    <article class="glass-panel" style="padding: 20px;">
+                        <button class="btn btn-primary" id="save-blog-config-btn" style="width: 100%; justify-content: center; padding: 10px; font-size: 13px; margin-bottom: 10px;">
+                            <i data-lucide="save" style="width: 16px; height: 16px; margin-right: 4px;"></i>
+                            Save Config & Credentials
                         </button>
-                        <button class="btn" id="trigger-opt-params-btn" style="flex: 1; min-width: 75px; padding: 6px 8px; font-size: 10px; justify-content: center; border-color: rgba(168, 85, 247, 0.2); font-family: inherit; color: var(--neon-purple);">
-                            Quant Opt
+                        <button class="btn" id="test-broker-api-btn" style="width: 100%; justify-content: center; border-color: rgba(0, 240, 255, 0.2); color: var(--neon-blue); font-size: 12px; padding: 10px; margin-bottom: 10px;">
+                            <i data-lucide="check-circle" style="width: 15px; height: 15px; margin-right: 4px;"></i>
+                            Test Exchange API connection
                         </button>
-                        <button class="btn" id="trigger-opt-nn-btn" style="flex: 1; min-width: 75px; padding: 6px 8px; font-size: 10px; justify-content: center; border-color: rgba(168, 85, 247, 0.2); font-family: inherit; color: var(--neon-purple);">
-                            NN Opt
+                        <button class="btn" id="trigger-blog-btn" style="width: 100%; justify-content: center; border-color: rgba(16,185,129,0.2); color: var(--neon-green); font-size: 12px; padding: 10px;">
+                            <i data-lucide="pen-tool" style="width: 15px; height: 15px; margin-right: 4px;"></i>
+                            Generate Weekly Blog Post
                         </button>
-                        <button class="btn" id="trigger-self-dev-btn" style="flex: 1; min-width: 85px; padding: 6px 8px; font-size: 10px; justify-content: center; border-color: rgba(0, 240, 255, 0.2); font-family: inherit; color: var(--neon-blue);">
-                            AI Self-Dev
-                        </button>
-                        <button class="btn" id="trigger-reset-cooldowns-btn" style="flex: 1; min-width: 90px; padding: 6px 8px; font-size: 10px; justify-content: center; border-color: rgba(244, 63, 94, 0.2); font-family: inherit; color: var(--neon-red);">
-                            Clear Cooldowns
-                        </button>
-                    </div>
+                    </article>
                 </div>
-                <div id="blog-status-msg" style="font-size: 11px; text-align: center; color: var(--text-muted); min-height: 15px; margin-top: 5px;"></div>
+            </main>
+        </div>
+
+        <!-- TAB CONTENT 5: SYSTEM ARCHITECTURE -->
+        <div id="tab-architecture" class="tab-content">
+            <article class="glass-panel" style="padding: 24px; display: flex; flex-direction: column; gap: 20px;">
+                <h2 class="panel-title" style="display: flex; align-items: center; gap: 8px;">
+                    <i data-lucide="network" style="color: var(--neon-blue)"></i>
+                    NexusTrader Cybernetic Architecture Map
+                </h2>
+                <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.5; max-width: 800px; margin-bottom: 10px;">
+                    Below is the live diagnostic connection graph mapping the information flow and cognitive loops of the NexusTrader. 
+                    Market inputs traverse the strategy ensemble which feeds probability odds check routines, ultimately executing positions on exchange while neural core feedback adjusts the policy weights.
+                </p>
+
+                <!-- Interactive SVG Map -->
+                <div style="background: rgba(8, 12, 20, 0.6); border: 1px solid var(--border-color); border-radius: 12px; padding: 20px; display: flex; justify-content: center; overflow-x: auto;">
+                    <svg width="860" height="420" viewBox="0 0 860 420" style="font-family: 'Space Grotesk', sans-serif;">
+                        <!-- Defs for markers and gradients -->
+                        <defs>
+                            <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b" />
+                            </marker>
+                            <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                <path d="M 0 0 L 10 5 L 0 10 z" fill="#00f0ff" />
+                            </marker>
+                            <marker id="arrow-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                <path d="M 0 0 L 10 5 L 0 10 z" fill="#a855f7" />
+                            </marker>
+                            <linearGradient id="blueGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#00f0ff" stop-opacity="0.2"/>
+                                <stop offset="100%" stop-color="#00f0ff" stop-opacity="0.05"/>
+                            </linearGradient>
+                            <linearGradient id="purpleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#a855f7" stop-opacity="0.2"/>
+                                <stop offset="100%" stop-color="#a855f7" stop-opacity="0.05"/>
+                            </linearGradient>
+                            <linearGradient id="greenGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#10b981" stop-opacity="0.2"/>
+                                <stop offset="100%" stop-color="#10b981" stop-opacity="0.05"/>
+                            </linearGradient>
+                        </defs>
+
+                        <!-- Blocks Connections Lines -->
+                        <!-- Ingestion to Ensemble -->
+                        <path d="M 130 90 L 175 90" stroke="#00f0ff" stroke-width="2" marker-end="url(#arrow-blue)" fill="none" />
+                        <!-- Ensemble to NeuralCore -->
+                        <path d="M 230 145 L 230 195" stroke="#a855f7" stroke-width="1.5" marker-end="url(#arrow-purple)" fill="none" />
+                        <!-- NeuralCore to Ensemble (weights feed) -->
+                        <path d="M 270 215 L 270 145" stroke="#a855f7" stroke-width="1.5" stroke-dasharray="4,4" marker-end="url(#arrow-purple)" fill="none" />
+                        <!-- Ensemble to Probability -->
+                        <path d="M 330 90 L 375 90" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)" fill="none" />
+                        <!-- Probability to Execution -->
+                        <path d="M 505 90 L 555 90" stroke="#00f0ff" stroke-width="2" marker-end="url(#arrow-blue)" fill="none" />
+                        <!-- Execution to Exchange -->
+                        <path d="M 685 90 L 735 90" stroke="#10b981" stroke-width="2" marker-end="url(#arrow-blue)" fill="none" />
+                        <!-- Execution to NeuralCore feedback -->
+                        <path d="M 620 135 L 620 310 L 330 310" stroke="#a855f7" stroke-width="1.5" stroke-dasharray="3,3" marker-end="url(#arrow-purple)" fill="none" />
+                        <!-- NeuralCore feedback to NeuralCore -->
+                        <path d="M 230 310 L 230 255" stroke="#a855f7" stroke-width="1.5" stroke-dasharray="3,3" marker-end="url(#arrow-purple)" fill="none" />
+
+                        <!-- Flow annotation text -->
+                        <text x="630" y="295" fill="#a855f7" font-size="10" font-weight="600">PnL Trade Telemetry Feedback</text>
+                        <text x="280" y="175" fill="#a855f7" font-size="10" font-weight="600">Trust Weights</text>
+                        <text x="515" y="80" fill="#00f0ff" font-size="10" font-weight="600">Trade Signals</text>
+
+                        <!-- Block 1: Ingestion -->
+                        <rect x="10" y="50" width="120" height="80" rx="8" fill="url(#blueGrad)" stroke="#00f0ff" stroke-width="1" />
+                        <text x="70" y="80" text-anchor="middle" fill="#00f0ff" font-size="13" font-weight="700">Data Ingest</text>
+                        <text x="70" y="98" text-anchor="middle" fill="#94a3b8" font-size="10">Yahoo Finance API</text>
+                        <text x="70" y="112" text-anchor="middle" fill="#64748b" font-size="9">Feeds & Orderbook</text>
+
+                        <!-- Block 2: Ensemble -->
+                        <rect x="175" y="50" width="155" height="95" rx="8" fill="url(#purpleGrad)" stroke="#a855f7" stroke-width="1" />
+                        <text x="252" y="78" text-anchor="middle" fill="#a855f7" font-size="13" font-weight="700">Strategy Ensemble</text>
+                        <text x="252" y="95" text-anchor="middle" fill="#94a3b8" font-size="9">EMA, RSI, BB, Kalman</text>
+                        <text x="252" y="110" text-anchor="middle" fill="#94a3b8" font-size="9">Sentiment & Random Forest</text>
+                        <text x="252" y="128" text-anchor="middle" fill="#64748b" font-size="9">(7 algorithms)</text>
+
+                        <!-- Block 3: NeuralCore policy net -->
+                        <rect x="175" y="195" width="155" height="60" rx="8" fill="url(#purpleGrad)" stroke="#a855f7" stroke-width="1" />
+                        <text x="252" y="222" text-anchor="middle" fill="#a855f7" font-size="13" font-weight="700">NeuralCore Brain</text>
+                        <text x="252" y="238" text-anchor="middle" fill="#94a3b8" font-size="10">Policy Gradient Net</text>
+
+                        <!-- Block 4: Probability Engine -->
+                        <rect x="375" y="50" width="130" height="80" rx="8" fill="url(#blueGrad)" stroke="#00f0ff" stroke-width="1" />
+                        <text x="440" y="80" text-anchor="middle" fill="#00f0ff" font-size="13" font-weight="700">Probability Engine</text>
+                        <text x="440" y="98" text-anchor="middle" fill="#94a3b8" font-size="10">Kelly Sizing & Odds</text>
+                        <text x="440" y="112" text-anchor="middle" fill="#64748b" font-size="9">Signal Strength Check</text>
+
+                        <!-- Block 5: Execution Engine -->
+                        <rect x="555" y="50" width="130" height="85" rx="8" fill="url(#blueGrad)" stroke="#00f0ff" stroke-width="1" />
+                        <text x="620" y="80" text-anchor="middle" fill="#00f0ff" font-size="13" font-weight="700">Execution Engine</text>
+                        <text x="620" y="98" text-anchor="middle" fill="#94a3b8" font-size="10">Simulated / Live API</text>
+                        <text x="620" y="115" text-anchor="middle" fill="#64748b" font-size="9">Leverage & Limits</text>
+
+                        <!-- Block 6: Exchange -->
+                        <rect x="735" y="50" width="115" height="80" rx="8" fill="url(#greenGrad)" stroke="#10b981" stroke-width="1" />
+                        <text x="792" y="80" text-anchor="middle" fill="#10b981" font-size="13" font-weight="700">Kraken Exchange</text>
+                        <text x="792" y="98" text-anchor="middle" fill="#94a3b8" font-size="10">Order Book Execution</text>
+                        <text x="792" y="112" text-anchor="middle" fill="#64748b" font-size="9">Secure CCXT REST</text>
+
+                        <!-- Background Overlay for Agents (Bottom Row) -->
+                        <rect x="10" y="340" width="840" height="70" rx="10" fill="rgba(255,255,255,0.01)" stroke="rgba(255,255,255,0.05)" stroke-width="1" />
+                        <text x="25" y="360" fill="#94a3b8" font-size="11" font-weight="600" text-anchor="start">AUTONOMOUS AGENT TEAM (DAILY/WEEKLY CRON OPTIMIZATION LOOP)</text>
+                        
+                        <!-- Mini representation of agents -->
+                        <text x="45" y="390" fill="#a855f7" font-size="11" font-weight="600">📊 NexusQuant (Math PhD)</text>
+                        <text x="265" y="390" fill="#00f0ff" font-size="11" font-weight="600">⚙️ NexusDev (Software Dev)</text>
+                        <text x="485" y="390" fill="#10b981" font-size="11" font-weight="600">📝 NexusReporter (Blogger)</text>
+                        <text x="695" y="390" fill="#f59e0b" font-size="11" font-weight="600">🎓 NeuralCore Optimizer</text>
+                    </svg>
+                </div>
             </article>
         </div>
-    </main>
     </div>
 
     <!-- App Logic -->

@@ -1027,6 +1027,8 @@ function loadBlogConfig() {
             if (elDailyHour) elDailyHour.value = data.daily_agent_hour;
             if (elWeeklyDay) elWeeklyDay.value = data.weekly_agent_day;
             if (elWeeklyHour) elWeeklyHour.value = data.weekly_agent_hour;
+            const elNnHour = document.getElementById("sched-nn-hour");
+            if (elNnHour) elNnHour.value = data.nn_agent_hour || 1;
         })
         .catch(err => console.error("Error loading schedule config:", err));
 }
@@ -1133,11 +1135,13 @@ if (elSaveScheduleBtn) {
         elBlogStatusMsg.className = "color-blue";
         elSaveScheduleBtn.disabled = true;
         
+        const elNnHour = document.getElementById("sched-nn-hour");
         const dhVal = elDailyHour ? parseInt(elDailyHour.value) : 0;
         const wdVal = elWeeklyDay ? parseInt(elWeeklyDay.value) : 0;
         const whVal = elWeeklyHour ? parseInt(elWeeklyHour.value) : 23;
+        const nhVal = elNnHour ? parseInt(elNnHour.value) : 1;
         
-        fetch(`/api/system/schedule?daily_agent_hour=${dhVal}&weekly_agent_day=${wdVal}&weekly_agent_hour=${whVal}`, { method: 'POST' })
+        fetch(`/api/system/schedule?daily_agent_hour=${dhVal}&weekly_agent_day=${wdVal}&weekly_agent_hour=${whVal}&nn_agent_hour=${nhVal}`, { method: 'POST' })
             .then(res => res.json())
             .then(data => {
                 elSaveScheduleBtn.disabled = false;
@@ -1701,3 +1705,114 @@ document.querySelectorAll(".tf-btn").forEach(btn => {
         loadPortfolioHistory();
     });
 });
+
+// -------------------------------------------------------------
+// Cybernetic Tab Navigation & Personified Layout Control
+// -------------------------------------------------------------
+const elNavTabs = document.querySelectorAll(".nav-tab");
+const elTabContents = document.querySelectorAll(".tab-content");
+
+elNavTabs.forEach(tab => {
+    tab.addEventListener("click", () => {
+        // Toggle active navigation tab
+        elNavTabs.forEach(t => t.classList.remove("active"));
+        tab.classList.add("active");
+
+        // Toggle active content page
+        const targetTabId = tab.getAttribute("data-tab");
+        elTabContents.forEach(content => {
+            if (content.id === targetTabId) {
+                content.classList.add("active");
+            } else {
+                content.classList.remove("active");
+            }
+        });
+        
+        // Refresh charts or widgets if needed when visible
+        if (targetTabId === "tab-neural") {
+            loadWeightsChart();
+        }
+    });
+});
+
+// -------------------------------------------------------------
+// Neural Core Parameter Adjustment Hook
+// -------------------------------------------------------------
+const elSaveNnParamsBtn = document.getElementById("save-nn-params-btn");
+if (elSaveNnParamsBtn) {
+    elSaveNnParamsBtn.addEventListener("click", () => {
+        const elLrInput = document.getElementById("setting-nn-lr-tab");
+        const elFloorInput = document.getElementById("setting-nn-floor-tab");
+        if (!elLrInput || !elFloorInput) return;
+        
+        const lrVal = parseFloat(elLrInput.value);
+        const floorVal = parseFloat(elFloorInput.value);
+        
+        // Re-read other settings from dashboard controls or state to avoid overwriting them
+        const tradingMode = document.getElementById("setting-trading-mode")?.value || "paper";
+        const broker = document.getElementById("setting-broker")?.value || "kraken";
+        const exchangeApiKey = document.getElementById("setting-api-key")?.value || "";
+        const exchangeApiSecret = document.getElementById("setting-api-secret")?.value || "";
+        const trailingStop = document.getElementById("setting-trailing-stop")?.checked || false;
+        const cooldown = document.getElementById("setting-cooldown")?.value ? parseFloat(document.getElementById("setting-cooldown").value) : 4.0;
+        const tpMultiplier = document.getElementById("setting-tp-multiplier")?.value ? parseFloat(document.getElementById("setting-tp-multiplier").value) : 2.5;
+        const slMultiplier = document.getElementById("setting-sl-multiplier")?.value ? parseFloat(document.getElementById("setting-sl-multiplier").value) : 1.5;
+        const riskMode = document.getElementById("risk-mode-select")?.value || "conservative";
+        const maxDrawdown = document.getElementById("setting-max-drawdown")?.value ? parseFloat(document.getElementById("setting-max-drawdown").value) : 5.0;
+
+        elSaveNnParamsBtn.disabled = true;
+        
+        // Sync inputs with the other settings tab inputs so they stay updated
+        const elNnLrOrig = document.getElementById("setting-nn-lr");
+        const elNnFloorOrig = document.getElementById("setting-nn-floor");
+        if (elNnLrOrig) elNnLrOrig.value = lrVal;
+        if (elNnFloorOrig) elNnFloorOrig.value = floorVal;
+
+        fetch(`/api/system/config?trading_mode=${tradingMode}&risk_mode=${riskMode}&max_drawdown=${maxDrawdown}&broker=${broker}&api_key=${encodeURIComponent(exchangeApiKey)}&api_secret=${encodeURIComponent(exchangeApiSecret)}&trailing_stop=${trailingStop}&cooldown=${cooldown}&tp_multiplier=${tpMultiplier}&sl_multiplier=${slMultiplier}&nn_lr=${lrVal}&nn_floor=${floorVal}`, {
+            method: 'POST'
+        })
+        .then(res => res.json())
+        .then(data => {
+            elSaveNnParamsBtn.disabled = false;
+            if (data.status === "success") {
+                alert("Neural Network hyperparameters saved successfully!");
+            } else {
+                alert("Failed to save neural parameters: " + data.error);
+            }
+        })
+        .catch(err => {
+            elSaveNnParamsBtn.disabled = false;
+            console.error("Error saving neural core settings:", err);
+        });
+    });
+}
+
+// -------------------------------------------------------------
+// Bind Duplicate Actions inside Personified Cards Tab
+// -------------------------------------------------------------
+const bindTabAction = (btnId, origBtnId) => {
+    const btn = document.getElementById(btnId);
+    const origBtn = document.getElementById(origBtnId);
+    if (btn && origBtn) {
+        btn.addEventListener("click", () => {
+            origBtn.click();
+        });
+    }
+};
+
+bindTabAction("trigger-opt-params-btn-tab", "trigger-opt-params-btn");
+bindTabAction("trigger-self-dev-btn-tab", "trigger-self-dev-btn");
+bindTabAction("trigger-blog-btn-tab", "trigger-blog-btn");
+bindTabAction("trigger-opt-nn-btn-tab", "trigger-opt-nn-btn");
+bindTabAction("trigger-opt-sentiment-btn-tab", "trigger-opt-sentiment-btn");
+bindTabAction("trigger-reset-cooldowns-btn-tab", "trigger-reset-cooldowns-btn");
+
+// Populate NN values in Neural tab from config values on load
+setTimeout(() => {
+    const elNnLrOrig = document.getElementById("setting-nn-lr");
+    const elNnFloorOrig = document.getElementById("setting-nn-floor");
+    const elLrInput = document.getElementById("setting-nn-lr-tab");
+    const elFloorInput = document.getElementById("setting-nn-floor-tab");
+    if (elNnLrOrig && elLrInput) elLrInput.value = elNnLrOrig.value;
+    if (elNnFloorOrig && elFloorInput) elFloorInput.value = elNnFloorOrig.value;
+}, 1500);

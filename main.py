@@ -177,10 +177,11 @@ class NexusTraderOrchestrator:
         weights_json = learner.policy_net.to_json()
         database.save_setting(f"policy_net_weights_{ticker}", weights_json)
         
-        # Calculate unique Model DNA signature from network weight parameters
+        # Model DNA signature is a stable representation of the Policy Network's architecture topology
         import hashlib
-        dna_hash = hashlib.md5(weights_json.encode('utf-8')).hexdigest()[:8].upper()
-        model_dna = f"NN-{dna_hash}"
+        topo_str = f"PolicyNet-8x12x{len(ensemble.strategies)}"
+        dna_hash = hashlib.md5(topo_str.encode('utf-8')).hexdigest()[:6].upper()
+        model_dna = f"NN-ARCH-{dna_hash}"
         
         # Increment and save lifetime training steps
         steps_key = f"lifetime_training_steps_{ticker}"
@@ -742,13 +743,10 @@ def get_weights(ticker: str = "ETH-USD"):
     steps_key = f"lifetime_training_steps_{ticker}"
     steps = int(database.load_setting(steps_key, "0"))
     
-    db_net_str = database.load_setting(f"policy_net_weights_{ticker}")
-    if db_net_str:
-        import hashlib
-        dna_hash = hashlib.md5(db_net_str.encode('utf-8')).hexdigest()[:8].upper()
-        model_dna = f"NN-{dna_hash}"
-    else:
-        model_dna = "NN-DEFAULT"
+    import hashlib
+    topo_str = f"PolicyNet-8x12x{len(ensemble.strategies)}"
+    dna_hash = hashlib.md5(topo_str.encode('utf-8')).hexdigest()[:6].upper()
+    model_dna = f"NN-ARCH-{dna_hash}"
         
     return {
         "weights": {
@@ -1207,12 +1205,14 @@ def update_crontab_schedule():
         daily_hour = int(database.load_setting("daily_agent_hour", "0"))
         weekly_day = int(database.load_setting("weekly_agent_day", "0"))  # 0=Sunday
         weekly_hour = int(database.load_setting("weekly_agent_hour", "23"))
+        nn_hour = int(database.load_setting("nn_agent_hour", "1"))
         
         project_path = os.path.dirname(os.path.abspath(__file__))
         
         # Generate cron commands dynamically
         daily_line = f"0 {daily_hour} * * * cd {project_path} && ./daily_agent.sh >> daily_agent.log 2>&1"
         weekly_line = f"59 {weekly_hour} * * {weekly_day} cd {project_path} && /usr/bin/python3 blog_agent.py >> blog_agent.log 2>&1"
+        nn_line = f"0 {nn_hour} * * * cd {project_path} && /usr/bin/python3 nn_agent.py >> nn_agent.log 2>&1"
         
         # Read current crontab
         import subprocess
@@ -1224,11 +1224,12 @@ def update_crontab_schedule():
             
         new_lines = []
         for line in lines:
-            if "daily_agent.sh" not in line and "blog_agent.py" not in line:
+            if "daily_agent.sh" not in line and "blog_agent.py" not in line and "nn_agent.py" not in line:
                 new_lines.append(line)
                 
         new_lines.append(daily_line)
         new_lines.append(weekly_line)
+        new_lines.append(nn_line)
         
         # Write back to crontab
         cron_content = "\n".join(new_lines) + "\n"
@@ -1252,11 +1253,12 @@ def get_system_schedule():
     return {
         "daily_agent_hour": int(database.load_setting("daily_agent_hour", "0")),
         "weekly_agent_day": int(database.load_setting("weekly_agent_day", "0")),
-        "weekly_agent_hour": int(database.load_setting("weekly_agent_hour", "23"))
+        "weekly_agent_hour": int(database.load_setting("weekly_agent_hour", "23")),
+        "nn_agent_hour": int(database.load_setting("nn_agent_hour", "1"))
     }
 
 @app.post("/api/system/schedule")
-def update_system_schedule(daily_agent_hour: int, weekly_agent_day: int, weekly_agent_hour: int):
+def update_system_schedule(daily_agent_hour: int, weekly_agent_day: int, weekly_agent_hour: int, nn_agent_hour: int = 1):
     try:
         if not (0 <= daily_agent_hour <= 23):
             return {"status": "error", "error": "Daily hour must be between 0 and 23"}
@@ -1264,10 +1266,13 @@ def update_system_schedule(daily_agent_hour: int, weekly_agent_day: int, weekly_
             return {"status": "error", "error": "Weekly day must be between 0 and 6"}
         if not (0 <= weekly_agent_hour <= 23):
             return {"status": "error", "error": "Weekly hour must be between 0 and 23"}
+        if not (0 <= nn_agent_hour <= 23):
+            return {"status": "error", "error": "NN optimizer hour must be between 0 and 23"}
             
         database.save_setting("daily_agent_hour", str(daily_agent_hour))
         database.save_setting("weekly_agent_day", str(weekly_agent_day))
         database.save_setting("weekly_agent_hour", str(weekly_agent_hour))
+        database.save_setting("nn_agent_hour", str(nn_agent_hour))
         
         # Update system crontab dynamically
         update_crontab_schedule()

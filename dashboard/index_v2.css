@@ -670,3 +670,80 @@ tbody#trade-log-body tr:hover {
     background: rgba(255, 255, 255, 0.05);
     color: var(--text-primary);
 }
+
+/* Menu Page Navigation tabs */
+.nav-tab.active {
+    background: rgba(0, 240, 255, 0.1) !important;
+    color: var(--neon-blue) !important;
+    border-color: rgba(0, 240, 255, 0.3) !important;
+}
+.nav-tab:hover:not(.active) {
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text-primary);
+}
+
+.tab-content {
+    display: none;
+}
+.tab-content.active {
+    display: block;
+}
+
+/* Personified AI Agent Card styling */
+.persona-card {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 16px;
+    transition: var(--transition);
+}
+.persona-card:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(0, 240, 255, 0.2);
+}
+
+.persona-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    position: relative;
+    box-shadow: 0 0 12px rgba(0, 0, 0, 0.5);
+}
+.persona-avatar::after {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    right: -2px;
+    bottom: -2px;
+    border-radius: 50%;
+    border: 1px solid transparent;
+    transition: var(--transition);
+}
+
+.persona-quant .persona-avatar { background: rgba(168, 85, 247, 0.15); color: var(--neon-purple); }
+.persona-quant .persona-avatar::after { border-color: rgba(168, 85, 247, 0.3); }
+.persona-quant:hover .persona-avatar { box-shadow: 0 0 15px rgba(168, 85, 247, 0.4); }
+
+.persona-dev .persona-avatar { background: rgba(0, 240, 255, 0.15); color: var(--neon-blue); }
+.persona-dev .persona-avatar::after { border-color: rgba(0, 240, 255, 0.3); }
+.persona-dev:hover .persona-avatar { box-shadow: 0 0 15px rgba(0, 240, 255, 0.4); }
+
+.persona-blog .persona-avatar { background: rgba(16, 185, 129, 0.15); color: var(--neon-green); }
+.persona-blog .persona-avatar::after { border-color: rgba(16, 185, 129, 0.3); }
+.persona-blog:hover .persona-avatar { box-shadow: 0 0 15px rgba(16, 185, 129, 0.4); }
+
+.persona-nn .persona-avatar { background: rgba(245, 158, 11, 0.15); color: var(--neon-orange); }
+.persona-nn .persona-avatar::after { border-color: rgba(245, 158, 11, 0.3); }
+.persona-nn:hover .persona-avatar { box-shadow: 0 0 15px rgba(245, 158, 11, 0.4); }
+
+.persona-bot .persona-avatar { background: rgba(244, 63, 94, 0.15); color: var(--neon-red); }
+.persona-bot .persona-avatar::after { border-color: rgba(244, 63, 94, 0.3); }
+.persona-bot:hover .persona-avatar { box-shadow: 0 0 15px rgba(244, 63, 94, 0.4); }
