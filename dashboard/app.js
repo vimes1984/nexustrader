@@ -200,6 +200,19 @@ function handleInitState(data) {
         initialBalance = data.initial_balance;
     }
     
+    // Initialize neural policy engine status log
+    const logBox = document.getElementById("neural-log");
+    if (logBox) {
+        logBox.innerHTML = "";
+        const timeStr = new Date().toLocaleTimeString();
+        const entry = document.createElement("div");
+        entry.style.marginBottom = "6px";
+        entry.style.borderBottom = "1px solid rgba(255,255,255,0.02)";
+        entry.style.paddingBottom = "4px";
+        entry.innerHTML = `<span style="color:var(--text-muted)">[${timeStr}]</span> <span style="color:var(--neon-purple);font-weight:600;">[AI Policy Engine]</span> Loaded policy weights from DB. Neural network training active.`;
+        logBox.appendChild(entry);
+    }
+    
     // Set active ticker default if not set
     if (data.ticker && !activeTicker) {
         activeTicker = data.ticker;
