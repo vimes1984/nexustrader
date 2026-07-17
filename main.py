@@ -433,38 +433,61 @@ def control_simulation(action: str, speed: float = 0.2, mode: str = "live"):
 def get_system_config():
     config_path = os.path.expanduser("~/.nexustrader/config.json")
     trading_mode = "paper"
+    broker = "kraken"
+    api_key = ""
+    api_secret = ""
     if os.path.exists(config_path):
         try:
             with open(config_path, "r") as f:
                 cfg = json.load(f)
                 trading_mode = cfg.get("trading_mode", "paper")
+                broker = cfg.get("broker", "kraken")
+                api_key = cfg.get("api_credentials", {}).get("api_key", "")
+                api_secret = cfg.get("api_credentials", {}).get("api_secret", "")
         except Exception:
             pass
             
     return {
         "trading_mode": trading_mode,
+        "broker": broker,
+        "api_key": api_key,
+        "api_secret": api_secret,
+        "trailing_stop": database.load_setting("trailing_stop_enabled", "false") == "true",
+        "cooldown": float(database.load_setting("loss_cooldown_hours", "4.0")),
         "risk_mode": database.load_setting("risk_mode", "conservative"),
         "max_drawdown": float(database.load_setting("max_daily_drawdown", "5.0"))
     }
 
 @app.post("/api/system/config")
-def update_system_config(trading_mode: str, risk_mode: str, max_drawdown: float):
-    # 1. Update config.json for trading mode
+def update_system_config(trading_mode: str, risk_mode: str, max_drawdown: float, broker: str = "kraken", api_key: str = "", api_secret: str = "", trailing_stop: bool = False, cooldown: float = 4.0):
+    # 1. Update config.json
     config_path = os.path.expanduser("~/.nexustrader/config.json")
+    cfg = {}
     if os.path.exists(config_path):
         try:
             with open(config_path, "r") as f:
                 cfg = json.load(f)
-            cfg["trading_mode"] = trading_mode
-            with open(config_path, "w") as f:
-                json.dump(cfg, f, indent=2)
+        except Exception:
+            pass
             
-            # Hot-reload in execution engine
-            orchestrator.execution_engine.trading_mode = trading_mode
-            logging.info(f"System Trading Mode updated to: {trading_mode}")
-        except Exception as e:
-            logging.error(f"Error updating config.json: {e}")
-            
+    cfg["trading_mode"] = trading_mode
+    cfg["broker"] = broker
+    if "api_credentials" not in cfg:
+        cfg["api_credentials"] = {}
+    cfg["api_credentials"]["api_key"] = api_key
+    cfg["api_credentials"]["api_secret"] = api_secret
+    
+    try:
+        with open(config_path, "w") as f:
+            json.dump(cfg, f, indent=2)
+        
+        # Hot-reload in execution engine
+        orchestrator.execution_engine.trading_mode = trading_mode
+        orchestrator.execution_engine.config = cfg
+        logging.info(f"System configuration and API credentials updated for: {broker}")
+    except Exception as e:
+        logging.error(f"Error updating config.json: {e}")
+        
     # 2. Update Risk Mode
     if risk_mode in ["conservative", "aggressive", "hyper_growth"]:
         orchestrator.probability_engine.set_risk_mode(risk_mode)
@@ -474,8 +497,22 @@ def update_system_config(trading_mode: str, risk_mode: str, max_drawdown: float)
     # 3. Update Max Drawdown
     database.save_setting("max_daily_drawdown", str(max_drawdown))
     logging.info(f"Max Daily Drawdown updated to: {max_drawdown}%")
+
+    # 4. Update Trailing Stop and Cooldown
+    database.save_setting("trailing_stop_enabled", "true" if trailing_stop else "false")
+    database.save_setting("loss_cooldown_hours", str(cooldown))
+    logging.info(f"Trailing Stop: {trailing_stop}, Cooldown: {cooldown} hours updated.")
     
     return {"status": "success"}
+
+@app.post("/api/system/risk_mode")
+def update_system_risk_mode(risk_mode: str):
+    if risk_mode in ["conservative", "aggressive", "hyper_growth"]:
+        orchestrator.probability_engine.set_risk_mode(risk_mode)
+        database.save_setting("risk_mode", risk_mode)
+        logging.info(f"System Risk Mode updated to: {risk_mode}")
+        return {"status": "success", "risk_mode": risk_mode}
+    return {"error": "Invalid risk mode"}
 
 @app.post("/api/system/optimize/sentiment")
 def trigger_sentiment_optimization():

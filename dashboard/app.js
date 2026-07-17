@@ -569,7 +569,7 @@ elResetBtn.addEventListener("click", () => {
 if (elRiskSelect) {
     elRiskSelect.addEventListener("change", (e) => {
         const val = e.target.value;
-        fetch(`/api/config?risk_mode=${val}`, { method: 'POST' })
+        fetch(`/api/system/risk_mode?risk_mode=${val}`, { method: 'POST' })
             .then(res => res.json())
             .then(data => {
                 console.log(`Risk profile updated to: ${data.risk_mode}`);
@@ -587,6 +587,11 @@ const elTriggerBlogBtn = document.getElementById("trigger-blog-btn");
 const elBlogStatusMsg = document.getElementById("blog-status-msg");
 
 const elTradingModeSelect = document.getElementById("setting-trading-mode");
+const elBrokerSelect = document.getElementById("setting-broker");
+const elApiKeyInput = document.getElementById("setting-api-key");
+const elApiSecretInput = document.getElementById("setting-api-secret");
+const elTrailingStopCheck = document.getElementById("setting-trailing-stop");
+const elCooldownInput = document.getElementById("setting-cooldown");
 const elMaxDrawdownInput = document.getElementById("setting-max-drawdown");
 
 function loadBlogConfig() {
@@ -606,6 +611,11 @@ function loadBlogConfig() {
         .then(res => res.json())
         .then(data => {
             if (elTradingModeSelect) elTradingModeSelect.value = data.trading_mode || "paper";
+            if (elBrokerSelect) elBrokerSelect.value = data.broker || "kraken";
+            if (elApiKeyInput) elApiKeyInput.value = data.api_key || "";
+            if (elApiSecretInput) elApiSecretInput.value = data.api_secret || "";
+            if (elTrailingStopCheck) elTrailingStopCheck.checked = data.trailing_stop || false;
+            if (elCooldownInput) elCooldownInput.value = data.cooldown || 4;
             if (elMaxDrawdownInput) elMaxDrawdownInput.value = data.max_drawdown || 5;
             
             // Sync risk selector in header
@@ -624,6 +634,12 @@ if (elSaveBlogConfigBtn) {
         const apiKey = elBlogApiKey ? elBlogApiKey.value.trim() : "";
         
         const tradingMode = elTradingModeSelect ? elTradingModeSelect.value : "paper";
+        const broker = elBrokerSelect ? elBrokerSelect.value : "kraken";
+        const exchangeApiKey = elApiKeyInput ? elApiKeyInput.value.trim() : "";
+        const exchangeApiSecret = elApiSecretInput ? elApiSecretInput.value.trim() : "";
+        const trailingStop = elTrailingStopCheck ? elTrailingStopCheck.checked : false;
+        const cooldown = elCooldownInput ? parseFloat(elCooldownInput.value) : 4.0;
+        
         const riskMode = elRiskSelect ? elRiskSelect.value : "conservative";
         const maxDrawdown = elMaxDrawdownInput ? parseFloat(elMaxDrawdownInput.value) : 5.0;
         
@@ -636,7 +652,7 @@ if (elSaveBlogConfigBtn) {
         });
         
         // 2. Save System settings
-        const saveSystemPromise = fetch(`/api/system/config?trading_mode=${tradingMode}&risk_mode=${riskMode}&max_drawdown=${maxDrawdown}`, {
+        const saveSystemPromise = fetch(`/api/system/config?trading_mode=${tradingMode}&risk_mode=${riskMode}&max_drawdown=${maxDrawdown}&broker=${broker}&api_key=${encodeURIComponent(exchangeApiKey)}&api_secret=${encodeURIComponent(exchangeApiSecret)}&trailing_stop=${trailingStop}&cooldown=${cooldown}`, {
             method: 'POST'
         });
 

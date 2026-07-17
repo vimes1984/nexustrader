@@ -100,6 +100,13 @@ class ExecutionEngine:
 
     def open_position(self, symbol, evaluation, strategy_signals):
         """Opens a position or queues a limit order based on trade viability."""
+        # Check Loss Cooldown
+        cooldown_end = float(database.load_setting(f"cooldown_end_{symbol}", "0.0"))
+        if time.time() < cooldown_end:
+            remaining_minutes = int((cooldown_end - time.time()) / 60)
+            logging.warning(f"[LOSS COOLDOWN] Ticker {symbol} is in a loss cooldown period. {remaining_minutes} mins remaining. Skipping.")
+            return False
+
         if symbol in self.active_positions or symbol in self.pending_limit_orders:
             logging.warning(f"Position or pending order already exists for {symbol}. Skipping.")
             return False
@@ -204,6 +211,30 @@ class ExecutionEngine:
         tp = pos["take_profit"]
         sl = pos["stop_loss"]
 
+        # Trailing Stop-Loss logic
+        trailing_stop_enabled = database.load_setting("trailing_stop_enabled", "false") == "true"
+        if trailing_stop_enabled:
+            if direction == "BUY":
+                if "original_sl" not in pos:
+                    pos["original_sl"] = sl
+                    pos["trail_offset"] = entry_price - sl
+                
+                new_sl = current_price - pos["trail_offset"]
+                if new_sl > sl:
+                    sl = new_sl
+                    pos["stop_loss"] = new_sl
+                    logging.info(f"[TRAILING STOP-LOSS] Trailed stop-loss for {symbol} upward to {new_sl:.4f}")
+            else: # SELL
+                if "original_sl" not in pos:
+                    pos["original_sl"] = sl
+                    pos["trail_offset"] = sl - entry_price
+                
+                new_sl = current_price + pos["trail_offset"]
+                if new_sl < sl:
+                    sl = new_sl
+                    pos["stop_loss"] = new_sl
+                    logging.info(f"[TRAILING STOP-LOSS] Trailed stop-loss for {symbol} downward to {new_sl:.4f}")
+
         close_trade = False
         exit_reason = None
         pnl = 0.0
@@ -236,6 +267,14 @@ class ExecutionEngine:
             # Handle trade closure
             exit_fee = (current_price * quantity) * self.transaction_fee_rate
             pnl_after_fee = pnl - exit_fee
+            
+            # Trigger Loss Cooldown if PnL is negative
+            if pnl_after_fee < 0:
+                cooldown_hours = float(database.load_setting("loss_cooldown_hours", "4.0"))
+                if cooldown_hours > 0:
+                    cooldown_end = time.time() + (cooldown_hours * 3600)
+                    database.save_setting(f"cooldown_end_{symbol}", str(cooldown_end))
+                    logging.info(f"[LOSS COOLDOWN] Placed {symbol} on cooldown for {cooldown_hours} hours until {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(cooldown_end))}")
             
             # Update balance
             original_value = quantity * entry_price

@@ -137,6 +137,39 @@
                         </select>
                     </label>
 
+                    <!-- Exchange Broker selection -->
+                    <label style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>Exchange Broker:</span>
+                        <select id="setting-broker" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 12px; outline: none; cursor: pointer;">
+                            <option value="kraken">Kraken</option>
+                            <option value="binance">Binance</option>
+                            <option value="coinbase">Coinbase</option>
+                        </select>
+                    </label>
+
+                    <!-- API Credentials container -->
+                    <div id="exchange-credentials-container" style="display: flex; flex-direction: column; gap: 8px; margin-top: 4px; padding: 10px; background: rgba(255,255,255,0.01); border: 1px dashed var(--border-color); border-radius: 8px;">
+                        <label style="display: flex; flex-direction: column; gap: 4px;">
+                            <span style="font-size: 11px; color: var(--text-secondary);">Exchange API Key:</span>
+                            <input type="password" id="setting-api-key" placeholder="Enter API key..." style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 6px 10px; border-radius: 6px; font-family: inherit; font-size: 11px; outline: none;">
+                        </label>
+                        <label style="display: flex; flex-direction: column; gap: 4px;">
+                            <span style="font-size: 11px; color: var(--text-secondary);">Exchange API Secret:</span>
+                            <input type="password" id="setting-api-secret" placeholder="Enter API secret..." style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 6px 10px; border-radius: 6px; font-family: inherit; font-size: 11px; outline: none;">
+                        </label>
+                    </div>
+
+                    <!-- Freqtrade/Hummingbot Features -->
+                    <label style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
+                        <span>Trailing Stop-Loss:</span>
+                        <input type="checkbox" id="setting-trailing-stop" style="accent-color: var(--neon-blue); cursor: pointer;">
+                    </label>
+
+                    <label style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>Loss Cooldown (hours):</span>
+                        <input type="number" id="setting-cooldown" min="0" max="48" value="4" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 12px; width: 60px; outline: none; text-align: center;">
+                    </label>
+
 
 
                     <!-- Max Drawdown -->
