@@ -167,6 +167,12 @@ header {
     margin-bottom: 24px;
 }
 
+.main-left-column {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
 .chart-panel {
     padding: 24px;
     height: 480px;
