@@ -1177,14 +1177,16 @@ def update_crontab_schedule():
         weekly_day = int(database.load_setting("weekly_agent_day", "0"))  # 0=Sunday
         weekly_hour = int(database.load_setting("weekly_agent_hour", "23"))
         
-        # Generate cron commands
-        daily_line = f"0 {daily_hour} * * * cd /home/chris/nexustrader && ./daily_agent.sh >> daily_agent.log 2>&1"
-        weekly_line = f"59 {weekly_hour} * * {weekly_day} cd /home/chris/nexustrader && /usr/bin/python3 blog_agent.py >> blog_agent.log 2>&1"
+        project_path = os.path.dirname(os.path.abspath(__file__))
+        
+        # Generate cron commands dynamically
+        daily_line = f"0 {daily_hour} * * * cd {project_path} && ./daily_agent.sh >> daily_agent.log 2>&1"
+        weekly_line = f"59 {weekly_hour} * * {weekly_day} cd {project_path} && /usr/bin/python3 blog_agent.py >> blog_agent.log 2>&1"
         
         # Read current crontab
         import subprocess
         try:
-            res = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
+            res = subprocess.run(["/usr/bin/crontab", "-l"], capture_output=True, text=True)
             lines = res.stdout.splitlines() if res.returncode == 0 else []
         except Exception:
             lines = []
@@ -1205,7 +1207,7 @@ def update_crontab_schedule():
             temp_name = f.name
             
         try:
-            subprocess.run(["crontab", temp_name])
+            subprocess.run(["/usr/bin/crontab", temp_name])
         finally:
             try:
                 os.unlink(temp_name)
