@@ -13,6 +13,8 @@ const ema12Data = [];
 const ema26Data = [];
 
 // App State
+let activeTicker = "ETH-EUR";
+const tickerLatest = {};
 let activePosition = null;
 let currentPrice = 0.0;
 let balance = 100.0;
@@ -181,12 +183,35 @@ function handleSocketMessage(msg) {
 
 // Process Init Message
 function handleInitState(data) {
-    document.getElementById("chart-ticker-title").textContent = data.ticker;
     balance = data.balance;
     if (data.initial_balance !== undefined) {
         initialBalance = data.initial_balance;
     }
     
+    // Set active ticker default if not set
+    if (data.ticker && !activeTicker) {
+        activeTicker = data.ticker;
+    }
+    document.getElementById("chart-ticker-title").textContent = activeTicker;
+    
+    // Render Ticker Switcher tabs
+    const switcherEl = document.getElementById("ticker-switcher-bar");
+    if (switcherEl && data.tickers) {
+        switcherEl.innerHTML = "";
+        data.tickers.forEach(t => {
+            const btn = document.createElement("button");
+            btn.className = `ticker-tab ${t === activeTicker ? 'active' : ''}`;
+            btn.id = `tab-${t}`;
+            btn.setAttribute("data-ticker", t);
+            btn.innerHTML = `
+                <span class="ticker-tab-name">${t}</span>
+                <span class="ticker-tab-price" id="tab-price-${t}">€0.00</span>
+            `;
+            btn.addEventListener("click", () => switchTicker(t));
+            switcherEl.appendChild(btn);
+        });
+    }
+
     // Toggle controls and status badges based on trading mode (live vs paper)
     const tradingMode = data.trading_mode || "paper";
     const brokerName = data.broker || "kraken";
@@ -219,6 +244,26 @@ function handleInitState(data) {
     renderTradeLog(data.trades);
     updatePerformanceKPIs(data.trades, balance);
     
+    // Switch to active ticker history initial loading
+    fetch(`/api/history?ticker=${activeTicker}&t=${Date.now()}`)
+        .then(res => res.json())
+        .then(history => {
+            if (Array.isArray(history) && history.length > 0) {
+                chartLabels.length = 0;
+                priceData.length = 0;
+                bbUpperData.length = 0;
+                bbLowerData.length = 0;
+                history.forEach(item => {
+                    const timeLabel = item.timestamp.split(" ")[1] || item.timestamp.split("T")[1]?.slice(0, 5) || item.timestamp;
+                    chartLabels.push(timeLabel);
+                    priceData.push(item.close);
+                    bbUpperData.push(item.bb_upper);
+                    bbLowerData.push(item.bb_lower);
+                });
+                chart.update();
+            }
+        });
+    
     if (data.risk_mode && elRiskSelect) {
         elRiskSelect.value = data.risk_mode;
     }
@@ -226,6 +271,20 @@ function handleInitState(data) {
 
 // Process Tick Message
 function handleTick(data) {
+    // Store latest tick for this symbol
+    tickerLatest[data.ticker] = data;
+    
+    // Update ticker price shown on switcher tab
+    const tabPriceEl = document.getElementById(`tab-price-${data.ticker}`);
+    if (tabPriceEl) {
+        tabPriceEl.textContent = `€${data.price.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    }
+    
+    // If this tick belongs to another ticker, do not update the main chart or details cards
+    if (data.ticker !== activeTicker) {
+        return;
+    }
+    
     currentPrice = data.price;
     elPrice.textContent = `€${currentPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
     
@@ -315,6 +374,66 @@ function handleTick(data) {
         
         const elWinTrend = document.getElementById("neural-val-wintrend");
         if (elWinTrend) elWinTrend.textContent = `${(win_trend * 100).toFixed(1)}%`;
+    }
+}
+
+// Switch Active Ticker Handler
+function switchTicker(ticker) {
+    if (ticker === activeTicker) return;
+    activeTicker = ticker;
+    
+    // Update tab classes
+    document.querySelectorAll(".ticker-tab").forEach(tab => {
+        if (tab.getAttribute("data-ticker") === ticker) {
+            tab.classList.add("active");
+        } else {
+            tab.classList.remove("active");
+        }
+    });
+    
+    document.getElementById("chart-ticker-title").textContent = ticker;
+    
+    // Clear chart datasets
+    chartLabels.length = 0;
+    priceData.length = 0;
+    bbUpperData.length = 0;
+    bbLowerData.length = 0;
+    
+    // Fetch historical candles for this ticker
+    fetch(`/api/history?ticker=${ticker}&t=${Date.now()}`)
+        .then(res => res.json())
+        .then(history => {
+            if (Array.isArray(history) && history.length > 0) {
+                history.forEach(item => {
+                    const timeLabel = item.timestamp.split(" ")[1] || item.timestamp.split("T")[1]?.slice(0, 5) || item.timestamp;
+                    chartLabels.push(timeLabel);
+                    priceData.push(item.close);
+                    bbUpperData.push(item.bb_upper);
+                    bbLowerData.push(item.bb_lower);
+                });
+                chart.update();
+            }
+        })
+        .catch(err => console.error("Error loading historical candles:", err));
+        
+    // Fetch weights for this ticker
+    fetch(`/api/weights?ticker=${ticker}&t=${Date.now()}`)
+        .then(res => res.json())
+        .then(weights => {
+            currentWeights = weights;
+            renderWeights(currentWeights);
+        })
+        .catch(err => console.error("Error loading weights:", err));
+        
+    // Update active position/evaluation display for the new ticker from latest socket tick
+    const tick = tickerLatest[ticker];
+    if (tick) {
+        handleTick(tick);
+    } else {
+        elPrice.textContent = "€0.00";
+        elUnrealized.textContent = "Active Trade Profit: €0.00 (0.00%)";
+        elUnrealized.className = "kpi-sub";
+        elPositionDetails.innerHTML = `<p style="font-size: 13px; color: var(--text-muted); text-align: center; padding: 20px;">No Trade Currently Open</p>`;
     }
 }
 

@@ -388,6 +388,29 @@ def get_status():
 def get_trades():
     return orchestrator.execution_engine.closed_trades
 
+@app.get("/api/history")
+def get_ticker_history(ticker: str = "ETH-EUR"):
+    if ticker not in orchestrator.data_ingestions:
+        return []
+    
+    ingest = orchestrator.data_ingestions[ticker]
+    df = ingest.data.tail(40)
+    history = []
+    for idx, r in df.iterrows():
+        # Handle index timestamp or column timestamp
+        ts = str(idx)
+        if 'timestamp' in r:
+            ts = str(r['timestamp'])
+        
+        history.append({
+            "timestamp": ts,
+            "close": float(r['close']),
+            "bb_upper": float(r.get('bb_upper', r['close'])),
+            "bb_lower": float(r.get('bb_lower', r['close'])),
+            "rsi": float(r.get('rsi', 50))
+        })
+    return history
+
 @app.get("/api/weights")
 def get_weights(ticker: str = "ETH-EUR"):
     if ticker not in orchestrator.strategy_ensembles:

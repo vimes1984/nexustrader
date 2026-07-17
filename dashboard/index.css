@@ -500,3 +500,75 @@ input[type="range"]::-webkit-slider-thumb {
         grid-template-columns: 1fr;
     }
 }
+
+/* Ticker Switcher Tabs */
+.ticker-tab {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 8px 16px;
+    border-radius: 10px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    min-width: 110px;
+    transition: var(--transition);
+    outline: none;
+}
+
+.ticker-tab:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(0, 240, 255, 0.3);
+    transform: translateY(-1px);
+}
+
+.ticker-tab.active {
+    background: rgba(0, 240, 255, 0.05);
+    border-color: var(--neon-blue);
+    color: var(--text-primary);
+    box-shadow: 0 0 10px rgba(0, 240, 255, 0.15);
+}
+
+.ticker-tab-name {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.ticker-tab-price {
+    font-size: 13px;
+    font-weight: 700;
+    font-family: 'Space Grotesk', sans-serif;
+}
+
+/* Custom Scrollbar for Trades Table */
+.table-scroll::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.table-scroll::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 3px;
+}
+
+.table-scroll::-webkit-scrollbar-thumb {
+    background: rgba(0, 240, 255, 0.2);
+    border-radius: 3px;
+}
+
+.table-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 240, 255, 0.4);
+}
+
+/* Completed Trades Panel row highlight */
+tbody#trade-log-body tr {
+    transition: var(--transition);
+}
+
+tbody#trade-log-body tr:hover {
+    background: rgba(255, 255, 255, 0.015);
+}
