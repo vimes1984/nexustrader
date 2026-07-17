@@ -93,21 +93,41 @@ class ExecutionEngine:
                 'enableRateLimit': True,
             })
             balance_info = exchange.fetch_balance()
+            total_bal = balance_info.get('total', {})
             
-            # Use EUR (our primary quote currency)
-            eur_total = float(balance_info.get('EUR', {}).get('total', 0.0))
-            if eur_total > 0:
-                self.balance = eur_total
+            # 1. Quote Currency Balance (cash ready to invest)
+            eur_cash = float(total_bal.get('EUR', 0.0))
+            if eur_cash >= 0:
+                self.balance = eur_cash
                 database.save_setting("portfolio_balance", str(self.balance))
                 
-                # Check if it was default initial balance
-                db_init_balance = database.load_setting("initial_portfolio_balance")
-                if db_init_balance is None or float(db_init_balance) == 100.0:
-                    self.initial_balance = eur_total
-                    database.save_setting("initial_portfolio_balance", str(eur_total))
-                    logging.info(f"[LIVE BALANCE] Set initial portfolio baseline to: €{eur_total:.2f}")
+            # 2. Total Portfolio Value (EUR cash + holdings value)
+            total_value_eur = eur_cash
+            try:
+                # Fetch live rates for conversions
+                tickers = exchange.fetch_tickers(['BTC/EUR', 'ETH/EUR', 'SOL/EUR', 'DOGE/EUR', 'XRP/EUR'])
+                prices = {sym.split('/')[0]: float(tick['last']) for sym, tick in tickers.items() if tick.get('last') is not None}
+            except Exception as pe:
+                logging.error(f"[LIVE VALUE SYNC] Failed to fetch conversion tickers: {pe}")
+                prices = {}
+                
+            for asset, qty in total_bal.items():
+                qty = float(qty)
+                if qty <= 0 or asset == 'EUR':
+                    continue
+                if asset in prices:
+                    total_value_eur += qty * prices[asset]
                     
-                logging.info(f"[LIVE BALANCE SYNC] Synchronized cash balance: €{self.balance:.2f}")
+            self.live_equity = total_value_eur
+            
+            # Update initial balance if not set
+            db_init_balance = database.load_setting("initial_portfolio_balance")
+            if db_init_balance is None or float(db_init_balance) == 100.0:
+                self.initial_balance = total_value_eur
+                database.save_setting("initial_portfolio_balance", str(total_value_eur))
+                logging.info(f"[LIVE BALANCE] Set initial portfolio baseline to: €{total_value_eur:.2f}")
+                
+            logging.info(f"[LIVE BALANCE SYNC] Cash: €{self.balance:.2f} | Total Value (Equity): €{self.live_equity:.2f}")
         except Exception as e:
             logging.error(f"[LIVE BALANCE SYNC ERROR] Failed to fetch live balance: {e}")
 
@@ -419,6 +439,9 @@ class ExecutionEngine:
         
         current_prices: dict of symbol -> current_price
         """
+        if self.trading_mode == "live" and hasattr(self, "live_equity"):
+            return float(self.live_equity)
+            
         equity = self.balance
         for symbol, pos in self.active_positions.items():
             qty = pos["quantity"]
