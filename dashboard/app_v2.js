@@ -195,6 +195,11 @@ function handleSocketMessage(msg) {
         case "risk_mode_updated":
             if (elRiskSelect) elRiskSelect.value = msg.risk_mode;
             break;
+        case "trading_mode_updated":
+            globalTradingMode = msg.trading_mode;
+            globalBrokerName = msg.broker;
+            updateStatusBadge();
+            break;
     }
 }
 
@@ -263,11 +268,45 @@ function handleInitState(data) {
         `;
         portBtn.addEventListener("click", () => switchPortfolioMode(true));
         switcherEl.appendChild(portBtn);
-    }
 
-    // Toggle controls and status badges based on trading mode (live vs paper)
-    globalTradingMode = data.trading_mode || "paper";
-    globalBrokerName = data.broker || "kraken";
+        // Toggle controls and status badges based on trading mode (live vs paper)
+        globalTradingMode = data.trading_mode || "paper";
+        globalBrokerName = data.broker || "kraken";
+        updateStatusBadge();
+
+        currentWeights = data.weights;
+        renderWeights(currentWeights);
+        renderTradeLog(data.trades);
+        updatePerformanceKPIs(data.trades, equity);
+        
+        // Switch to active ticker history initial loading
+        fetch(`/api/history?ticker=${activeTicker}&t=${Date.now()}`)
+            .then(res => res.json())
+            .then(history => {
+                if (Array.isArray(history) && history.length > 0) {
+                    chartLabels.length = 0;
+                    priceData.length = 0;
+                    bbUpperData.length = 0;
+                    bbLowerData.length = 0;
+                    history.forEach(item => {
+                        const timeLabel = item.timestamp.split(" ")[1] || item.timestamp.split("T")[1]?.slice(0, 5) || item.timestamp;
+                        chartLabels.push(timeLabel);
+                        priceData.push(item.close);
+                        bbUpperData.push(item.bb_upper);
+                        bbLowerData.push(item.bb_lower);
+                    });
+                    chart.update();
+                }
+            })
+            .catch(err => console.error("Error loading historical candles:", err));
+        
+        if (data.risk_mode && elRiskSelect) {
+            elRiskSelect.value = data.risk_mode;
+        }
+    }
+}
+
+function updateStatusBadge() {
     const statusTextEl = document.getElementById("status-text");
     const botStatusEl = document.getElementById("bot-status");
     const speedEl = document.getElementById("speed-slider") ? document.getElementById("speed-slider").parentElement : null;
@@ -290,35 +329,6 @@ function handleInitState(data) {
         if (speedEl) speedEl.style.display = "flex";
         if (playPauseBtn) playPauseBtn.style.display = "flex";
         if (resetBtn) resetBtn.style.display = "flex";
-    }
-    
-    currentWeights = data.weights;
-    renderWeights(currentWeights);
-    renderTradeLog(data.trades);
-    updatePerformanceKPIs(data.trades, equity);
-    
-    // Switch to active ticker history initial loading
-    fetch(`/api/history?ticker=${activeTicker}&t=${Date.now()}`)
-        .then(res => res.json())
-        .then(history => {
-            if (Array.isArray(history) && history.length > 0) {
-                chartLabels.length = 0;
-                priceData.length = 0;
-                bbUpperData.length = 0;
-                bbLowerData.length = 0;
-                history.forEach(item => {
-                    const timeLabel = item.timestamp.split(" ")[1] || item.timestamp.split("T")[1]?.slice(0, 5) || item.timestamp;
-                    chartLabels.push(timeLabel);
-                    priceData.push(item.close);
-                    bbUpperData.push(item.bb_upper);
-                    bbLowerData.push(item.bb_lower);
-                });
-                chart.update();
-            }
-        });
-    
-    if (data.risk_mode && elRiskSelect) {
-        elRiskSelect.value = data.risk_mode;
     }
 }
 
