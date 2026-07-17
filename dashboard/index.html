@@ -435,6 +435,24 @@
                         <input type="number" id="setting-max-drawdown" min="1" max="25" value="5" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 12px; width: 60px; outline: none; text-align: center;">
                     </label>
 
+                    <!-- Neural Net Learning Rate -->
+                    <label style="display: flex; justify-content: space-between; align-items: center;">
+                        <span class="tooltip" data-tooltip="Policy Gradient Neural Network backpropagation learning rate.">
+                            NN Learning Rate
+                            <i data-lucide="info" class="tooltip-icon"></i>
+                        </span>
+                        <input type="number" id="setting-nn-lr" min="0.01" max="0.99" step="0.01" value="0.15" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 12px; width: 60px; outline: none; text-align: center;">
+                    </label>
+
+                    <!-- Neural Net Weight Floor -->
+                    <label style="display: flex; justify-content: space-between; align-items: center;">
+                        <span class="tooltip" data-tooltip="Minimum strategy weight allocation floor to ensure continuous exploration.">
+                            NN Weight Floor
+                            <i data-lucide="info" class="tooltip-icon"></i>
+                        </span>
+                        <input type="number" id="setting-nn-floor" min="0.01" max="0.25" step="0.01" value="0.05" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 12px; width: 60px; outline: none; text-align: center;">
+                    </label>
+
                     <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 4px 0;">
 
                     <!-- Weekly Blog Settings -->
@@ -508,6 +526,10 @@
                             <span style="color: var(--text-muted);">Weekly Blogger Prompt:</span>
                             <textarea id="prompt-blog-text" style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 6px; padding: 6px; font-family: inherit; font-size: 10px; height: 50px; resize: vertical; outline: none;"></textarea>
                         </label>
+                        <label style="display: flex; flex-direction: column; gap: 3px; font-size: 10px;">
+                            <span style="color: var(--text-muted);">NN Optimizer Prompt:</span>
+                            <textarea id="prompt-nn-text" style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 6px; padding: 6px; font-family: inherit; font-size: 10px; height: 50px; resize: vertical; outline: none;"></textarea>
+                        </label>
                         <button class="btn btn-primary" id="save-prompts-btn" style="padding: 6px 12px; font-size: 11px; justify-content: center; font-family: inherit; margin-top: 2px;">
                             Save AI Prompts
                         </button>
@@ -544,6 +566,9 @@
                         </button>
                         <button class="btn" id="trigger-opt-params-btn" style="flex: 1; min-width: 75px; padding: 6px 8px; font-size: 10px; justify-content: center; border-color: rgba(168, 85, 247, 0.2); font-family: inherit; color: var(--neon-purple);">
                             Quant Opt
+                        </button>
+                        <button class="btn" id="trigger-opt-nn-btn" style="flex: 1; min-width: 75px; padding: 6px 8px; font-size: 10px; justify-content: center; border-color: rgba(168, 85, 247, 0.2); font-family: inherit; color: var(--neon-purple);">
+                            NN Opt
                         </button>
                         <button class="btn" id="trigger-self-dev-btn" style="flex: 1; min-width: 85px; padding: 6px 8px; font-size: 10px; justify-content: center; border-color: rgba(0, 240, 255, 0.2); font-family: inherit; color: var(--neon-blue);">
                             AI Self-Dev

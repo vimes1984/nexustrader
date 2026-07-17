@@ -15,6 +15,9 @@ python3 self_improvement_agent.py
 echo "🤖 2. Running AI Coding Assistant Self-Development..."
 python3 agent_self_developer.py
 
+echo "🤖 3. Running Neural Network Hyperparameter Self-Improvement..."
+python3 nn_agent.py
+
 echo "=========================================================="
 echo "🎉 Daily Agent tasks completed successfully!"
 echo "=========================================================="

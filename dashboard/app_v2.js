@@ -995,6 +995,10 @@ function loadBlogConfig() {
             if (elMaxDrawdownInput) elMaxDrawdownInput.value = data.max_drawdown || 5;
             if (elTpMultiplierInput) elTpMultiplierInput.value = data.tp_multiplier || 2.5;
             if (elSlMultiplierInput) elSlMultiplierInput.value = data.sl_multiplier || 1.5;
+            const elNnLr = document.getElementById("setting-nn-lr");
+            const elNnFloor = document.getElementById("setting-nn-floor");
+            if (elNnLr) elNnLr.value = data.nn_lr || 0.15;
+            if (elNnFloor) elNnFloor.value = data.nn_floor || 0.05;
         })
         .catch(err => console.error("Error loading system config:", err));
 
@@ -1005,9 +1009,11 @@ function loadBlogConfig() {
             const elQuant = document.getElementById("prompt-quant-text");
             const elDev = document.getElementById("prompt-dev-text");
             const elBlog = document.getElementById("prompt-blog-text");
+            const elNnPrompt = document.getElementById("prompt-nn-text");
             if (elQuant && data.prompt_quant) elQuant.value = data.prompt_quant;
             if (elDev && data.prompt_dev) elDev.value = data.prompt_dev;
             if (elBlog && data.prompt_blog) elBlog.value = data.prompt_blog;
+            if (elNnPrompt && data.prompt_nn) elNnPrompt.value = data.prompt_nn;
         })
         .catch(err => console.error("Error loading prompt config:", err));
 
@@ -1041,6 +1047,11 @@ if (elSaveBlogConfigBtn) {
         const tpMultiplier = elTpMultiplierInput ? parseFloat(elTpMultiplierInput.value) : 2.5;
         const slMultiplier = elSlMultiplierInput ? parseFloat(elSlMultiplierInput.value) : 1.5;
         
+        const elNnLr = document.getElementById("setting-nn-lr");
+        const elNnFloor = document.getElementById("setting-nn-floor");
+        const nnLr = elNnLr ? parseFloat(elNnLr.value) : 0.15;
+        const nnFloor = elNnFloor ? parseFloat(elNnFloor.value) : 0.05;
+
         const riskMode = elRiskSelect ? elRiskSelect.value : "conservative";
         const maxDrawdown = elMaxDrawdownInput ? parseFloat(elMaxDrawdownInput.value) : 5.0;
         
@@ -1053,7 +1064,7 @@ if (elSaveBlogConfigBtn) {
         });
         
         // 2. Save System settings
-        const saveSystemPromise = fetch(`/api/system/config?trading_mode=${tradingMode}&risk_mode=${riskMode}&max_drawdown=${maxDrawdown}&broker=${broker}&api_key=${encodeURIComponent(exchangeApiKey)}&api_secret=${encodeURIComponent(exchangeApiSecret)}&trailing_stop=${trailingStop}&cooldown=${cooldown}&tp_multiplier=${tpMultiplier}&sl_multiplier=${slMultiplier}`, {
+        const saveSystemPromise = fetch(`/api/system/config?trading_mode=${tradingMode}&risk_mode=${riskMode}&max_drawdown=${maxDrawdown}&broker=${broker}&api_key=${encodeURIComponent(exchangeApiKey)}&api_secret=${encodeURIComponent(exchangeApiSecret)}&trailing_stop=${trailingStop}&cooldown=${cooldown}&tp_multiplier=${tpMultiplier}&sl_multiplier=${slMultiplier}&nn_lr=${nnLr}&nn_floor=${nnFloor}`, {
             method: 'POST'
         });
 
@@ -1078,6 +1089,7 @@ if (elSavePromptsBtn) {
         const elQuant = document.getElementById("prompt-quant-text");
         const elDev = document.getElementById("prompt-dev-text");
         const elBlog = document.getElementById("prompt-blog-text");
+        const elNn = document.getElementById("prompt-nn-text");
         
         elBlogStatusMsg.textContent = "Saving prompt templates...";
         elBlogStatusMsg.className = "color-blue";
@@ -1086,8 +1098,9 @@ if (elSavePromptsBtn) {
         const qVal = encodeURIComponent(elQuant ? elQuant.value : "");
         const dVal = encodeURIComponent(elDev ? elDev.value : "");
         const bVal = encodeURIComponent(elBlog ? elBlog.value : "");
+        const nVal = encodeURIComponent(elNn ? elNn.value : "");
         
-        fetch(`/api/system/prompts?prompt_quant=${qVal}&prompt_dev=${dVal}&prompt_blog=${bVal}`, { method: 'POST' })
+        fetch(`/api/system/prompts?prompt_quant=${qVal}&prompt_dev=${dVal}&prompt_blog=${bVal}&prompt_nn=${nVal}`, { method: 'POST' })
             .then(res => res.json())
             .then(data => {
                 elSavePromptsBtn.disabled = false;
@@ -1241,6 +1254,36 @@ if (elOptParamsBtn) {
             .catch(err => {
                 elOptParamsBtn.disabled = false;
                 elBlogStatusMsg.textContent = "Error optimizing parameters.";
+                elBlogStatusMsg.className = "color-red";
+                console.error(err);
+            });
+    });
+}
+
+const elOptNnBtn = document.getElementById("trigger-opt-nn-btn");
+if (elOptNnBtn) {
+    elOptNnBtn.addEventListener("click", () => {
+        elBlogStatusMsg.textContent = "AI Agent optimizing Neural Network settings...";
+        elBlogStatusMsg.className = "color-blue";
+        elOptNnBtn.disabled = true;
+
+        fetch("/api/system/optimize/nn", { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                elOptNnBtn.disabled = false;
+                if (data.status === "success") {
+                    elBlogStatusMsg.textContent = "Neural Network settings optimized!";
+                    elBlogStatusMsg.className = "color-green";
+                    alert("Neural Network Self-Improvement optimization completed successfully!\n\n" + data.log);
+                    setTimeout(() => { elBlogStatusMsg.textContent = ""; }, 5000);
+                } else {
+                    elBlogStatusMsg.textContent = `Error: ${data.error || "failed"}`;
+                    elBlogStatusMsg.className = "color-red";
+                }
+            })
+            .catch(err => {
+                elOptNnBtn.disabled = false;
+                elBlogStatusMsg.textContent = "Error optimizing Neural Network.";
                 elBlogStatusMsg.className = "color-red";
                 console.error(err);
             });

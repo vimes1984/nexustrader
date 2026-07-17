@@ -843,11 +843,13 @@ def get_system_config():
         "tp_multiplier": float(database.load_setting("opt_tp_multiplier", "2.5")),
         "sl_multiplier": float(database.load_setting("opt_sl_multiplier", "1.5")),
         "risk_mode": database.load_setting("risk_mode", "conservative"),
-        "max_drawdown": float(database.load_setting("max_daily_drawdown", "5.0"))
+        "max_drawdown": float(database.load_setting("max_daily_drawdown", "5.0")),
+        "nn_lr": float(database.load_setting("nn_learning_rate", "0.15")),
+        "nn_floor": float(database.load_setting("nn_weight_floor", "0.05"))
     }
 
 @app.post("/api/system/config")
-def update_system_config(trading_mode: str, risk_mode: str, max_drawdown: float, broker: str = "kraken", api_key: str = "", api_secret: str = "", trailing_stop: bool = False, cooldown: float = 4.0, tp_multiplier: float = 2.5, sl_multiplier: float = 1.5):
+def update_system_config(trading_mode: str, risk_mode: str, max_drawdown: float, broker: str = "kraken", api_key: str = "", api_secret: str = "", trailing_stop: bool = False, cooldown: float = 4.0, tp_multiplier: float = 2.5, sl_multiplier: float = 1.5, nn_lr: float = 0.15, nn_floor: float = 0.05):
     # 1. Update config.json
     config_path = os.path.expanduser("~/.nexustrader/config.json")
     cfg = {}
@@ -895,7 +897,9 @@ def update_system_config(trading_mode: str, risk_mode: str, max_drawdown: float,
     database.save_setting("loss_cooldown_hours", str(cooldown))
     database.save_setting("opt_tp_multiplier", str(tp_multiplier))
     database.save_setting("opt_sl_multiplier", str(sl_multiplier))
-    logging.info(f"Trailing Stop: {trailing_stop}, Cooldown: {cooldown}h, TP mult: {tp_multiplier}x, SL mult: {sl_multiplier}x updated.")
+    database.save_setting("nn_learning_rate", str(nn_lr))
+    database.save_setting("nn_weight_floor", str(nn_floor))
+    logging.info(f"Trailing Stop: {trailing_stop}, Cooldown: {cooldown}h, TP mult: {tp_multiplier}x, SL mult: {sl_multiplier}x, NN lr: {nn_lr}, NN floor: {nn_floor} updated.")
     
     return {"status": "success"}
 
@@ -1117,6 +1121,19 @@ def trigger_self_development():
         logging.error(f"Error in manual AI self-development: {e}")
         return {"status": "error", "error": str(e)}
 
+@app.post("/api/system/optimize/nn")
+def trigger_nn_optimization():
+    try:
+        from nn_agent import run_nn_self_improvement
+        res = run_nn_self_improvement()
+        if res.startswith("Success"):
+            return {"status": "success", "log": res}
+        else:
+            return {"status": "error", "error": res}
+    except Exception as e:
+        logging.error(f"Error in manual Neural Network optimization: {e}")
+        return {"status": "error", "error": str(e)}
+
 DEFAULT_PROMPT_QUANT = """You are a world-class Quantitative Researcher, PhD in Mathematical Finance, and elite risk manager critically evaluating the performance of the NexusTrader self-learning ensemble bot.
 
 Our core operational mandate is to scale net returns to a stable, risk-adjusted target of $1,000 USD per day while strictly minimizing maximum drawdown (MDD) and tail risk.
@@ -1140,34 +1157,47 @@ At the very end of your response, output a strict JSON block specifying the exac
 }
 ```"""
 
-DEFAULT_PROMPT_DEV = """You are Antigravity, an elite autonomous AI software engineer. Your goal is to improve the NexusTrader algorithmic trading bot codebase.
-Our mission is to build features and UI visualizations that help the bot consistently earn $1,000 USD a day by giving the trader better indicators, diagnostic data, or performance controls.
+DEFAULT_PROMPT_DEV = """You are Antigravity, a world-class Principal AI Software Architect.
+Our core mission is to construct software modules, advanced UI visualizations, and diagnostic dashboards that enable the bot to achieve $1,000 USD/day.
 
-Identify ONE specific, clean, non-breaking improvement or feature to implement. 
-Return your response STRICTLY in JSON format containing "explanation" and "modifications" find-and-replace rules.
-"""
+Design and implement ONE clean, production-grade, non-breaking feature or UI widget (e.g., real-time expected value gauges, risk-exposure alerts, or performance tables).
+Return your response STRICTLY in JSON format containing "explanation" and "modifications" find-and-replace rules."""
 
-DEFAULT_PROMPT_BLOG = """You are an expert quantitative researcher, financial blogger, and algorithmic trading editor. 
-Our mission is to help the NexusTrader bot scale to a target of earning $1,000 USD a day.
+DEFAULT_PROMPT_BLOG = """You are a high-caliber Financial Journalist and Senior Quantitative Writer.
+Produce an elite, data-driven weekly performance report on the NexusTrader system.
+Frame the narrative around our strategic trajectory toward the $1,000 USD/day capital-scaling goal.
 
-Rewrite the raw report data into a highly detailed, witty, professional, and engaging market-commentary blog post.
-Analyze metrics, explain profit factors, detail policy weights, and discuss the bot's mathematical evolution.
+Explain model updates, probability distributions, and policy gradient shifts in an engaging, institutional-grade style.
 Keep all quantitative tables intact."""
+
+DEFAULT_PROMPT_NN = """You are a world-class Deep Learning Engineer and Neuro-Symbolic Quantitative Researcher.
+Our goal is to optimize the policy gradient neural network of the NexusTrader bot to enable it to safely scale earnings to $1,000 USD a day.
+
+Critique the learning rate, weight floor, and policy network convergence based on the latest training steps.
+At the very end of your response, output recommended setting adjustments strictly in a JSON block:
+```json
+{
+  "recommended_nn_learning_rate": float,
+  "recommended_nn_weight_floor": float
+}
+```"""
 
 @app.get("/api/system/prompts")
 def get_prompts():
     return {
         "prompt_quant": database.load_setting("prompt_self_improvement", DEFAULT_PROMPT_QUANT),
         "prompt_dev": database.load_setting("prompt_self_developer", DEFAULT_PROMPT_DEV),
-        "prompt_blog": database.load_setting("prompt_blog_agent", DEFAULT_PROMPT_BLOG)
+        "prompt_blog": database.load_setting("prompt_blog_agent", DEFAULT_PROMPT_BLOG),
+        "prompt_nn": database.load_setting("prompt_nn_agent", DEFAULT_PROMPT_NN)
     }
 
 @app.post("/api/system/prompts")
-def update_prompts(prompt_quant: str, prompt_dev: str, prompt_blog: str):
+def update_prompts(prompt_quant: str, prompt_dev: str, prompt_blog: str, prompt_nn: str):
     try:
         database.save_setting("prompt_self_improvement", prompt_quant)
         database.save_setting("prompt_self_developer", prompt_dev)
         database.save_setting("prompt_blog_agent", prompt_blog)
+        database.save_setting("prompt_nn_agent", prompt_nn)
         return {"status": "success"}
     except Exception as e:
         return {"status": "error", "error": str(e)}
