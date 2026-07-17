@@ -921,22 +921,29 @@ function updatePerformanceKPIs(trades, currentEquity) {
     elWinrate.textContent = `${wr.toFixed(1)}%`;
     elTradeCount.textContent = `${trades.length} trades completed`;
     
-    // 1. Calculate Realized PnL from trades
-    const realizedPnL = trades.reduce((sum, t) => sum + t.pnl, 0);
+    let netPnL = 0.0;
     
-    // 2. Calculate Unrealized PnL from active position
-    let unrealizedPnL = 0.0;
-    if (activePosition && currentPrice > 0) {
-        const entry = activePosition.entry_price;
-        const qty = activePosition.quantity;
-        if (activePosition.direction === "BUY") {
-            unrealizedPnL = (currentPrice - entry) * qty;
-        } else {
-            unrealizedPnL = (entry - currentPrice) * qty;
+    if (globalTradingMode === "live") {
+        // In live mode, calculate net profit directly from Kraken portfolio value (current equity) - starting balance
+        netPnL = currentEquity - initialBalance;
+    } else {
+        // 1. Calculate Realized PnL from trades
+        const realizedPnL = trades.reduce((sum, t) => sum + t.pnl, 0);
+        
+        // 2. Calculate Unrealized PnL from active position
+        let unrealizedPnL = 0.0;
+        if (activePosition && currentPrice > 0) {
+            const entry = activePosition.entry_price;
+            const qty = activePosition.quantity;
+            if (activePosition.direction === "BUY") {
+                unrealizedPnL = (currentPrice - entry) * qty;
+            } else {
+                unrealizedPnL = (entry - currentPrice) * qty;
+            }
         }
+        netPnL = realizedPnL + unrealizedPnL;
     }
     
-    const netPnL = realizedPnL + unrealizedPnL;
     const netPct = initialBalance > 0 ? (netPnL / initialBalance) * 100 : 0.0;
     
     elTotalPnL.textContent = `${netPnL >= 0 ? '+' : ''}$${netPnL.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
