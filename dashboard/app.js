@@ -497,6 +497,17 @@ function switchTicker(ticker) {
             renderWeights(currentWeights);
         })
         .catch(err => console.error("Error loading weights:", err));
+        
+    // Update active position/evaluation display for the new ticker from latest socket tick
+    const tick = tickerLatest[ticker];
+    if (tick) {
+        handleTick(tick);
+    } else {
+        elPrice.textContent = "€0.00";
+        elUnrealized.textContent = "Active Trade Profit: €0.00 (0.00%)";
+        elUnrealized.className = "kpi-sub";
+        elPositionDetails.innerHTML = `<p style="font-size: 13px; color: var(--text-muted); text-align: center; padding: 20px;">No Trade Currently Open</p>`;
+    }
 }
 
 function switchPortfolioMode(enable) {
@@ -559,18 +570,6 @@ function loadPortfolioHistory() {
             }
         })
         .catch(err => console.error("Error loading portfolio history:", err));
-}
-        
-    // Update active position/evaluation display for the new ticker from latest socket tick
-    const tick = tickerLatest[ticker];
-    if (tick) {
-        handleTick(tick);
-    } else {
-        elPrice.textContent = "€0.00";
-        elUnrealized.textContent = "Active Trade Profit: €0.00 (0.00%)";
-        elUnrealized.className = "kpi-sub";
-        elPositionDetails.innerHTML = `<p style="font-size: 13px; color: var(--text-muted); text-align: center; padding: 20px;">No Trade Currently Open</p>`;
-    }
 }
 
 function handleTradeOpened(data) {
