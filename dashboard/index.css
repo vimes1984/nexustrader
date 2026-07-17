@@ -267,13 +267,13 @@ header {
 /* Lower Section */
 .bottom-content {
     display: grid;
-    grid-template-columns: 1.5fr 1fr 1fr;
+    grid-template-columns: 1.4fr 1fr;
     gap: 20px;
 }
 
 .table-panel {
+    grid-row: span 2;
     padding: 24px;
-    height: 380px;
     display: flex;
     flex-direction: column;
 }
@@ -440,10 +440,14 @@ input[type="range"]::-webkit-slider-thumb {
 @media (max-width: 1200px) {
     .dashboard-grid {
         grid-template-columns: repeat(2, 1fr);
-    }
-    .main-content, .bottom-content {
-        grid-template-columns: 1fr;
-    }
+     }
+     .main-content, .bottom-content {
+         grid-template-columns: 1fr;
+     }
+     .table-panel {
+         grid-row: auto;
+         height: 380px;
+     }
 }
 
 @media (max-width: 768px) {
