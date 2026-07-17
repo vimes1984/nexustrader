@@ -68,6 +68,12 @@ class NexusTraderOrchestrator:
                 logging.info(f"Loaded risk mode from database: {db_risk_mode}")
             except Exception as e:
                 logging.error(f"Error loading risk mode from DB: {e}")
+                
+        # Sync cash balance with live broker if in live mode
+        try:
+            self.execution_engine.sync_live_balance()
+        except Exception as e:
+            logging.error(f"Error synchronizing live balance at startup: {e}")
         
         # Initialize each ticker independently
         for ticker in self.tickers:
@@ -174,6 +180,16 @@ class NexusTraderOrchestrator:
         row['sentiment'] = self.latest_sentiments.get(ticker, 0.0)
         row['sentiment_sources'] = self.latest_source_sentiments.get(ticker, {})
         
+        # Periodically sync live balance (every 30 ticks across tickers)
+        if not hasattr(self, "_tick_count"):
+            self._tick_count = 0
+        self._tick_count += 1
+        if self._tick_count % 30 == 0:
+            try:
+                self.execution_engine.sync_live_balance()
+            except Exception as e:
+                logging.error(f"Error in periodic live balance sync: {e}")
+
         self.latest_ticks[ticker] = row
         current_price = float(row['close'])
         atr = row.get('atr', None)
@@ -666,6 +682,9 @@ async def websocket_endpoint(websocket: WebSocket):
             "tickers": orchestrator.tickers,
             "ticker": first_ticker,
             "balance": orchestrator.execution_engine.balance,
+            "initial_balance": orchestrator.execution_engine.initial_balance,
+            "trading_mode": orchestrator.execution_engine.trading_mode,
+            "broker": orchestrator.execution_engine.config.get("broker", "kraken"),
             "weights": {
                 ensemble.strategies[i].name: float(ensemble.weights[i])
                 for i in range(len(ensemble.weights))

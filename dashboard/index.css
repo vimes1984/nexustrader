@@ -84,9 +84,9 @@ header {
 }
 
 .status-badge {
-    background: rgba(16, 185, 129, 0.1);
-    border: 1px solid var(--neon-green);
-    color: var(--neon-green);
+    background: rgba(0, 240, 255, 0.1);
+    border: 1px solid var(--neon-blue);
+    color: var(--neon-blue);
     padding: 6px 14px;
     border-radius: 20px;
     font-size: 13px;
@@ -96,6 +96,12 @@ header {
     gap: 6px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+}
+
+.status-badge.live {
+    background: rgba(16, 185, 129, 0.1);
+    border-color: var(--neon-green);
+    color: var(--neon-green);
 }
 
 .status-badge.stopped {

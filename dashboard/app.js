@@ -135,7 +135,6 @@ function connectWebSocket() {
 
     socket.onopen = () => {
         console.log("WebSocket connected.");
-        document.getElementById("status-text").textContent = "Simulating";
         document.getElementById("bot-status").classList.remove("stopped");
     };
 
@@ -184,6 +183,37 @@ function handleSocketMessage(msg) {
 function handleInitState(data) {
     document.getElementById("chart-ticker-title").textContent = data.ticker;
     balance = data.balance;
+    if (data.initial_balance !== undefined) {
+        initialBalance = data.initial_balance;
+    }
+    
+    // Toggle controls and status badges based on trading mode (live vs paper)
+    const tradingMode = data.trading_mode || "paper";
+    const brokerName = data.broker || "kraken";
+    const statusTextEl = document.getElementById("status-text");
+    const botStatusEl = document.getElementById("bot-status");
+    const speedEl = document.getElementById("speed-slider") ? document.getElementById("speed-slider").parentElement : null;
+    const playPauseBtn = document.getElementById("play-pause-btn");
+    const resetBtn = document.getElementById("reset-btn");
+    
+    if (tradingMode === "live") {
+        if (statusTextEl) statusTextEl.textContent = `Live (${brokerName.toUpperCase()})`;
+        if (botStatusEl) {
+            botStatusEl.className = "status-badge live";
+        }
+        if (speedEl) speedEl.style.display = "none";
+        if (playPauseBtn) playPauseBtn.style.display = "none";
+        if (resetBtn) resetBtn.style.display = "none";
+    } else {
+        if (statusTextEl) statusTextEl.textContent = "Simulating";
+        if (botStatusEl) {
+            botStatusEl.className = "status-badge";
+        }
+        if (speedEl) speedEl.style.display = "flex";
+        if (playPauseBtn) playPauseBtn.style.display = "flex";
+        if (resetBtn) resetBtn.style.display = "flex";
+    }
+    
     currentWeights = data.weights;
     renderWeights(currentWeights);
     renderTradeLog(data.trades);

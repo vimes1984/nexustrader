@@ -149,34 +149,97 @@ class DataIngestion:
         logging.info(f"Live data stream started. Polling every {interval_seconds}s...")
 
     def _run_live_polling(self, interval):
+        import json
+        import os
+        
+        config_path = os.path.expanduser("~/.nexustrader/config.json")
+        use_ccxt = False
+        broker_type = "kraken"
+        api_key = ""
+        api_secret = ""
+        
+        if os.path.exists(config_path):
+            try:
+                with open(config_path, "r") as f:
+                    cfg = json.load(f)
+                if cfg.get("trading_mode") == "live":
+                    broker_type = cfg.get("broker", "kraken").lower()
+                    creds = cfg.get("api_credentials", {})
+                    api_key = creds.get("api_key", "")
+                    api_secret = creds.get("api_secret", "")
+                    if api_key and api_secret:
+                        use_ccxt = True
+            except Exception:
+                pass
+
+        # If ccxt is available and we want live mode, initialize exchange client
+        exchange = None
+        if use_ccxt:
+            try:
+                import ccxt
+                if hasattr(ccxt, broker_type):
+                    exchange_class = getattr(ccxt, broker_type)
+                    exchange = exchange_class({
+                        'apiKey': api_key,
+                        'secret': api_secret,
+                        'enableRateLimit': True,
+                    })
+                    logging.info(f"[LIVE POLLING] Initialized live ticker polling from exchange: {broker_type.upper()}")
+            except Exception as e:
+                logging.error(f"[LIVE POLLING ERROR] Failed to initialize ccxt for polling: {e}")
+                exchange = None
+
         while self.streaming:
             try:
-                ticker_obj = yf.Ticker(self.ticker)
-                # Fetch recent history
-                df = ticker_obj.history(period="1d", interval="1m")
-                if not df.empty:
-                    last_row = df.iloc[-1]
-                    price = float(last_row['Close'])
-                    self.live_price = price
-                    
-                    # Package row
-                    row = {
-                        'timestamp': df.index[-1],
-                        'open': float(last_row['Open']),
-                        'high': float(last_row['High']),
-                        'low': float(last_row['Low']),
-                        'close': price,
-                        'volume': float(last_row['Volume'])
-                    }
-                    
-                    # Compute indicators on the fly by appending to historical data
-                    # (Simplified for live polling updates)
+                price = None
+                row = None
+                
+                # Try live exchange polling via CCXT
+                if exchange is not None:
+                    try:
+                        ccxt_symbol = self.ticker.replace("-", "/")
+                        ticker_data = exchange.fetch_ticker(ccxt_symbol)
+                        price = float(ticker_data['last'])
+                        self.live_price = price
+                        
+                        # Fetch OHLCV or construct from history
+                        if not self.data.empty:
+                            last_row = self.data.iloc[-1]
+                            row = {
+                                'timestamp': pd.Timestamp.now(),
+                                'open': float(last_row['close']), # current open is previous close
+                                'high': max(float(last_row['close']), price),
+                                'low': min(float(last_row['close']), price),
+                                'close': price,
+                                'volume': 0.0
+                            }
+                    except Exception as e:
+                        logging.error(f"[LIVE EXCHANGE POLLING FAILED] {e}. Falling back to yfinance.")
+                        price = None
+                
+                # Fallback to yfinance if not CCXT or CCXT failed
+                if price is None:
+                    ticker_obj = yf.Ticker(self.ticker)
+                    df = ticker_obj.history(period="1d", interval="1m")
+                    if not df.empty:
+                        last_row = df.iloc[-1]
+                        price = float(last_row['Close'])
+                        self.live_price = price
+                        row = {
+                            'timestamp': df.index[-1],
+                            'open': float(last_row['Open']),
+                            'high': float(last_row['High']),
+                            'low': float(last_row['Low']),
+                            'close': price,
+                            'volume': float(last_row['Volume'])
+                        }
+                
+                if row is not None:
+                    # Append and recompute technical indicators
                     self.data = pd.concat([self.data, pd.DataFrame([row])]).drop_duplicates(subset=['timestamp'])
                     self.compute_technical_indicators()
                     
-                    # Get the updated row with technical indicators
                     updated_row = self.data.iloc[-1].to_dict()
-                    
                     # Notify subscribers
                     for callback in self.subscribers:
                         callback(updated_row)

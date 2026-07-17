@@ -57,6 +57,13 @@ class ExecutionEngine:
             database.save_setting("portfolio_balance", self.balance)
             logging.info(f"Initialized portfolio balance in DB: €{self.balance:.2f}")
             
+        db_init_balance = database.load_setting("initial_portfolio_balance")
+        if db_init_balance is not None:
+            self.initial_balance = float(db_init_balance)
+        else:
+            self.initial_balance = self.balance
+            database.save_setting("initial_portfolio_balance", str(self.balance))
+            
         # Load closed trades from DB
         self.closed_trades = database.load_trades()
         logging.info(f"Loaded {len(self.closed_trades)} closed trades from DB.")
@@ -64,11 +71,51 @@ class ExecutionEngine:
         self.learning_callback = None
         self.pending_limit_orders = {}  # symbol -> pending order dict
 
+    def sync_live_balance(self):
+        """Syncs the balance with the live broker if trading_mode is 'live'."""
+        if self.trading_mode != "live":
+            return
+            
+        broker_type = self.config.get("broker", "kraken").lower()
+        creds = self.config.get("api_credentials", {})
+        api_key = creds.get("api_key", "")
+        api_secret = creds.get("api_secret", "")
+        
+        if not api_key or not api_secret:
+            return
+            
+        try:
+            import ccxt
+            exchange_class = getattr(ccxt, broker_type)
+            exchange = exchange_class({
+                'apiKey': api_key,
+                'secret': api_secret,
+                'enableRateLimit': True,
+            })
+            balance_info = exchange.fetch_balance()
+            
+            # Use EUR (our primary quote currency)
+            eur_total = float(balance_info.get('EUR', {}).get('total', 0.0))
+            if eur_total > 0:
+                self.balance = eur_total
+                database.save_setting("portfolio_balance", str(self.balance))
+                
+                # Check if it was default initial balance
+                db_init_balance = database.load_setting("initial_portfolio_balance")
+                if db_init_balance is None or float(db_init_balance) == 100.0:
+                    self.initial_balance = eur_total
+                    database.save_setting("initial_portfolio_balance", str(eur_total))
+                    logging.info(f"[LIVE BALANCE] Set initial portfolio baseline to: €{eur_total:.2f}")
+                    
+                logging.info(f"[LIVE BALANCE SYNC] Synchronized cash balance: €{self.balance:.2f}")
+        except Exception as e:
+            logging.error(f"[LIVE BALANCE SYNC ERROR] Failed to fetch live balance: {e}")
+
     def execute_order_on_broker(self, symbol, side, qty, price):
-        """Sends order to live broker API if trading_mode is 'live'."""
+        """Sends order to live broker API if trading_mode is 'live'. Returns (success, actual_qty)."""
         if self.trading_mode != "live":
             logging.info(f"[PAPER TRADING] Simulating order execution: {side.upper()} {qty:.4f} {symbol} @ {price:.2f}")
-            return True
+            return True, qty
             
         broker_type = self.config.get("broker", "kraken").lower()
         creds = self.config.get("api_credentials", {})
@@ -77,15 +124,15 @@ class ExecutionEngine:
         
         if not api_key or not api_secret:
             logging.error("[LIVE TRADING ERROR] Missing API credentials in config.json. Aborting order execution!")
-            return False
+            return False, qty
             
         ccxt_symbol = symbol.replace("-", "/")
-        logging.info(f"[LIVE TRADING] Sending order to {broker_type.upper()}: {side.upper()} {qty:.4f} {ccxt_symbol} @ {price:.2f}")
+        logging.info(f"[LIVE TRADING] Preparing order for {broker_type.upper()}: {side.upper()} {qty:.4f} {ccxt_symbol} @ {price:.2f}")
         try:
             import ccxt
             if not hasattr(ccxt, broker_type):
                 logging.error(f"[LIVE TRADING ERROR] Broker '{broker_type}' is not supported by ccxt library.")
-                return False
+                return False, qty
                 
             exchange_class = getattr(ccxt, broker_type)
             exchange = exchange_class({
@@ -94,28 +141,44 @@ class ExecutionEngine:
                 'enableRateLimit': True,
             })
             
-            # Load markets to obtain asset precisions
+            # Load markets to obtain asset precisions and limits
             exchange.load_markets()
             
             if ccxt_symbol not in exchange.markets:
                 logging.error(f"[LIVE TRADING ERROR] Market symbol '{ccxt_symbol}' not found on exchange {broker_type.upper()}.")
-                return False
+                return False, qty
                 
+            market = exchange.markets[ccxt_symbol]
+            min_amount = market.get('limits', {}).get('amount', {}).get('min', 0.0) or 0.0
+            min_cost = market.get('limits', {}).get('cost', {}).get('min', 0.0) or 0.0
+            
+            # Adjust qty to meet min amount
+            adjusted_qty = max(qty, min_amount)
+            
+            # Adjust qty to meet min cost
+            if price > 0:
+                cost = adjusted_qty * price
+                if cost < min_cost:
+                    adjusted_qty = min_cost / price
+            
             # Round quantity to exchange precision
-            amount = float(exchange.amount_to_precision(ccxt_symbol, qty))
+            amount = float(exchange.amount_to_precision(ccxt_symbol, adjusted_qty))
             if amount <= 0:
                 logging.error(f"[LIVE TRADING ERROR] Calculated execution quantity {amount} rounded to 0. Order aborted.")
-                return False
+                return False, qty
+                
+            if amount != qty:
+                logging.info(f"[LIVE TRADING LIMITS] Adjusted execution quantity from {qty:.6f} to {amount:.6f} to meet exchange limits (Min Amt: {min_amount}, Min Cost: {min_cost})")
                 
             # Execute market order on live exchange
             logging.info(f"[LIVE TRADING EXECUTE] Routing market {side.upper()} order for {amount} {ccxt_symbol}...")
             order = exchange.create_order(ccxt_symbol, 'market', side.lower(), amount)
             
             logging.info(f"[LIVE TRADING SUCCESS] Placed order on {broker_type.upper()}: ID={order.get('id')}, Status={order.get('status')}, Filled={order.get('filled')}")
-            return True
+            return True, amount
         except Exception as e:
             logging.error(f"[LIVE TRADING EXCEPTION] Failed to place live order: {e}")
-            return False
+            return False, qty
 
     def set_learning_callback(self, callback):
         """Callback to execute when a trade closes, returning learning results."""
@@ -147,7 +210,7 @@ class ExecutionEngine:
 
         if self.trading_mode == "live":
             # For live trading, execute immediately on the broker API
-            success = self.execute_order_on_broker(symbol, direction.lower(), quantity, entry_price)
+            success, actual_qty = self.execute_order_on_broker(symbol, direction.lower(), quantity, entry_price)
             if not success:
                 logging.error(f"Could not execute entry order for {symbol} on live broker. Position aborted.")
                 return False
@@ -159,7 +222,7 @@ class ExecutionEngine:
                 "symbol": symbol,
                 "direction": direction,
                 "entry_price": entry_price,
-                "quantity": quantity,
+                "quantity": actual_qty,
                 "take_profit": tp,
                 "stop_loss": sl,
                 "entry_time": time.time(),
@@ -167,7 +230,7 @@ class ExecutionEngine:
                 "sentiment_sources": evaluation.get("sentiment_sources", {}),
                 "fee_paid": fee
             }
-            logging.info(f"Opened live {direction} position for {symbol}: Qty {quantity:.4f} at {entry_price:.2f}. Fee: {fee:.2f}")
+            logging.info(f"Opened live {direction} position for {symbol}: Qty {actual_qty:.6f} at {entry_price:.2f}. Fee: {fee:.2f}")
             return True
         else:
             # For paper trading, place a simulated limit order
@@ -305,6 +368,10 @@ class ExecutionEngine:
             
             # Save updated balance to DB
             database.save_setting("portfolio_balance", self.balance)
+            
+            # If live mode, sync balance directly from the exchange
+            if self.trading_mode == "live":
+                self.sync_live_balance()
             
             pnl_percent = (pnl_after_fee) / (original_value + 1e-9)
 
