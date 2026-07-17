@@ -1,6 +1,7 @@
 // App.js for NexusTrader Dashboard
 let socket = null;
 let chart = null;
+let weightsChart = null;
 
 // Chart state
 const maxChartPoints = 40;
@@ -863,7 +864,7 @@ elPlayPauseBtn.addEventListener("click", () => {
     const action = isStopped ? "stop" : "start";
     const speed = parseFloat(elSpeedSlider.value);
     
-    fetch(`/api/control?action=${action}&speed=${speed}`, { method: 'POST' })
+    fetch(`/api/control?action=${action}&speed=${speed}&mode=${globalTradingMode === 'live' ? 'live' : 'simulation'}`, { method: 'POST' })
         .then(res => res.json())
         .then(data => {
             if (isStopped) {
@@ -874,7 +875,7 @@ elPlayPauseBtn.addEventListener("click", () => {
             } else {
                 elPlayPauseText.textContent = "Pause";
                 elPlayPauseBtn.querySelector("i").setAttribute("data-lucide", "pause");
-                document.getElementById("status-text").textContent = "Simulating";
+                document.getElementById("status-text").textContent = globalTradingMode === 'live' ? `Live (${globalBrokerName.toUpperCase()})` : "Simulating";
                 document.getElementById("bot-status").classList.remove("stopped");
             }
             lucide.createIcons();
@@ -887,7 +888,7 @@ elSpeedSlider.addEventListener("input", (e) => {
     
     if (!isStopped) {
         // Update speed on the fly
-        fetch(`/api/control?action=start&speed=${val}`, { method: 'POST' });
+        fetch(`/api/control?action=start&speed=${val}&mode=${globalTradingMode === 'live' ? 'live' : 'simulation'}`, { method: 'POST' });
     }
 });
 
@@ -1852,6 +1853,99 @@ if (elRiskAuditBtn) {
                 console.error(err);
             });
     });
+}
+
+// -------------------------------------------------------------
+// Load & Render Strategy Allocation Convergence Chart
+// -------------------------------------------------------------
+function loadWeightsChart() {
+    const canvas = document.getElementById("weights-history-chart");
+    if (!canvas) return;
+
+    fetch(`/api/weights/history?ticker=${activeTicker}&t=${Date.now()}`)
+        .then(res => res.json())
+        .then(data => {
+            if (!data || data.length === 0) {
+                console.log("No weights history found for", activeTicker);
+                return;
+            }
+
+            const labels = data.map((d, index) => `Step ${index + 1}`);
+            const strategies = Object.keys(data[0].weights || {});
+
+            const strategyColors = {
+                "EMA Cross": "#00f0ff",      // Neon Blue
+                "RSI Volatility": "#a855f7", // Neon Purple
+                "Bollinger Bands": "#10b981",// Neon Green
+                "Kalman Filter": "#f43f5e",  // Neon Red
+                "Sentiment Net": "#f59e0b",  // Neon Orange
+                "Random Forest": "#ec4899",  // Neon Pink
+                "Neural Policy": "#3b82f6"   // Light Blue
+            };
+
+            const datasets = strategies.map(strat => {
+                const color = strategyColors[strat] || "#64748b";
+                return {
+                    label: strat,
+                    data: data.map(d => (d.weights[strat] || 0) * 100),
+                    borderColor: color,
+                    backgroundColor: color + "1a",
+                    borderWidth: 2,
+                    pointRadius: 1,
+                    tension: 0.3
+                };
+            });
+
+            if (weightsChart) {
+                weightsChart.data.labels = labels;
+                weightsChart.data.datasets = datasets;
+                weightsChart.update();
+            } else {
+                const ctx = canvas.getContext("2d");
+                weightsChart = new Chart(ctx, {
+                    type: "line",
+                    data: {
+                        labels: labels,
+                        datasets: datasets
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: true,
+                                position: "top",
+                                labels: {
+                                    color: "#94a3b8",
+                                    font: { size: 10, family: "Space Grotesk" }
+                                }
+                            },
+                            tooltip: {
+                                mode: "index",
+                                intersect: false
+                            }
+                        },
+                        scales: {
+                            x: {
+                                grid: { color: "rgba(255, 255, 255, 0.02)" },
+                                ticks: { color: "#64748b", font: { size: 9 } }
+                            },
+                            y: {
+                                grid: { color: "rgba(255, 255, 255, 0.05)" },
+                                ticks: {
+                                    color: "#64748b",
+                                    font: { size: 9 },
+                                    callback: function(val) { return val + "%"; }
+                                },
+                                min: 0,
+                                max: 100
+                            }
+                        }
+                    }
+                });
+            }
+        })
+        .catch(err => console.error("Error loading weights chart data:", err));
 }
 
 // Populate NN values in Neural tab from config values on load
