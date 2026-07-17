@@ -222,7 +222,7 @@ class NexusTraderOrchestrator:
         if not hasattr(self, "last_equity_log_time") or now_time - self.last_equity_log_time >= 3600:
             self.last_equity_log_time = now_time
             try:
-                init_bal_str = database.get_setting("initial_portfolio_balance")
+                init_bal_str = database.load_setting("initial_portfolio_balance")
                 init_bal = float(init_bal_str) if init_bal_str else 100.0
                 conn = sqlite3.connect(database.DB_PATH)
                 cursor = conn.cursor()
@@ -516,7 +516,7 @@ def get_trades():
 @app.get("/api/portfolio/history")
 def get_portfolio_history(timeframe: str = "1W"):
     try:
-        init_bal_str = database.get_setting("initial_portfolio_balance")
+        init_bal_str = database.load_setting("initial_portfolio_balance")
         init_bal = float(init_bal_str) if init_bal_str else 100.0
         
         now = time.time()

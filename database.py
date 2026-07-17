@@ -10,6 +10,7 @@ def get_data_dir():
     return data_dir
 
 DB_FILE = os.path.join(get_data_dir(), "nexustrader.db")
+DB_PATH = DB_FILE
 
 def get_db_connection():
     conn = sqlite3.connect(DB_FILE)
