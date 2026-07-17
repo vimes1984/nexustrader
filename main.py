@@ -1,6 +1,7 @@
 import json
 import logging
 import asyncio
+import sqlite3
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
