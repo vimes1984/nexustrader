@@ -493,6 +493,10 @@ def update_system_config(trading_mode: str, risk_mode: str, max_drawdown: float,
         orchestrator.probability_engine.set_risk_mode(risk_mode)
         database.save_setting("risk_mode", risk_mode)
         logging.info(f"System Risk Mode updated to: {risk_mode}")
+        orchestrator._run_async(orchestrator.broadcast_message({
+            "type": "risk_mode_updated",
+            "risk_mode": risk_mode
+        }))
         
     # 3. Update Max Drawdown
     database.save_setting("max_daily_drawdown", str(max_drawdown))
@@ -511,6 +515,10 @@ def update_system_risk_mode(risk_mode: str):
         orchestrator.probability_engine.set_risk_mode(risk_mode)
         database.save_setting("risk_mode", risk_mode)
         logging.info(f"System Risk Mode updated to: {risk_mode}")
+        orchestrator._run_async(orchestrator.broadcast_message({
+            "type": "risk_mode_updated",
+            "risk_mode": risk_mode
+        }))
         return {"status": "success", "risk_mode": risk_mode}
     return {"error": "Invalid risk mode"}
 

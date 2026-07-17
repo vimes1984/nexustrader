@@ -174,6 +174,9 @@ function handleSocketMessage(msg) {
         case "learning_update":
             handleLearningUpdate(msg);
             break;
+        case "risk_mode_updated":
+            if (elRiskSelect) elRiskSelect.value = msg.risk_mode;
+            break;
     }
 }
 
@@ -448,7 +451,7 @@ function renderTradeLog(trades) {
 
 function renderTradeClosedState(closedTrade) {
     // Re-fetch all trades and update statistics
-    fetch("/api/trades")
+    fetch(`/api/trades?t=${Date.now()}`)
         .then(res => res.json())
         .then(trades => {
             renderTradeLog(trades);
@@ -596,7 +599,7 @@ const elMaxDrawdownInput = document.getElementById("setting-max-drawdown");
 
 function loadBlogConfig() {
     // 1. Fetch Blog configurations
-    fetch("/api/blog/config")
+    fetch(`/api/blog/config?t=${Date.now()}`)
         .then(res => res.json())
         .then(data => {
             if (elBlogEnabledCheck) elBlogEnabledCheck.checked = data.blog_enabled;
@@ -607,7 +610,7 @@ function loadBlogConfig() {
         .catch(err => console.error("Error loading blog config:", err));
 
     // 2. Fetch System configurations
-    fetch("/api/system/config")
+    fetch(`/api/system/config?t=${Date.now()}`)
         .then(res => res.json())
         .then(data => {
             if (elTradingModeSelect) elTradingModeSelect.value = data.trading_mode || "paper";
@@ -617,11 +620,6 @@ function loadBlogConfig() {
             if (elTrailingStopCheck) elTrailingStopCheck.checked = data.trailing_stop || false;
             if (elCooldownInput) elCooldownInput.value = data.cooldown || 4;
             if (elMaxDrawdownInput) elMaxDrawdownInput.value = data.max_drawdown || 5;
-            
-            // Sync risk selector in header
-            if (data.risk_mode && elRiskSelect) {
-                elRiskSelect.value = data.risk_mode;
-            }
         })
         .catch(err => console.error("Error loading system config:", err));
 }
@@ -690,7 +688,7 @@ if (elTriggerBlogBtn) {
                     setTimeout(() => { elBlogStatusMsg.textContent = ""; }, 5000);
                     // Refresh trade log if mock was used
                     if (useMock) {
-                        fetch("/api/trades")
+                        fetch(`/api/trades?t=${Date.now()}`)
                             .then(res => res.json())
                             .then(trades => {
                                 renderTradeLog(trades);
