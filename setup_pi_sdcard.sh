@@ -65,6 +65,9 @@ echo "✔ Detected Rootfs Partition at: $ROOTFS_PATH"
 echo "🔧 Enabling SSH server on Pi..."
 touch "$BOOT_PATH/ssh"
 touch "$BOOT_PATH/ssh.txt"
+# 3. Create Default User (pi:12341234)
+echo "👤 Creating default user credentials (pi:12341234)..."
+echo "pi:\$6\$mENbeBkwXAtzXlux\$rsv884K/YxFGDbP2BaYldGuH8kdXKVjHxOOmPyQnpXVyuTHXf5YV12SWlHcg1y3dppIRZgHKdkbER/b/6sKmH." | tee "$BOOT_PATH/userconf" "$BOOT_PATH/userconf.txt" > /dev/null
 
 # 3. Configure Wi-Fi (NetworkManager keyfile)
 echo "📶 Configuring Wi-Fi profile (Bumble Cottage Wifi)..."
