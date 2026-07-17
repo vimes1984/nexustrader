@@ -158,6 +158,8 @@ class LearningEngine:
 
     def learn_from_trade(self, state, strategy_signals, trade_direction, pnl_percent):
         """Performs backward propagation on the Policy Network using the trade PnL as reward."""
+        # Ensure forward activations are cached for this state before backpropagation
+        self.policy_net.forward(state)
         # The reward is the actual trade percentage profit/loss (e.g. +0.024 for +2.4%)
         self.policy_net.backward(state, strategy_signals, trade_direction, pnl_percent)
         

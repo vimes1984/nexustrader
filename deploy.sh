@@ -8,9 +8,13 @@ REMOTE_HOST="nexustrader.local"
 REMOTE_USER="root"
 REMOTE_PATH="/root/nexustrader"
 
-echo "=========================================================="
-echo "🚀 Deploying NexusTrader to Proxmox ($REMOTE_HOST)..."
-echo "=========================================================="
+# 0. Run Unit Tests locally
+echo "🧪 Running unit tests..."
+if ! python3 -m unittest discover -s tests/; then
+    echo "❌ Error: Unit tests failed. Aborting deployment!"
+    exit 1
+fi
+echo "✅ All unit tests passed!"
 
 # 1. Verify connection
 if ! ping -c 1 -W 2 "$REMOTE_HOST" > /dev/null 2>&1; then
