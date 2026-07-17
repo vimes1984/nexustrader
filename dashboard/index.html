@@ -246,25 +246,41 @@
                 </div>
             </article>
 
-            <!-- Live Exchange Holdings & Orders Panel -->
-            <article class="glass-panel" style="padding: 20px; display: flex; flex-direction: column; gap: 15px;">
-                <h2 class="panel-title">
-                    <i data-lucide="wallet" style="color: var(--neon-blue)"></i>
-                    Exchange Assets & Orders
-                </h2>
-                <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.4;">
-                    Real-time asset holdings and pending orders active on your broker.
+            <!-- Live Exchange Portfolio Panel -->
+            <article class="glass-panel" style="padding: 20px; display: flex; flex-direction: column; gap: 15px;" id="portfolio-card">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h2 class="panel-title">
+                        <i data-lucide="wallet" style="color: var(--neon-blue)"></i>
+                        Exchange Portfolio
+                    </h2>
+                </div>
+                <p style="font-size: 11px; color: var(--text-secondary); margin: -5px 0 5px 0; line-height: 1.4;">
+                    Real-time status of your assets, leverage positions, and open limit orders directly from Kraken.
                 </p>
                 
-                <div>
-                    <h3 style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; letter-spacing: 0.5px;">Asset Balance Breakdown</h3>
+                <!-- Portfolio Tabs Switcher -->
+                <div style="display: flex; background: rgba(0, 0, 0, 0.25); border: 1px solid var(--border-color); border-radius: 8px; padding: 2px;">
+                    <button class="portfolio-tab active" data-tab="assets" style="flex: 1; background: transparent; border: none; color: var(--text-secondary); padding: 6px 12px; font-size: 11px; font-weight: 600; border-radius: 6px; cursor: pointer; outline: none; transition: var(--transition); font-family: inherit;">Assets</button>
+                    <button class="portfolio-tab" data-tab="positions" style="flex: 1; background: transparent; border: none; color: var(--text-secondary); padding: 6px 12px; font-size: 11px; font-weight: 600; border-radius: 6px; cursor: pointer; outline: none; transition: var(--transition); font-family: inherit;">Positions</button>
+                    <button class="portfolio-tab" data-tab="orders" style="flex: 1; background: transparent; border: none; color: var(--text-secondary); padding: 6px 12px; font-size: 11px; font-weight: 600; border-radius: 6px; cursor: pointer; outline: none; transition: var(--transition); font-family: inherit;">Orders</button>
+                </div>
+                
+                <!-- Assets Tab Content -->
+                <div id="tab-assets" class="portfolio-tab-content">
                     <div id="holdings-list-container" style="display: flex; flex-direction: column; gap: 8px;">
                         <p style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 10px;">Loading exchange balances...</p>
                     </div>
                 </div>
                 
-                <div style="border-top: 1px solid var(--border-color); padding-top: 12px; margin-top: 4px;">
-                    <h3 style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; letter-spacing: 0.5px;">Pending Open Orders</h3>
+                <!-- Positions Tab Content -->
+                <div id="tab-positions" class="portfolio-tab-content" style="display: none;">
+                    <div id="positions-list-container" style="display: flex; flex-direction: column; gap: 8px;">
+                        <p style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 10px;">Loading open positions...</p>
+                    </div>
+                </div>
+                
+                <!-- Orders Tab Content -->
+                <div id="tab-orders" class="portfolio-tab-content" style="display: none;">
                     <div id="open-orders-list-container" style="display: flex; flex-direction: column; gap: 8px;">
                         <p style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 10px;">Loading open orders...</p>
                     </div>

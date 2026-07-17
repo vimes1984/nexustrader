@@ -702,37 +702,63 @@ def get_exchange_status():
         for asset, qty in total_bal.items():
             qty = float(qty)
             if qty > 0.000001:
-                val_eur = qty
+                price_eur = 1.0
                 if asset != 'EUR':
-                    val_eur = qty * prices.get(asset, 0.0)
+                    price_eur = prices.get(asset, 0.0)
+                val_eur = qty * price_eur
                 holdings.append({
                     "asset": asset,
                     "quantity": qty,
+                    "price_eur": price_eur,
                     "value_eur": val_eur
                 })
                 
         # Sort holdings: EUR always first, then others by value desc
         holdings.sort(key=lambda x: (x["asset"] != "EUR", -x["value_eur"]))
-        
-        # 2. Fetch Open Orders
+        # 2. Fetch Open Positions
+        open_positions = []
+        try:
+            if hasattr(exchange, 'has') and exchange.has.get('fetchPositions', False):
+                pos = exchange.fetch_positions()
+                for p in pos:
+                    contracts = float(p.get("contracts", p.get("size", 0.0) or 0.0))
+                    if contracts > 0 or p.get("side") is not None:
+                        open_positions.append({
+                            "id": p.get("id"),
+                            "symbol": p.get("symbol", "").replace("/", "-"),
+                            "side": p.get("side", "").upper(),
+                            "contracts": contracts,
+                            "entryPrice": p.get("entryPrice"),
+                            "markPrice": p.get("markPrice", p.get("currentPrice")),
+                            "unrealizedPnl": p.get("unrealizedPnl"),
+                            "leverage": p.get("leverage")
+                        })
+        except Exception as pe:
+            logging.error(f"Error fetching open positions: {pe}")
+
+        # 3. Fetch Open Orders
         open_orders = []
         try:
             orders = exchange.fetch_open_orders()
             for o in orders:
                 open_orders.append({
                     "id": o.get("id"),
-                    "symbol": o.get("symbol"),
-                    "side": o.get("side"),
-                    "type": o.get("type"),
+                    "symbol": o.get("symbol", "").replace("/", "-"),
+                    "side": o.get("side", "").upper(),
+                    "type": o.get("type", "").upper(),
                     "price": o.get("price"),
                     "amount": o.get("amount"),
-                    "filled": o.get("filled")
+                    "filled": o.get("filled"),
+                    "remaining": o.get("remaining"),
+                    "cost": o.get("cost"),
+                    "timestamp": o.get("timestamp")
                 })
         except Exception as oe:
             logging.error(f"Error fetching open orders: {oe}")
             
         return {
             "holdings": holdings,
+            "open_positions": open_positions,
             "open_orders": open_orders
         }
     except Exception as e:

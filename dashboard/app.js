@@ -1024,29 +1024,44 @@ connectWebSocket();
 loadBlogConfig();
 lucide.createIcons();
 
-// Live Exchange holdings and open orders status polling
+// Setup tab listeners for Exchange Portfolio
+document.querySelectorAll(".portfolio-tab").forEach(btn => {
+    btn.addEventListener("click", () => {
+        document.querySelectorAll(".portfolio-tab").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        
+        const tabName = btn.dataset.tab;
+        document.querySelectorAll(".portfolio-tab-content").forEach(el => el.style.display = "none");
+        document.getElementById(`tab-${tabName}`).style.display = "block";
+    });
+});
+
+// Live Exchange holdings, positions, and open orders status polling
 function updateExchangeStatus() {
     const elHoldingsContainer = document.getElementById("holdings-list-container");
+    const elPositionsContainer = document.getElementById("positions-list-container");
     const elOpenOrdersContainer = document.getElementById("open-orders-list-container");
     
-    if (!elHoldingsContainer || !elOpenOrdersContainer) return;
+    if (!elHoldingsContainer || !elPositionsContainer || !elOpenOrdersContainer) return;
     
     fetch(`/api/exchange/status?t=${Date.now()}`)
         .then(res => res.json())
         .then(data => {
             if (data.error) {
                 elHoldingsContainer.innerHTML = `<p style="font-size: 11px; color: var(--neon-red); text-align: center; padding: 10px;">${data.error}</p>`;
+                elPositionsContainer.innerHTML = `<p style="font-size: 11px; color: var(--neon-red); text-align: center; padding: 10px;">Error loading positions.</p>`;
                 elOpenOrdersContainer.innerHTML = `<p style="font-size: 11px; color: var(--neon-red); text-align: center; padding: 10px;">Error loading orders.</p>`;
                 return;
             }
             
             if (data.message) {
                 elHoldingsContainer.innerHTML = `<p style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 10px;">${data.message}</p>`;
+                elPositionsContainer.innerHTML = `<p style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 10px;">${data.message}</p>`;
                 elOpenOrdersContainer.innerHTML = `<p style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 10px;">${data.message}</p>`;
                 return;
             }
             
-            // Render holdings
+            // 1. Render holdings
             elHoldingsContainer.innerHTML = "";
             if (!data.holdings || data.holdings.length === 0) {
                 elHoldingsContainer.innerHTML = `<p style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 10px;">No holdings found.</p>`;
@@ -1054,12 +1069,21 @@ function updateExchangeStatus() {
                 let totalEur = 0;
                 data.holdings.forEach(h => {
                     totalEur += h.value_eur;
+                });
+                
+                data.holdings.forEach(h => {
+                    const share = totalEur > 0 ? ((h.value_eur / totalEur) * 100).toFixed(1) : "0.0";
                     const row = document.createElement("div");
-                    row.style.cssText = "display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 8px; font-size: 12px; transition: var(--transition);";
+                    row.style.cssText = "display: flex; flex-direction: column; gap: 4px; padding: 8px 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 8px; font-size: 12px; transition: var(--transition);";
                     row.innerHTML = `
-                        <span style="font-weight: 600; color: var(--text-primary);">${h.asset}</span>
-                        <span style="color: var(--text-secondary); font-family: monospace;">${h.quantity.toFixed(4)}</span>
-                        <span style="font-weight: 600; color: var(--neon-blue);">€${h.value_eur.toFixed(2)}</span>
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-weight: 600; color: var(--text-primary);">${h.asset}</span>
+                            <span style="font-weight: 600; color: var(--neon-blue);">€${h.value_eur.toFixed(2)}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: var(--text-muted);">
+                            <span>Qty: <span style="font-family: monospace;">${h.quantity.toFixed(4)}</span></span>
+                            <span>Price: €${h.price_eur.toFixed(2)} (${share}%)</span>
+                        </div>
                     `;
                     elHoldingsContainer.appendChild(row);
                 });
@@ -1074,21 +1098,48 @@ function updateExchangeStatus() {
                 elHoldingsContainer.appendChild(totalRow);
             }
             
-            // Render Open Orders
+            // 2. Render open positions
+            elPositionsContainer.innerHTML = "";
+            if (!data.open_positions || data.open_positions.length === 0) {
+                elPositionsContainer.innerHTML = `<p style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 15px;">No active leverage positions.</p>`;
+            } else {
+                data.open_positions.forEach(p => {
+                    const pnl = p.unrealizedPnl !== undefined && p.unrealizedPnl !== null ? p.unrealizedPnl : 0.0;
+                    const pnlColor = pnl >= 0 ? "var(--neon-green)" : "var(--neon-red)";
+                    const pnlSign = pnl >= 0 ? "+" : "";
+                    const row = document.createElement("div");
+                    row.style.cssText = "display: flex; flex-direction: column; gap: 4px; padding: 8px 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 8px; font-size: 12px; transition: var(--transition);";
+                    row.innerHTML = `
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-weight: 600; color: var(--text-primary);">${p.symbol} <span style="font-size: 9px; padding: 2px 4px; border-radius: 4px; background: ${p.side === 'BUY' || p.side === 'LONG' ? 'rgba(16,185,129,0.1)' : 'rgba(244,63,94,0.1)'}; color: ${p.side === 'BUY' || p.side === 'LONG' ? 'var(--neon-green)' : 'var(--neon-red)'}; font-weight: bold;">${p.side}</span></span>
+                            <span style="font-weight: 600; color: ${pnlColor};">${pnlSign}€${pnl.toFixed(2)}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: var(--text-muted);">
+                            <span>Entry: <span style="font-family: monospace;">€${p.entryPrice ? p.entryPrice.toFixed(2) : '-'}</span></span>
+                            <span>Mark: <span style="font-family: monospace;">€${p.markPrice ? p.markPrice.toFixed(2) : '-'}</span> (${p.leverage ? p.leverage + 'x' : '1x'})</span>
+                        </div>
+                    `;
+                    elPositionsContainer.appendChild(row);
+                });
+            }
+            
+            // 3. Render open orders
             elOpenOrdersContainer.innerHTML = "";
             if (!data.open_orders || data.open_orders.length === 0) {
-                elOpenOrdersContainer.innerHTML = `<p style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 10px;">No pending orders found.</p>`;
+                elOpenOrdersContainer.innerHTML = `<p style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 15px;">No pending orders found.</p>`;
             } else {
                 data.open_orders.forEach(o => {
                     const row = document.createElement("div");
-                    row.style.cssText = "display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 8px; font-size: 11px; transition: var(--transition);";
-                    const sideColor = o.side === "buy" ? "var(--neon-green)" : "var(--neon-red)";
+                    row.style.cssText = "display: flex; flex-direction: column; gap: 4px; padding: 8px 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 8px; font-size: 12px; transition: var(--transition);";
                     row.innerHTML = `
-                        <div>
-                            <span style="font-weight: 600; color: ${sideColor}; text-transform: uppercase;">${o.side}</span>
-                            <span style="color: var(--text-primary); font-weight: 500;">${o.symbol}</span>
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-weight: 600; color: var(--text-primary);">${o.symbol} <span style="font-size: 9px; padding: 2px 4px; border-radius: 4px; background: ${o.side === 'BUY' ? 'rgba(16,185,129,0.1)' : 'rgba(244,63,94,0.1)'}; color: ${o.side === 'BUY' ? 'var(--neon-green)' : 'var(--neon-red)'};">${o.side}</span></span>
+                            <span style="font-weight: 600; color: var(--neon-blue);">€${o.price ? o.price.toFixed(2) : 'Market'}</span>
                         </div>
-                        <span style="color: var(--text-secondary); font-family: monospace;">${o.amount} @ €${o.price}</span>
+                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: var(--text-muted);">
+                            <span>Qty: <span style="font-family: monospace;">${o.amount.toFixed(4)}</span></span>
+                            <span>Type: ${o.type}</span>
+                        </div>
                     `;
                     elOpenOrdersContainer.appendChild(row);
                 });
@@ -1097,6 +1148,7 @@ function updateExchangeStatus() {
         .catch(err => {
             console.error("Error fetching exchange status:", err);
             elHoldingsContainer.innerHTML = `<p style="font-size: 11px; color: var(--neon-red); text-align: center; padding: 10px;">Connection failed.</p>`;
+            if (elPositionsContainer) elPositionsContainer.innerHTML = `<p style="font-size: 11px; color: var(--neon-red); text-align: center; padding: 10px;">Connection failed.</p>`;
             elOpenOrdersContainer.innerHTML = `<p style="font-size: 11px; color: var(--neon-red); text-align: center; padding: 10px;">Connection failed.</p>`;
         });
 }
