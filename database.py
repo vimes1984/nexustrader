@@ -91,6 +91,15 @@ def init_db():
     )
     """)
     
+    # Create portfolio history table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS portfolio_history (
+        timestamp REAL PRIMARY KEY,
+        equity REAL,
+        pnl REAL
+    )
+    """)
+    
     # Commit and close
     conn.commit()
     conn.close()

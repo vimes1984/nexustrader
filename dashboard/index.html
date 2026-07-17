@@ -82,12 +82,21 @@
         <div class="main-left-column">
             <!-- Chart Section -->
             <article class="glass-panel chart-panel">
-            <div class="panel-header">
-                <h2 class="panel-title">
+            <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center; gap: 15px; flex-wrap: wrap; margin-bottom: 16px;">
+                <h2 class="panel-title" style="margin: 0;">
                     <i data-lucide="trending-up" style="color: var(--neon-blue)"></i>
                     <span id="chart-ticker-title">ETH-EUR</span> Live Feed
                 </h2>
-                <div style="font-size: 14px; font-weight: 600; font-family: 'Space Grotesk', sans-serif;">
+                
+                <!-- Portfolio Timeframe Selector (hidden by default) -->
+                <div id="portfolio-timeframes" style="display: none; gap: 6px; background: rgba(0, 0, 0, 0.2); padding: 2px; border: 1px solid var(--border-color); border-radius: 6px;">
+                    <button class="tf-btn" data-tf="1D" style="background: transparent; border: none; color: var(--text-secondary); padding: 4px 8px; font-size: 11px; font-weight: 600; border-radius: 4px; cursor: pointer; font-family: inherit; transition: var(--transition); outline: none;">1D</button>
+                    <button class="tf-btn active" data-tf="1W" style="background: rgba(0, 240, 255, 0.1); border: none; color: var(--neon-blue); padding: 4px 8px; font-size: 11px; font-weight: 600; border-radius: 4px; cursor: pointer; font-family: inherit; transition: var(--transition); outline: none;">1W</button>
+                    <button class="tf-btn" data-tf="1M" style="background: transparent; border: none; color: var(--text-secondary); padding: 4px 8px; font-size: 11px; font-weight: 600; border-radius: 4px; cursor: pointer; font-family: inherit; transition: var(--transition); outline: none;">1M</button>
+                    <button class="tf-btn" data-tf="1Y" style="background: transparent; border: none; color: var(--text-secondary); padding: 4px 8px; font-size: 11px; font-weight: 600; border-radius: 4px; cursor: pointer; font-family: inherit; transition: var(--transition); outline: none;">1Y</button>
+                </div>
+
+                <div id="ticker-price-container" style="font-size: 14px; font-weight: 600; font-family: 'Space Grotesk', sans-serif;">
                     Price: <span id="ticker-price" class="color-blue">€0.00</span>
                 </div>
             </div>

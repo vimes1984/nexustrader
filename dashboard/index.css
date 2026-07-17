@@ -655,3 +655,13 @@ tbody#trade-log-body tr:hover {
     background: rgba(255, 255, 255, 0.05);
     color: var(--text-primary);
 }
+
+/* Timeframe buttons styling */
+.tf-btn.active {
+    background: rgba(0, 240, 255, 0.1) !important;
+    color: var(--neon-blue) !important;
+}
+.tf-btn:hover:not(.active) {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+}

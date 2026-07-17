@@ -14,6 +14,8 @@ const ema26Data = [];
 
 // App State
 let activeTicker = "ETH-EUR";
+let isPortfolioMode = false;
+let activePortfolioTimeframe = "1W";
 const tickerLatest = {};
 let activePosition = null;
 let currentPrice = 0.0;
@@ -225,7 +227,7 @@ function handleInitState(data) {
         switcherEl.innerHTML = "";
         data.tickers.forEach(t => {
             const btn = document.createElement("button");
-            btn.className = `ticker-tab ${t === activeTicker ? 'active' : ''}`;
+            btn.className = `ticker-tab ${t === activeTicker && !isPortfolioMode ? 'active' : ''}`;
             btn.id = `tab-${t}`;
             btn.setAttribute("data-ticker", t);
             btn.innerHTML = `
@@ -235,6 +237,17 @@ function handleInitState(data) {
             btn.addEventListener("click", () => switchTicker(t));
             switcherEl.appendChild(btn);
         });
+        
+        // Add Portfolio Tab
+        const portBtn = document.createElement("button");
+        portBtn.className = `ticker-tab ${isPortfolioMode ? 'active' : ''}`;
+        portBtn.id = "tab-portfolio";
+        portBtn.innerHTML = `
+            <span class="ticker-tab-name" style="color: var(--neon-purple); font-weight: bold;">💼 Portfolio</span>
+            <span class="ticker-tab-price" id="tab-portfolio-equity">€${equity.toFixed(2)}</span>
+        `;
+        portBtn.addEventListener("click", () => switchPortfolioMode(true));
+        switcherEl.appendChild(portBtn);
     }
 
     // Toggle controls and status badges based on trading mode (live vs paper)
@@ -318,6 +331,10 @@ function handleTick(data) {
     equity = data.equity !== undefined ? data.equity : data.balance;
     elBalance.textContent = `€${balance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
     elEquity.textContent = `€${equity.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    const portEqEl = document.getElementById("tab-portfolio-equity");
+    if (portEqEl) {
+        portEqEl.textContent = `€${equity.toFixed(2)}`;
+    }
     
     // Update unrealized calculations
     activePosition = data.position;
@@ -409,8 +426,14 @@ function handleTick(data) {
 
 // Switch Active Ticker Handler
 function switchTicker(ticker) {
-    if (ticker === activeTicker) return;
+    isPortfolioMode = false;
     activeTicker = ticker;
+    
+    // Toggle UI visibility
+    const elTf = document.getElementById("portfolio-timeframes");
+    const elPr = document.getElementById("ticker-price-container");
+    if (elTf) elTf.style.display = "none";
+    if (elPr) elPr.style.display = "block";
     
     // Update tab classes
     document.querySelectorAll(".ticker-tab").forEach(tab => {
@@ -420,8 +443,28 @@ function switchTicker(ticker) {
             tab.classList.remove("active");
         }
     });
+    const portTab = document.getElementById("tab-portfolio");
+    if (portTab) portTab.classList.remove("active");
     
     document.getElementById("chart-ticker-title").textContent = ticker;
+    
+    // Reset Chart.js dataset config
+    if (chart && chart.data && chart.data.datasets) {
+        if (chart.data.datasets[0]) {
+            chart.data.datasets[0].label = 'Close Price';
+            chart.data.datasets[0].borderColor = '#00f0ff';
+        }
+        if (chart.data.datasets[1]) {
+            chart.data.datasets[1].label = 'BB Upper';
+            chart.data.datasets[1].borderColor = 'rgba(168, 85, 247, 0.3)';
+            chart.data.datasets[1].borderDash = [5, 5];
+        }
+        if (chart.data.datasets[2]) {
+            chart.data.datasets[2].label = 'BB Lower';
+            chart.data.datasets[2].borderColor = 'rgba(168, 85, 247, 0.3)';
+            chart.data.datasets[2].borderDash = [5, 5];
+        }
+    }
     
     // Clear chart datasets
     chartLabels.length = 0;
@@ -454,6 +497,69 @@ function switchTicker(ticker) {
             renderWeights(currentWeights);
         })
         .catch(err => console.error("Error loading weights:", err));
+}
+
+function switchPortfolioMode(enable) {
+    if (!enable) return;
+    isPortfolioMode = true;
+    
+    // Toggle UI visibility
+    const elTf = document.getElementById("portfolio-timeframes");
+    const elPr = document.getElementById("ticker-price-container");
+    if (elTf) elTf.style.display = "flex";
+    if (elPr) elPr.style.display = "none";
+    
+    // Update tab classes
+    document.querySelectorAll(".ticker-tab").forEach(tab => tab.classList.remove("active"));
+    const portTab = document.getElementById("tab-portfolio");
+    if (portTab) portTab.classList.add("active");
+    
+    document.getElementById("chart-ticker-title").textContent = "Portfolio Equity & PnL";
+    
+    // Modify Chart.js dataset config
+    if (chart && chart.data && chart.data.datasets) {
+        if (chart.data.datasets[0]) {
+            chart.data.datasets[0].label = 'Total Equity (€)';
+            chart.data.datasets[0].borderColor = '#00f0ff';
+        }
+        if (chart.data.datasets[1]) {
+            chart.data.datasets[1].label = 'Cumulative PnL (€)';
+            chart.data.datasets[1].borderColor = '#10b981'; // green for profit
+            chart.data.datasets[1].borderDash = []; // solid line
+        }
+        if (chart.data.datasets[2]) {
+            chart.data.datasets[2].label = 'Initial Capital (€)';
+            chart.data.datasets[2].borderColor = '#f59e0b'; // amber
+            chart.data.datasets[2].borderDash = [4, 4]; // dashed line
+        }
+    }
+    
+    loadPortfolioHistory();
+}
+
+function loadPortfolioHistory() {
+    if (!isPortfolioMode) return;
+    
+    chartLabels.length = 0;
+    priceData.length = 0;
+    bbUpperData.length = 0;
+    bbLowerData.length = 0;
+    
+    fetch(`/api/portfolio/history?timeframe=${activePortfolioTimeframe}&t=${Date.now()}`)
+        .then(res => res.json())
+        .then(data => {
+            if (Array.isArray(data) && data.length > 0) {
+                data.forEach(item => {
+                    chartLabels.push(item.label);
+                    priceData.push(item.equity);
+                    bbUpperData.push(item.pnl);
+                    bbLowerData.push(initialBalance);
+                });
+                chart.update();
+            }
+        })
+        .catch(err => console.error("Error loading portfolio history:", err));
+}
         
     // Update active position/evaluation display for the new ticker from latest socket tick
     const tick = tickerLatest[ticker];
@@ -1182,3 +1288,13 @@ function updateExchangeStatus() {
 // Initial pull and setup 15s interval
 updateExchangeStatus();
 setInterval(updateExchangeStatus, 15000);
+
+// Timeframe button listener setup
+document.querySelectorAll(".tf-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+        document.querySelectorAll(".tf-btn").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        activePortfolioTimeframe = btn.dataset.tf;
+        loadPortfolioHistory();
+    });
+});

@@ -217,6 +217,24 @@ class NexusTraderOrchestrator:
         current_prices = {t: float(r['close']) for t, r in self.latest_ticks.items()}
         current_equity = self.execution_engine.get_equity(current_prices)
         
+        # Periodic equity history logging (every 1 hour)
+        now_time = time.time()
+        if not hasattr(self, "last_equity_log_time") or now_time - self.last_equity_log_time >= 3600:
+            self.last_equity_log_time = now_time
+            try:
+                init_bal_str = database.get_setting("initial_portfolio_balance")
+                init_bal = float(init_bal_str) if init_bal_str else 100.0
+                conn = sqlite3.connect(database.DB_PATH)
+                cursor = conn.cursor()
+                cursor.execute(
+                    "INSERT OR REPLACE INTO portfolio_history (timestamp, equity, pnl) VALUES (?, ?, ?)",
+                    (now_time, current_equity, current_equity - init_bal)
+                )
+                conn.commit()
+                conn.close()
+            except Exception as e:
+                logging.error(f"Error logging portfolio history point: {e}")
+        
         if update_event:
             if update_event["event"] == "closed":
                 # Broadcast closed trade
@@ -494,6 +512,100 @@ def get_trades():
             logging.error(f"Error merging exchange trades: {e}")
             
     return local_trades
+
+@app.get("/api/portfolio/history")
+def get_portfolio_history(timeframe: str = "1W"):
+    try:
+        init_bal_str = database.get_setting("initial_portfolio_balance")
+        init_bal = float(init_bal_str) if init_bal_str else 100.0
+        
+        now = time.time()
+        if timeframe == "1D":
+            cutoff = now - 86400
+            label_format = "%H:%M"
+        elif timeframe == "1W":
+            cutoff = now - 7 * 86400
+            label_format = "%m-%d"
+        elif timeframe == "1M":
+            cutoff = now - 30 * 86400
+            label_format = "%m-%d"
+        elif timeframe == "1Y":
+            cutoff = now - 365 * 86400
+            label_format = "%Y-%m"
+        else:
+            cutoff = 0
+            label_format = "%Y-%m-%d"
+            
+        conn = sqlite3.connect(database.DB_PATH)
+        cursor = conn.cursor()
+        
+        cursor.execute(
+            "SELECT timestamp, equity, pnl FROM portfolio_history WHERE timestamp >= ? ORDER BY timestamp ASC",
+            (cutoff,)
+        )
+        rows = cursor.fetchall()
+        
+        points = []
+        if len(rows) > 1:
+            for r_time, r_eq, r_pnl in rows:
+                points.append({
+                    "timestamp": float(r_time),
+                    "equity": float(r_eq),
+                    "pnl": float(r_pnl)
+                })
+        else:
+            cursor.execute("SELECT exit_time, pnl FROM trades ORDER BY exit_time ASC")
+            trades = cursor.fetchall()
+            
+            current_equity = init_bal
+            all_points = [{"timestamp": 0.0, "equity": init_bal, "pnl": 0.0}]
+            
+            cumulative_pnl = 0.0
+            for t_time, pnl in trades:
+                if not t_time:
+                    continue
+                cumulative_pnl += pnl
+                current_equity = init_bal + cumulative_pnl
+                all_points.append({
+                    "timestamp": float(t_time),
+                    "equity": current_equity,
+                    "pnl": cumulative_pnl
+                })
+                
+            points = [p for p in all_points if p["timestamp"] >= cutoff or p["timestamp"] == 0]
+            
+            if len(points) <= 1:
+                start_equity = init_bal
+                start_pnl = 0.0
+                for p in all_points:
+                    if p["timestamp"] < cutoff:
+                        start_equity = p["equity"]
+                        start_pnl = p["pnl"]
+                points = [
+                    {"timestamp": cutoff, "equity": start_equity, "pnl": start_pnl},
+                    {"timestamp": now, "equity": current_equity, "pnl": cumulative_pnl}
+                ]
+                
+        conn.close()
+        
+        formatted = []
+        for p in points:
+            t_val = p["timestamp"]
+            if t_val == 0.0 or t_val == cutoff:
+                t_struct = time.localtime(cutoff if cutoff > 0 else now)
+            else:
+                t_struct = time.localtime(t_val)
+            label = time.strftime(label_format, t_struct)
+            formatted.append({
+                "label": label,
+                "equity": round(p["equity"], 2),
+                "pnl": round(p["pnl"], 2)
+            })
+            
+        return formatted
+    except Exception as e:
+        logging.error(f"Error in portfolio history: {e}")
+        return []
 
 @app.get("/api/history")
 def get_ticker_history(ticker: str = "ETH-EUR"):
