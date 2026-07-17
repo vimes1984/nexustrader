@@ -3,6 +3,10 @@ let socket = null;
 let chart = null;
 let weightsChart = null;
 
+// Notifications State
+const notificationsList = [];
+let unreadCount = 0;
+
 // Cybernetic Floating Toast Notifications
 function showToast(message, type = "success") {
     const container = document.getElementById("toast-container");
@@ -27,6 +31,19 @@ function showToast(message, type = "success") {
         icon = "📡";
     }
     
+    // Save notification to list
+    const notification = {
+        id: Date.now() + Math.random(),
+        message: message,
+        type: type,
+        icon: icon,
+        time: new Date().toLocaleTimeString(),
+        read: false
+    };
+    notificationsList.unshift(notification);
+    unreadCount++;
+    updateNotificationsUI();
+    
     toast.style.background = "rgba(15, 23, 42, 0.9)";
     toast.style.color = "#ffffff";
     toast.style.borderLeft = `4px solid ${color}`;
@@ -43,11 +60,21 @@ function showToast(message, type = "success") {
     toast.style.display = "flex";
     toast.style.alignItems = "center";
     toast.style.gap = "10px";
+    toast.style.cursor = "pointer";
+    toast.style.pointerEvents = "auto";
     toast.style.opacity = "0";
     toast.style.transform = "translateY(20px)";
     toast.style.transition = "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)";
+    toast.title = "Click to jump to relevant agent/section";
     
-    toast.innerHTML = `<span style="font-size: 14px;">${icon}</span> <span>${message}</span>`;
+    toast.innerHTML = `<span style="font-size: 14px;">${icon}</span> <span style="flex-grow: 1;">${message}</span> <span style="font-size: 10px; opacity: 0.5;">${notification.time}</span>`;
+    
+    // Make popup clickable
+    toast.addEventListener("click", () => {
+        handleNotificationClick(notification);
+        toast.remove();
+    });
+    
     container.appendChild(toast);
     
     // Animate in
@@ -58,13 +85,177 @@ function showToast(message, type = "success") {
     
     // Animate out and remove
     setTimeout(() => {
-        toast.style.opacity = "0";
-        toast.style.transform = "translateY(-15px)";
-        setTimeout(() => {
-            toast.remove();
-        }, 300);
+        if (toast.parentNode) {
+            toast.style.opacity = "0";
+            toast.style.transform = "translateY(-15px)";
+            setTimeout(() => {
+                toast.remove();
+            }, 300);
+        }
     }, 4500);
 }
+
+// Function to handle notification navigation
+function handleNotificationClick(notification) {
+    notification.read = true;
+    
+    // Decrease unread count if applicable
+    const dropdown = document.getElementById("notification-dropdown");
+    if (dropdown && dropdown.style.display === "block") {
+        notification.read = true;
+    }
+    
+    const msgLower = notification.message.toLowerCase();
+    let targetTab = null;
+    let targetSelector = null;
+    
+    if (msgLower.includes("quant") || msgLower.includes("phd") || msgLower.includes("hyperparameter")) {
+        targetTab = "tab-agents";
+        targetSelector = "agent-quant-phd";
+    } else if (msgLower.includes("dev") || msgLower.includes("architect") || msgLower.includes("codebase")) {
+        targetTab = "tab-agents";
+        targetSelector = "agent-dev-architect";
+    } else if (msgLower.includes("blog") || msgLower.includes("weekly") || msgLower.includes("reporter")) {
+        targetTab = "tab-agents";
+        targetSelector = "agent-reporter";
+    } else if (msgLower.includes("sentinel") || msgLower.includes("sentiment")) {
+        targetTab = "tab-agents";
+        targetSelector = "agent-sentiment-sentinel";
+    } else if (msgLower.includes("risk") || msgLower.includes("audit") || msgLower.includes("drawdown")) {
+        targetTab = "tab-agents";
+        targetSelector = "agent-risk-auditor";
+    } else if (msgLower.includes("neural") || msgLower.includes("nn") || msgLower.includes("tuning") || msgLower.includes("hyperparameters")) {
+        targetTab = "tab-neural";
+    } else if (msgLower.includes("broker") || msgLower.includes("system") || msgLower.includes("exchange")) {
+        targetTab = "tab-settings";
+    }
+    
+    // 1. Switch Navigation Tab if targetTab is identified
+    if (targetTab) {
+        const tabBtn = document.querySelector(`.nav-tab[data-tab="${targetTab}"]`);
+        if (tabBtn) {
+            tabBtn.click();
+            
+            // 2. Scroll to target element with visual highlighting if targetSelector exists
+            if (targetSelector) {
+                setTimeout(() => {
+                    const card = document.getElementById(targetSelector);
+                    if (card) {
+                        card.scrollIntoView({ behavior: "smooth", block: "center" });
+                        
+                        // Add glow effect animation
+                        const originalBorder = card.style.border;
+                        const originalBoxShadow = card.style.boxShadow;
+                        card.style.border = "1px solid var(--neon-blue)";
+                        card.style.boxShadow = "0 0 20px rgba(0, 240, 255, 0.4)";
+                        
+                        setTimeout(() => {
+                            card.style.border = originalBorder;
+                            card.style.boxShadow = originalBoxShadow;
+                        }, 2000);
+                    }
+                }, 200);
+            }
+        }
+    }
+    
+    updateNotificationsUI();
+}
+
+// Update the badge count and render notifications in the bell dropdown list
+function updateNotificationsUI() {
+    const badge = document.getElementById("notification-badge");
+    if (badge) {
+        const activeUnread = notificationsList.filter(n => !n.read).length;
+        if (activeUnread > 0) {
+            badge.textContent = activeUnread;
+            badge.style.display = "block";
+        } else {
+            badge.style.display = "none";
+        }
+    }
+    
+    const list = document.getElementById("notification-list");
+    if (!list) return;
+    
+    if (notificationsList.length === 0) {
+        list.innerHTML = `<div style="color: var(--text-secondary); text-align: center; padding: 20px 0;">No alerts logged.</div>`;
+        return;
+    }
+    
+    list.innerHTML = "";
+    notificationsList.forEach(n => {
+        const item = document.createElement("div");
+        item.style.padding = "8px 10px";
+        item.style.borderRadius = "6px";
+        item.style.background = n.read ? "rgba(255,255,255,0.01)" : "rgba(255,255,255,0.04)";
+        item.style.borderLeft = `3px solid ${n.type === "success" ? "var(--neon-green)" : n.type === "error" ? "var(--neon-red)" : "var(--neon-purple)"}`;
+        item.style.cursor = "pointer";
+        item.style.transition = "background 0.2s";
+        item.style.display = "flex";
+        item.style.flexDirection = "column";
+        item.style.gap = "2px";
+        
+        item.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-weight: 600; color: ${n.read ? 'var(--text-secondary)' : 'var(--text-primary)'};">${n.icon} Alert</span>
+                <span style="font-size: 9px; opacity: 0.5;">${n.time}</span>
+            </div>
+            <div style="color: ${n.read ? 'var(--text-muted)' : 'var(--text-secondary)'}; font-size: 11px;">${n.message}</div>
+        `;
+        
+        item.addEventListener("mouseenter", () => {
+            item.style.background = "rgba(255,255,255,0.08)";
+        });
+        item.addEventListener("mouseleave", () => {
+            item.style.background = n.read ? "rgba(255,255,255,0.01)" : "rgba(255,255,255,0.04)";
+        });
+        
+        item.addEventListener("click", (e) => {
+            e.stopPropagation();
+            handleNotificationClick(n);
+        });
+        
+        list.appendChild(item);
+    });
+}
+
+// Notification Bell Dropdown Toggle Listeners
+document.addEventListener("DOMContentLoaded", () => {
+    const bellBtn = document.getElementById("notification-bell-btn");
+    const dropdown = document.getElementById("notification-dropdown");
+    const clearBtn = document.getElementById("clear-notifications-btn");
+    
+    if (bellBtn && dropdown) {
+        bellBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const isOpen = dropdown.style.display === "block";
+            dropdown.style.display = isOpen ? "none" : "block";
+            
+            // Mark all as read when opening
+            if (!isOpen) {
+                notificationsList.forEach(n => n.read = true);
+                updateNotificationsUI();
+            }
+        });
+        
+        // Close dropdown when clicking outside
+        document.addEventListener("click", (e) => {
+            if (!dropdown.contains(e.target) && e.target !== bellBtn && !bellBtn.contains(e.target)) {
+                dropdown.style.display = "none";
+            }
+        });
+    }
+    
+    if (clearBtn) {
+        clearBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            notificationsList.length = 0;
+            updateNotificationsUI();
+            if (dropdown) dropdown.style.display = "none";
+        });
+    }
+});
 
 // Chart state
 const maxChartPoints = 40;
