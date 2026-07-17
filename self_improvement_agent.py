@@ -241,7 +241,7 @@ You are an expert quantitative researcher. NexusTrader bot has run backtest para
 Suggest 2 quantitative improvements, math models, or code refactor strategies for the NexusTrader python engine code to increase returns.
 Provide your response in clean markdown bullet points.
 """
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={gemini_api_key}"
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={gemini_api_key}"
                 data = json.dumps({"contents": [{"parts": [{"text": prompt}]}]}).encode("utf-8")
                 req = urllib.request.Request(
                     url, 

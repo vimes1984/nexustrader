@@ -497,8 +497,8 @@ To optimize execution safety and target higher capital return frequencies, we ar
     return template
 
 def query_gemini_api(api_key, context_prompt):
-    """Queries Gemini 1.5 Flash API to write a witty, professional blog post."""
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+    """Queries Gemini 2.0 Flash API to write a witty, professional blog post."""
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
     headers = {"Content-Type": "application/json"}
     payload = {
         "contents": [
