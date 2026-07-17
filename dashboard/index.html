@@ -12,8 +12,9 @@
     <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body>
-    <!-- App Header -->
-    <header class="glass-panel">
+    <div class="dashboard-container">
+        <!-- App Header -->
+        <header class="glass-panel">
         <div class="brand">
             <i data-lucide="cpu" style="color: var(--neon-blue); width: 32px; height: 32px;"></i>
             <div>
@@ -247,7 +248,7 @@
             </article>
 
             <!-- Live Exchange Portfolio Panel -->
-            <article class="glass-panel" style="padding: 20px; display: flex; flex-direction: column; gap: 15px;" id="portfolio-card">
+            <article class="glass-panel" style="padding: 24px; display: flex; flex-direction: column; gap: 15px;" id="portfolio-card">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <h2 class="panel-title">
                         <i data-lucide="wallet" style="color: var(--neon-blue)"></i>
@@ -288,7 +289,7 @@
             </article>
 
             <!-- System Configurations Panel -->
-            <article class="glass-panel blog-panel" style="padding: 20px; display: flex; flex-direction: column; gap: 15px;">
+            <article class="glass-panel blog-panel" style="padding: 24px; display: flex; flex-direction: column; gap: 15px;">
                 <h2 class="panel-title" style="margin-bottom: 5px;">
                     <i data-lucide="settings" style="color: var(--neon-blue)"></i>
                     System Settings
@@ -460,8 +461,7 @@
             </article>
         </div>
     </main>
-
-    
+    </div>
 
     <!-- App Logic -->
     <script src="/dashboard/app.js"></script>

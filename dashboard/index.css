@@ -38,8 +38,15 @@ body {
     color: var(--text-primary);
     font-family: 'Outfit', sans-serif;
     min-height: 100vh;
-    padding: 24px;
+    padding: 24px 0;
     overflow-x: hidden;
+}
+
+.dashboard-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    width: 100%;
+    padding: 0 24px;
 }
 
 /* Glassmorphism utility */
