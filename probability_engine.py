@@ -20,8 +20,12 @@ class ProbabilityEngine:
         else:
             raise ValueError(f"Invalid risk mode: {mode}")
 
-    def calculate_atr_bounds(self, price, atr, direction, tp_multiplier=2.5, sl_multiplier=1.5):
+    def calculate_atr_bounds(self, price, atr, direction):
         """Calculates Volatility-Adjusted Take-Profit (TP) and Stop-Loss (SL) using ATR."""
+        import database
+        tp_multiplier = float(database.load_setting("opt_tp_multiplier", "2.5"))
+        sl_multiplier = float(database.load_setting("opt_sl_multiplier", "1.5"))
+
         if atr is None or np.isnan(atr) or atr == 0:
             # Fallback to percentage-based bounds (1.5% TP, 1.0% SL)
             atr = price * 0.01

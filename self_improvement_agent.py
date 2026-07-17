@@ -80,6 +80,46 @@ def run_backtest_kalman(ticks, threshold):
                 position = 0
     return pnl
 
+def run_backtest_atr_multipliers(ticks, tp_mult, sl_mult):
+    """Simulates trading to optimize ATR SL/TP multipliers."""
+    pnl = 0.0
+    position = 0 # 0=flat, 1=long, -1=short
+    entry_price = 0.0
+    sl = 0.0
+    tp = 0.0
+    
+    for row in ticks:
+        close = float(row["close"])
+        rsi = float(row["rsi"]) if row["rsi"] is not None else 50.0
+        atr = float(row["atr"]) if "atr" in row and row["atr"] is not None else (close * 0.01)
+        
+        if position == 0:
+            if rsi < 30: # Buy entry trigger
+                position = 1
+                entry_price = close
+                sl = close - (atr * sl_mult)
+                tp = close + (atr * tp_mult)
+            elif rsi > 70: # Sell entry trigger
+                position = -1
+                entry_price = close
+                sl = close + (atr * sl_mult)
+                tp = close - (atr * tp_mult)
+        elif position == 1:
+            if close <= sl: # Hit stop loss
+                pnl += (sl - entry_price)
+                position = 0
+            elif close >= tp: # Hit take profit
+                pnl += (tp - entry_price)
+                position = 0
+        elif position == -1:
+            if close >= sl: # Hit stop loss
+                pnl += (entry_price - sl)
+                position = 0
+            elif close <= tp: # Hit take profit
+                pnl += (entry_price - tp)
+                position = 0
+    return pnl
+
 def run_self_improvement():
     logging.info("Starting weekly self-improvement and strategy parameter optimization...")
     if not os.path.exists(DB_PATH):
@@ -132,10 +172,29 @@ def run_self_improvement():
                 best_kalman_pnl = sim_pnl
                 best_threshold = th
                 
+        # 3b. Optimize ATR multipliers (Stop-Loss and Take-Profit)
+        best_mult_pnl = -999999.0
+        best_tp_mult = 2.5
+        best_sl_mult = 1.5
+        
+        c.execute("SELECT close, rsi, atr FROM ticks ORDER BY timestamp ASC LIMIT 5000")
+        ticks_atr = [dict(r) for r in c.fetchall()]
+        
+        if len(ticks_atr) >= 50:
+            for tp_m in [2.0, 2.5, 3.0, 3.5]:
+                for sl_m in [1.0, 1.5, 2.0, 2.5]:
+                    sim_pnl = run_backtest_atr_multipliers(ticks_atr, tp_m, sl_m)
+                    if sim_pnl > best_mult_pnl:
+                        best_mult_pnl = sim_pnl
+                        best_tp_mult = tp_m
+                        best_sl_mult = sl_m
+                        
         # Save optimized parameters to settings
         save_setting("opt_rsi_oversold", str(best_oversold))
         save_setting("opt_rsi_overbought", str(best_overbought))
         save_setting("opt_kalman_threshold", str(best_threshold))
+        save_setting("opt_tp_multiplier", str(best_tp_mult))
+        save_setting("opt_sl_multiplier", str(best_sl_mult))
         
         # Load settings for report
         settings = load_settings()
@@ -146,6 +205,7 @@ def run_self_improvement():
         report_lines.append("\n### Optimized Strategy Parameters:")
         report_lines.append(f"* **RSI Reversion Strategy**: Oversold Threshold = `{best_oversold}`, Overbought Threshold = `{best_overbought}` (Backtest PnL: `€{best_rsi_pnl:.4f}`)")
         report_lines.append(f"* **Kalman Filter Trend Strategy**: Trigger Filter Threshold = `{best_threshold:.4f}` / `{best_threshold*100:.2f}%` (Backtest PnL: `€{best_kalman_pnl:.4f}`)")
+        report_lines.append(f"* **Volatility ATR Risk Strategy**: Take Profit Multiplier = `{best_tp_mult}x ATR`, Stop Loss Multiplier = `{best_sl_mult}x ATR` (Backtest PnL: `€{best_mult_pnl:.4f}`)")
         
         # 4. Neural Network Evaluation
         report_lines.append("\n### Policy Gradient Neural Network Evaluation:")

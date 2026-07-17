@@ -136,7 +136,10 @@
                 <div style="display: flex; flex-direction: column; gap: 12px; font-size: 13px;">
                     <!-- Engine Mode -->
                     <label style="display: flex; justify-content: space-between; align-items: center;">
-                        <span>Trading Mode:</span>
+                        <span class="tooltip" data-tooltip="Live executes trades on exchange via API; Paper simulates orders.">
+                            Trading Mode
+                            <i data-lucide="info" class="tooltip-icon"></i>
+                        </span>
                         <select id="setting-trading-mode" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 12px; outline: none; cursor: pointer;">
                             <option value="paper">Paper Trading</option>
                             <option value="live">Live Capital</option>
@@ -145,7 +148,10 @@
 
                     <!-- Exchange Broker selection -->
                     <label style="display: flex; justify-content: space-between; align-items: center;">
-                        <span>Exchange Broker:</span>
+                        <span class="tooltip" data-tooltip="The exchange where live trades are executed via CCXT client.">
+                            Exchange Broker
+                            <i data-lucide="info" class="tooltip-icon"></i>
+                        </span>
                         <select id="setting-broker" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 12px; outline: none; cursor: pointer;">
                             <option value="kraken">Kraken</option>
                             <option value="binance">Binance</option>
@@ -156,31 +162,63 @@
                     <!-- API Credentials container -->
                     <div id="exchange-credentials-container" style="display: flex; flex-direction: column; gap: 8px; margin-top: 4px; padding: 10px; background: rgba(255,255,255,0.01); border: 1px dashed var(--border-color); border-radius: 8px;">
                         <label style="display: flex; flex-direction: column; gap: 4px;">
-                            <span style="font-size: 11px; color: var(--text-secondary);">Exchange API Key:</span>
+                            <span class="tooltip" data-tooltip="API Key provided by your exchange account.">
+                                Exchange API Key
+                                <i data-lucide="info" class="tooltip-icon"></i>
+                            </span>
                             <input type="password" id="setting-api-key" placeholder="Enter API key..." style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 6px 10px; border-radius: 6px; font-family: inherit; font-size: 11px; outline: none;">
                         </label>
                         <label style="display: flex; flex-direction: column; gap: 4px;">
-                            <span style="font-size: 11px; color: var(--text-secondary);">Exchange API Secret:</span>
+                            <span class="tooltip" data-tooltip="Private API Secret key provided by your exchange.">
+                                Exchange API Secret
+                                <i data-lucide="info" class="tooltip-icon"></i>
+                            </span>
                             <input type="password" id="setting-api-secret" placeholder="Enter API secret..." style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 6px 10px; border-radius: 6px; font-family: inherit; font-size: 11px; outline: none;">
                         </label>
                     </div>
 
-                    <!-- Freqtrade/Hummingbot Features -->
+                    <!-- Trailing Stop -->
                     <label style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
-                        <span>Trailing Stop-Loss:</span>
+                        <span class="tooltip" data-tooltip="Trailing stops adjust the stop-loss upward as the trade price increases.">
+                            Trailing Stop-Loss
+                            <i data-lucide="info" class="tooltip-icon"></i>
+                        </span>
                         <input type="checkbox" id="setting-trailing-stop" style="accent-color: var(--neon-blue); cursor: pointer;">
                     </label>
 
+                    <!-- Cooldown -->
                     <label style="display: flex; justify-content: space-between; align-items: center;">
-                        <span>Loss Cooldown (hours):</span>
+                        <span class="tooltip" data-tooltip="Pause window (in hours) to halt trading after a closed loss.">
+                            Loss Cooldown (hours)
+                            <i data-lucide="info" class="tooltip-icon"></i>
+                        </span>
                         <input type="number" id="setting-cooldown" min="0" max="48" value="4" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 12px; width: 60px; outline: none; text-align: center;">
                     </label>
 
+                    <!-- Take Profit ATR Multiplier -->
+                    <label style="display: flex; justify-content: space-between; align-items: center;">
+                        <span class="tooltip" data-tooltip="Take-profit target boundary multiplier (calculated via price volatility ATR).">
+                            Take Profit (x ATR)
+                            <i data-lucide="info" class="tooltip-icon"></i>
+                        </span>
+                        <input type="number" id="setting-tp-multiplier" min="1.0" max="5.0" step="0.1" value="2.5" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 12px; width: 60px; outline: none; text-align: center;">
+                    </label>
 
+                    <!-- Stop Loss ATR Multiplier -->
+                    <label style="display: flex; justify-content: space-between; align-items: center;">
+                        <span class="tooltip" data-tooltip="Stop-loss protection boundary multiplier (calculated via price volatility ATR).">
+                            Stop Loss (x ATR)
+                            <i data-lucide="info" class="tooltip-icon"></i>
+                        </span>
+                        <input type="number" id="setting-sl-multiplier" min="0.5" max="3.0" step="0.1" value="1.5" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 12px; width: 60px; outline: none; text-align: center;">
+                    </label>
 
                     <!-- Max Drawdown -->
                     <label style="display: flex; justify-content: space-between; align-items: center;">
-                        <span>Max Daily Loss (%):</span>
+                        <span class="tooltip" data-tooltip="Maximum daily portfolio value draw-down limit. Halts engine.">
+                            Max Daily Loss (%)
+                            <i data-lucide="info" class="tooltip-icon"></i>
+                        </span>
                         <input type="number" id="setting-max-drawdown" min="1" max="25" value="5" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 12px; width: 60px; outline: none; text-align: center;">
                     </label>
 
@@ -188,22 +226,34 @@
 
                     <!-- Weekly Blog Settings -->
                     <label style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
-                        <span>Enable Weekly Blog:</span>
+                        <span class="tooltip" data-tooltip="Triggers weekly AI analysis report blogging posts.">
+                            Enable Weekly Blog
+                            <i data-lucide="info" class="tooltip-icon"></i>
+                        </span>
                         <input type="checkbox" id="blog-enabled-check" style="accent-color: var(--neon-blue); cursor: pointer;">
                     </label>
                     
                     <label style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
-                        <span>Auto-Push to GitHub:</span>
+                        <span class="tooltip" data-tooltip="Automatically pushes weekly blogs to your GitHub repository.">
+                            Auto-Push to GitHub
+                            <i data-lucide="info" class="tooltip-icon"></i>
+                        </span>
                         <input type="checkbox" id="blog-git-push-check" style="accent-color: var(--neon-blue); cursor: pointer;">
                     </label>
                     
                     <label style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
-                        <span>Use AI Styling (Gemini):</span>
+                        <span class="tooltip" data-tooltip="Enables professional styling of AI blogs using Gemini API models.">
+                            Use AI Styling (Gemini)
+                            <i data-lucide="info" class="tooltip-icon"></i>
+                        </span>
                         <input type="checkbox" id="blog-ai-check" style="accent-color: var(--neon-blue); cursor: pointer;">
                     </label>
                     
                     <div id="blog-key-container" style="display: flex; flex-direction: column; gap: 6px; margin-top: 4px;">
-                        <span>Gemini API Key:</span>
+                        <span class="tooltip" data-tooltip="Developer API key for Google Gemini services.">
+                            Gemini API Key
+                            <i data-lucide="info" class="tooltip-icon"></i>
+                        </span>
                         <input type="password" id="blog-api-key" placeholder="Enter API key..." style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 12px; border-radius: 8px; font-size:12px; font-family:inherit; outline:none; transition: var(--transition);">
                     </div>
                 </div>

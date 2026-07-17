@@ -572,3 +572,52 @@ tbody#trade-log-body tr {
 tbody#trade-log-body tr:hover {
     background: rgba(255, 255, 255, 0.015);
 }
+
+/* Tooltip styling */
+.tooltip {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    cursor: help;
+}
+
+.tooltip-icon {
+    width: 12px;
+    height: 12px;
+    color: var(--text-secondary);
+    margin-left: 4px;
+    opacity: 0.6;
+    transition: var(--transition);
+}
+
+.tooltip:hover .tooltip-icon {
+    color: var(--neon-blue);
+    opacity: 1;
+}
+
+.tooltip::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 125%;
+    left: 0;
+    background: #0f172b;
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    width: 180px;
+    white-space: normal;
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s, visibility 0.2s;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    pointer-events: none;
+    line-height: 1.3;
+}
+
+.tooltip:hover::after {
+    opacity: 1;
+    visibility: visible;
+}

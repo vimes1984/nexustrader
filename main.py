@@ -493,12 +493,14 @@ def get_system_config():
         "api_secret": api_secret,
         "trailing_stop": database.load_setting("trailing_stop_enabled", "false") == "true",
         "cooldown": float(database.load_setting("loss_cooldown_hours", "4.0")),
+        "tp_multiplier": float(database.load_setting("opt_tp_multiplier", "2.5")),
+        "sl_multiplier": float(database.load_setting("opt_sl_multiplier", "1.5")),
         "risk_mode": database.load_setting("risk_mode", "conservative"),
         "max_drawdown": float(database.load_setting("max_daily_drawdown", "5.0"))
     }
 
 @app.post("/api/system/config")
-def update_system_config(trading_mode: str, risk_mode: str, max_drawdown: float, broker: str = "kraken", api_key: str = "", api_secret: str = "", trailing_stop: bool = False, cooldown: float = 4.0):
+def update_system_config(trading_mode: str, risk_mode: str, max_drawdown: float, broker: str = "kraken", api_key: str = "", api_secret: str = "", trailing_stop: bool = False, cooldown: float = 4.0, tp_multiplier: float = 2.5, sl_multiplier: float = 1.5):
     # 1. Update config.json
     config_path = os.path.expanduser("~/.nexustrader/config.json")
     cfg = {}
@@ -541,10 +543,12 @@ def update_system_config(trading_mode: str, risk_mode: str, max_drawdown: float,
     database.save_setting("max_daily_drawdown", str(max_drawdown))
     logging.info(f"Max Daily Drawdown updated to: {max_drawdown}%")
 
-    # 4. Update Trailing Stop and Cooldown
+    # 4. Update Trailing Stop, Cooldown, and ATR Multipliers
     database.save_setting("trailing_stop_enabled", "true" if trailing_stop else "false")
     database.save_setting("loss_cooldown_hours", str(cooldown))
-    logging.info(f"Trailing Stop: {trailing_stop}, Cooldown: {cooldown} hours updated.")
+    database.save_setting("opt_tp_multiplier", str(tp_multiplier))
+    database.save_setting("opt_sl_multiplier", str(sl_multiplier))
+    logging.info(f"Trailing Stop: {trailing_stop}, Cooldown: {cooldown}h, TP mult: {tp_multiplier}x, SL mult: {sl_multiplier}x updated.")
     
     return {"status": "success"}
 

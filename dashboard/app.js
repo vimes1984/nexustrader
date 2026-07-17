@@ -753,6 +753,8 @@ const elApiSecretInput = document.getElementById("setting-api-secret");
 const elTrailingStopCheck = document.getElementById("setting-trailing-stop");
 const elCooldownInput = document.getElementById("setting-cooldown");
 const elMaxDrawdownInput = document.getElementById("setting-max-drawdown");
+const elTpMultiplierInput = document.getElementById("setting-tp-multiplier");
+const elSlMultiplierInput = document.getElementById("setting-sl-multiplier");
 
 function loadBlogConfig() {
     // 1. Fetch Blog configurations
@@ -777,6 +779,8 @@ function loadBlogConfig() {
             if (elTrailingStopCheck) elTrailingStopCheck.checked = data.trailing_stop || false;
             if (elCooldownInput) elCooldownInput.value = data.cooldown || 4;
             if (elMaxDrawdownInput) elMaxDrawdownInput.value = data.max_drawdown || 5;
+            if (elTpMultiplierInput) elTpMultiplierInput.value = data.tp_multiplier || 2.5;
+            if (elSlMultiplierInput) elSlMultiplierInput.value = data.sl_multiplier || 1.5;
         })
         .catch(err => console.error("Error loading system config:", err));
 }
@@ -794,6 +798,8 @@ if (elSaveBlogConfigBtn) {
         const exchangeApiSecret = elApiSecretInput ? elApiSecretInput.value.trim() : "";
         const trailingStop = elTrailingStopCheck ? elTrailingStopCheck.checked : false;
         const cooldown = elCooldownInput ? parseFloat(elCooldownInput.value) : 4.0;
+        const tpMultiplier = elTpMultiplierInput ? parseFloat(elTpMultiplierInput.value) : 2.5;
+        const slMultiplier = elSlMultiplierInput ? parseFloat(elSlMultiplierInput.value) : 1.5;
         
         const riskMode = elRiskSelect ? elRiskSelect.value : "conservative";
         const maxDrawdown = elMaxDrawdownInput ? parseFloat(elMaxDrawdownInput.value) : 5.0;
@@ -807,7 +813,7 @@ if (elSaveBlogConfigBtn) {
         });
         
         // 2. Save System settings
-        const saveSystemPromise = fetch(`/api/system/config?trading_mode=${tradingMode}&risk_mode=${riskMode}&max_drawdown=${maxDrawdown}&broker=${broker}&api_key=${encodeURIComponent(exchangeApiKey)}&api_secret=${encodeURIComponent(exchangeApiSecret)}&trailing_stop=${trailingStop}&cooldown=${cooldown}`, {
+        const saveSystemPromise = fetch(`/api/system/config?trading_mode=${tradingMode}&risk_mode=${riskMode}&max_drawdown=${maxDrawdown}&broker=${broker}&api_key=${encodeURIComponent(exchangeApiKey)}&api_secret=${encodeURIComponent(exchangeApiSecret)}&trailing_stop=${trailingStop}&cooldown=${cooldown}&tp_multiplier=${tpMultiplier}&sl_multiplier=${slMultiplier}`, {
             method: 'POST'
         });
 
