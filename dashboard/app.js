@@ -20,6 +20,7 @@ let currentPrice = 0.0;
 let balance = 100.0;
 let equity = 100.0;
 let initialBalance = 100.0;
+let completedTrades = [];
 let totalClosedPnL = 0.0;
 let isStopped = false;
 let currentWeights = {};
@@ -194,6 +195,7 @@ function handleSocketMessage(msg) {
 function handleInitState(data) {
     balance = data.balance;
     equity = data.equity !== undefined ? data.equity : data.balance;
+    completedTrades = data.trades || [];
     if (data.initial_balance !== undefined) {
         initialBalance = data.initial_balance;
     }
@@ -330,6 +332,9 @@ function handleTick(data) {
         elUnrealized.className = "kpi-sub";
         elPositionDetails.innerHTML = `<p style="font-size: 13px; color: var(--text-muted); text-align: center; padding: 20px;">No Trade Currently Open</p>`;
     }
+    
+    // Update performance KPIs in real-time
+    updatePerformanceKPIs(completedTrades, equity);
 
     // Process evaluation odds
     if (data.evaluation) {
@@ -580,6 +585,7 @@ function updateEvaluationWidget(eval, signal) {
 }
 
 function renderTradeLog(trades) {
+    completedTrades = trades || [];
     if (!trades || trades.length === 0) {
         elTradeLogBody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-muted); padding: 40px;">No trades completed yet. Watching the market for opportunities...</td></tr>`;
         return;
@@ -625,24 +631,30 @@ function renderTradeClosedState(closedTrade) {
 }
 
 function updatePerformanceKPIs(trades, currentEquity) {
-    if (!trades || trades.length === 0) {
-        elWinrate.textContent = "0.0%";
-        elTradeCount.textContent = "0 trades completed";
-        elTotalPnL.textContent = "€0.00";
-        elTotalPnLPercent.textContent = "0.00% growth";
-        elTotalPnL.className = "kpi-value";
-        elTotalPnLPercent.className = "kpi-sub";
-        return;
-    }
+    if (!trades) return;
     
     const winCount = trades.filter(t => t.pnl > 0).length;
-    const wr = (winCount / trades.length) * 100;
+    const wr = trades.length > 0 ? (winCount / trades.length) * 100 : 0.0;
     elWinrate.textContent = `${wr.toFixed(1)}%`;
     elTradeCount.textContent = `${trades.length} trades completed`;
     
-    // Net profit
-    const netPnL = currentEquity - initialBalance;
-    const netPct = (netPnL / initialBalance) * 100;
+    // 1. Calculate Realized PnL from trades
+    const realizedPnL = trades.reduce((sum, t) => sum + t.pnl, 0);
+    
+    // 2. Calculate Unrealized PnL from active position
+    let unrealizedPnL = 0.0;
+    if (activePosition && currentPrice > 0) {
+        const entry = activePosition.entry_price;
+        const qty = activePosition.quantity;
+        if (activePosition.direction === "BUY") {
+            unrealizedPnL = (currentPrice - entry) * qty;
+        } else {
+            unrealizedPnL = (entry - currentPrice) * qty;
+        }
+    }
+    
+    const netPnL = realizedPnL + unrealizedPnL;
+    const netPct = initialBalance > 0 ? (netPnL / initialBalance) * 100 : 0.0;
     
     elTotalPnL.textContent = `${netPnL >= 0 ? '+' : ''}€${netPnL.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
     elTotalPnLPercent.textContent = `${netPnL >= 0 ? '+' : ''}${netPct.toFixed(2)}% growth`;
