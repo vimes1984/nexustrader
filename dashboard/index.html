@@ -418,7 +418,12 @@
                             Gemini API Key
                             <i data-lucide="info" class="tooltip-icon"></i>
                         </span>
-                        <input type="password" id="blog-api-key" placeholder="Enter API key..." style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 12px; border-radius: 8px; font-size:12px; font-family:inherit; outline:none; transition: var(--transition);">
+                        <div style="position: relative; display: flex; align-items: center; width: 100%;">
+                            <input type="password" id="blog-api-key" placeholder="Enter API key..." style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 36px 8px 12px; border-radius: 8px; font-size:12px; font-family:inherit; outline:none; transition: var(--transition); width: 100%;">
+                            <button type="button" id="toggle-blog-api-key-visibility" style="position: absolute; right: 10px; background: transparent; border: none; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; outline: none; padding: 0;">
+                                <i data-lucide="eye" style="width: 16px; height: 16px;"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
                 

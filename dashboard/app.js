@@ -1035,6 +1035,19 @@ if (elResetCooldownsBtn) {
 initChart();
 connectWebSocket();
 loadBlogConfig();
+
+// Toggle Blog API Key visibility
+const btnToggleKey = document.getElementById("toggle-blog-api-key-visibility");
+const inputKey = document.getElementById("blog-api-key");
+if (btnToggleKey && inputKey) {
+    btnToggleKey.addEventListener("click", () => {
+        const isPassword = inputKey.type === "password";
+        inputKey.type = isPassword ? "text" : "password";
+        btnToggleKey.innerHTML = isPassword ? `<i data-lucide="eye-off" style="width: 16px; height: 16px;"></i>` : `<i data-lucide="eye" style="width: 16px; height: 16px;"></i>`;
+        lucide.createIcons();
+    });
+}
+
 lucide.createIcons();
 
 // Setup tab listeners for Exchange Portfolio
