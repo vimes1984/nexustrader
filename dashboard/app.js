@@ -317,7 +317,23 @@ function handleTick(data) {
     if (tabPriceEl) {
         tabPriceEl.textContent = `€${data.price.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
     }
+    // Update global balance & equity values whenever ANY tick arrives
+    if (data.balance !== undefined) {
+        balance = data.balance;
+        elBalance.textContent = `€${balance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    }
+    if (data.equity !== undefined) {
+        equity = data.equity;
+        elEquity.textContent = `€${equity.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        const portEqEl = document.getElementById("tab-portfolio-equity");
+        if (portEqEl) {
+            portEqEl.textContent = `€${equity.toFixed(2)}`;
+        }
+    }
     
+    // Update performance KPIs (realized + unrealized profit) in real-time
+    updatePerformanceKPIs(completedTrades, equity);
+
     // If this tick belongs to another ticker, do not update the main chart or details cards
     if (data.ticker !== activeTicker) {
         return;
@@ -325,16 +341,6 @@ function handleTick(data) {
     
     currentPrice = data.price;
     elPrice.textContent = `€${currentPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-    
-    // Update balance & equity card
-    balance = data.balance;
-    equity = data.equity !== undefined ? data.equity : data.balance;
-    elBalance.textContent = `€${balance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-    elEquity.textContent = `€${equity.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-    const portEqEl = document.getElementById("tab-portfolio-equity");
-    if (portEqEl) {
-        portEqEl.textContent = `€${equity.toFixed(2)}`;
-    }
     
     // Update unrealized calculations
     activePosition = data.position;
@@ -362,10 +368,6 @@ function handleTick(data) {
         elUnrealized.className = "kpi-sub";
         elPositionDetails.innerHTML = `<p style="font-size: 13px; color: var(--text-muted); text-align: center; padding: 20px;">No Trade Currently Open</p>`;
     }
-    
-    // Update performance KPIs in real-time
-    updatePerformanceKPIs(completedTrades, equity);
-
     // Process evaluation odds
     if (data.evaluation) {
         updateEvaluationWidget(data.evaluation, data.weighted_signal);
