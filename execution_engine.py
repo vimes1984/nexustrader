@@ -70,8 +70,7 @@ class ExecutionEngine:
             logging.info(f"[PAPER TRADING] Simulating order execution: {side.upper()} {qty:.4f} {symbol} @ {price:.2f}")
             return True
             
-        # Live broker integration placeholder
-        broker_type = self.config.get("broker", "kraken")
+        broker_type = self.config.get("broker", "kraken").lower()
         creds = self.config.get("api_credentials", {})
         api_key = creds.get("api_key", "")
         api_secret = creds.get("api_secret", "")
@@ -80,15 +79,39 @@ class ExecutionEngine:
             logging.error("[LIVE TRADING ERROR] Missing API credentials in config.json. Aborting order execution!")
             return False
             
-        logging.info(f"[LIVE TRADING] Sending order to {broker_type.upper()}: {side.upper()} {qty:.4f} {symbol} @ {price:.2f}")
+        ccxt_symbol = symbol.replace("-", "/")
+        logging.info(f"[LIVE TRADING] Sending order to {broker_type.upper()}: {side.upper()} {qty:.4f} {ccxt_symbol} @ {price:.2f}")
         try:
-            # Implementation point for exchange client library (e.g. ccxt or direct broker API)
-            # example:
-            # import ccxt
-            # exchange = getattr(ccxt, broker_type)({'apiKey': api_key, 'secret': api_secret})
-            # order = exchange.create_order(symbol, 'market', side, qty)
-            # return True
-            logging.info(f"[LIVE TRADING SUCCESS] Simulated successful routing to {broker_type.upper()} API.")
+            import ccxt
+            if not hasattr(ccxt, broker_type):
+                logging.error(f"[LIVE TRADING ERROR] Broker '{broker_type}' is not supported by ccxt library.")
+                return False
+                
+            exchange_class = getattr(ccxt, broker_type)
+            exchange = exchange_class({
+                'apiKey': api_key,
+                'secret': api_secret,
+                'enableRateLimit': True,
+            })
+            
+            # Load markets to obtain asset precisions
+            exchange.load_markets()
+            
+            if ccxt_symbol not in exchange.markets:
+                logging.error(f"[LIVE TRADING ERROR] Market symbol '{ccxt_symbol}' not found on exchange {broker_type.upper()}.")
+                return False
+                
+            # Round quantity to exchange precision
+            amount = float(exchange.amount_to_precision(ccxt_symbol, qty))
+            if amount <= 0:
+                logging.error(f"[LIVE TRADING ERROR] Calculated execution quantity {amount} rounded to 0. Order aborted.")
+                return False
+                
+            # Execute market order on live exchange
+            logging.info(f"[LIVE TRADING EXECUTE] Routing market {side.upper()} order for {amount} {ccxt_symbol}...")
+            order = exchange.create_order(ccxt_symbol, 'market', side.lower(), amount)
+            
+            logging.info(f"[LIVE TRADING SUCCESS] Placed order on {broker_type.upper()}: ID={order.get('id')}, Status={order.get('status')}, Filled={order.get('filled')}")
             return True
         except Exception as e:
             logging.error(f"[LIVE TRADING EXCEPTION] Failed to place live order: {e}")

@@ -211,16 +211,23 @@
                         Blog Now
                     </button>
                 </div>
+                <div style="display: flex; gap: 10px; margin-top: 5px;">
+                    <button class="btn" id="test-broker-api-btn" style="flex: 1; padding: 8px 12px; font-size: 12px; justify-content: center; border-color: rgba(0, 240, 255, 0.2); font-family: inherit;">
+                        <i data-lucide="check-circle" style="width: 14px; height: 14px; color: var(--neon-blue); margin-right: 4px;"></i>
+                        Test API Keys
+                    </button>
+                </div>
                 <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 8px;">
-                    <span style="font-size: 11px; color: var(--text-secondary);">Manual Optimizers:</span>
-                    <div style="display: flex; gap: 10px;">
-                        <button class="btn" id="trigger-opt-sentiment-btn" style="flex: 1; padding: 6px 10px; font-size: 11px; justify-content: center; border-color: rgba(168, 85, 247, 0.2); font-family: inherit; color: var(--neon-purple);">
-                            <i data-lucide="bar-chart-2" style="width: 12px; height: 12px; margin-right: 4px;"></i>
+                    <span style="font-size: 11px; color: var(--text-secondary);">Manual Actions:</span>
+                    <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                        <button class="btn" id="trigger-opt-sentiment-btn" style="flex: 1; min-width: 70px; padding: 6px 8px; font-size: 10px; justify-content: center; border-color: rgba(168, 85, 247, 0.2); font-family: inherit; color: var(--neon-purple);">
                             Feeds Opt
                         </button>
-                        <button class="btn" id="trigger-opt-params-btn" style="flex: 1; padding: 6px 10px; font-size: 11px; justify-content: center; border-color: rgba(168, 85, 247, 0.2); font-family: inherit; color: var(--neon-purple);">
-                            <i data-lucide="sliders" style="width: 12px; height: 12px; margin-right: 4px;"></i>
+                        <button class="btn" id="trigger-opt-params-btn" style="flex: 1; min-width: 75px; padding: 6px 8px; font-size: 10px; justify-content: center; border-color: rgba(168, 85, 247, 0.2); font-family: inherit; color: var(--neon-purple);">
                             Backtest Opt
+                        </button>
+                        <button class="btn" id="trigger-reset-cooldowns-btn" style="flex: 1; min-width: 90px; padding: 6px 8px; font-size: 10px; justify-content: center; border-color: rgba(244, 63, 94, 0.2); font-family: inherit; color: var(--neon-red);">
+                            Clear Cooldowns
                         </button>
                     </div>
                 </div>

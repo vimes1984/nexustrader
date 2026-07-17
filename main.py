@@ -519,8 +519,65 @@ def update_system_risk_mode(risk_mode: str):
             "type": "risk_mode_updated",
             "risk_mode": risk_mode
         }))
-        return {"status": "success", "risk_mode": risk_mode}
     return {"error": "Invalid risk mode"}
+
+@app.get("/api/system/test_broker")
+def test_broker_connection():
+    config_path = os.path.expanduser("~/.nexustrader/config.json")
+    if not os.path.exists(config_path):
+        return {"status": "error", "message": "No configuration file found."}
+        
+    try:
+        with open(config_path, "r") as f:
+            cfg = json.load(f)
+    except Exception as e:
+        return {"status": "error", "message": f"Failed to read config.json: {e}"}
+        
+    broker_type = cfg.get("broker", "kraken").lower()
+    creds = cfg.get("api_credentials", {})
+    api_key = creds.get("api_key", "")
+    api_secret = creds.get("api_secret", "")
+    
+    if not api_key or not api_secret:
+        return {"status": "error", "message": "API Key or Secret is missing in config."}
+        
+    try:
+        import ccxt
+        if not hasattr(ccxt, broker_type):
+            return {"status": "error", "message": f"Broker '{broker_type}' is not supported by CCXT."}
+            
+        exchange_class = getattr(ccxt, broker_type)
+        exchange = exchange_class({
+            'apiKey': api_key,
+            'secret': api_secret,
+            'enableRateLimit': True,
+        })
+        
+        # Test authenticating by fetching balance
+        balance_info = exchange.fetch_balance()
+        balances = {k: v for k, v in balance_info.get('total', {}).items() if v > 0}
+        
+        return {
+            "status": "success",
+            "message": f"Successfully connected to {broker_type.upper()} API!",
+            "balances": balances
+        }
+    except Exception as e:
+        logging.error(f"Broker test connection failed: {e}")
+        return {
+            "status": "error",
+            "message": f"Connection failed: {str(e)}"
+        }
+
+@app.post("/api/system/reset_cooldowns")
+def reset_all_cooldowns():
+    try:
+        for symbol in orchestrator.tickers:
+            database.save_setting(f"cooldown_end_{symbol}", "0.0")
+        logging.info("All ticker loss cooldown periods reset successfully.")
+        return {"status": "success", "message": "All loss cooldowns reset. Ready to trade!"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 @app.post("/api/system/optimize/sentiment")
 def trigger_sentiment_optimization():

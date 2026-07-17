@@ -770,6 +770,71 @@ if (elOptParamsBtn) {
     });
 }
 
+// 1. Test Broker API Connection Listener
+const elTestBrokerBtn = document.getElementById("test-broker-api-btn");
+if (elTestBrokerBtn) {
+    elTestBrokerBtn.addEventListener("click", () => {
+        elTestBrokerBtn.disabled = true;
+        elBlogStatusMsg.textContent = "Testing broker API connection...";
+        elBlogStatusMsg.className = "color-blue";
+        
+        fetch(`/api/system/test_broker?t=${Date.now()}`)
+            .then(res => res.json())
+            .then(data => {
+                elTestBrokerBtn.disabled = false;
+                if (data.status === "success") {
+                    elBlogStatusMsg.textContent = data.message;
+                    elBlogStatusMsg.className = "color-green";
+                    
+                    // Display balance info
+                    const balStrings = Object.entries(data.balances).map(([asset, qty]) => `${qty} ${asset}`).join(", ");
+                    alert(`✅ API Connection Success!\n\nBalances: ${balStrings || "No positive asset balances found."}`);
+                    setTimeout(() => { elBlogStatusMsg.textContent = ""; }, 5000);
+                } else {
+                    elBlogStatusMsg.textContent = "Connection failed. Check details.";
+                    elBlogStatusMsg.className = "color-red";
+                    alert(`❌ API Connection Failed:\n\n${data.message}`);
+                }
+            })
+            .catch(err => {
+                elTestBrokerBtn.disabled = false;
+                elBlogStatusMsg.textContent = "Error testing connection.";
+                elBlogStatusMsg.className = "color-red";
+                console.error(err);
+            });
+    });
+}
+
+// 2. Clear Loss Cooldowns Listener
+const elResetCooldownsBtn = document.getElementById("trigger-reset-cooldowns-btn");
+if (elResetCooldownsBtn) {
+    elResetCooldownsBtn.addEventListener("click", () => {
+        elResetCooldownsBtn.disabled = true;
+        elBlogStatusMsg.textContent = "Clearing all loss cooldowns...";
+        elBlogStatusMsg.className = "color-blue";
+        
+        fetch("/api/system/reset_cooldowns", { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                elResetCooldownsBtn.disabled = false;
+                if (data.status === "success") {
+                    elBlogStatusMsg.textContent = data.message;
+                    elBlogStatusMsg.className = "color-green";
+                    setTimeout(() => { elBlogStatusMsg.textContent = ""; }, 5000);
+                } else {
+                    elBlogStatusMsg.textContent = `Error: ${data.message || "failed"}`;
+                    elBlogStatusMsg.className = "color-red";
+                }
+            })
+            .catch(err => {
+                elResetCooldownsBtn.disabled = false;
+                elBlogStatusMsg.textContent = "Error resetting cooldowns.";
+                elBlogStatusMsg.className = "color-red";
+                console.error(err);
+            });
+    });
+}
+
 // App Startup
 initChart();
 connectWebSocket();
