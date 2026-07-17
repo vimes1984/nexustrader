@@ -301,8 +301,8 @@ tr:hover td {
     background: rgba(255, 255, 255, 0.01);
 }
 
-/* Probability Details */
-.probability-details {
+/* Probability & Neural Details */
+.probability-details, .neural-diagnostics {
     padding: 24px;
     display: flex;
     flex-direction: column;
