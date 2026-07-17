@@ -387,9 +387,113 @@ def get_status():
         "tickers": orchestrator.tickers
     }
 
+def reconstruct_trades_from_exchange(exchange):
+    try:
+        raw_trades = exchange.fetch_my_trades(limit=100)
+        if not raw_trades:
+            return []
+        # Sort raw trades chronologically
+        raw_trades.sort(key=lambda x: x.get('timestamp', 0))
+        
+        # FIFO inventory tracking per symbol
+        inventories = {} # symbol -> list of dicts: {"price": float, "qty": float, "timestamp": float}
+        completed_trades = []
+        
+        for rt in raw_trades:
+            symbol = rt.get('symbol', '')
+            side = rt.get('side', '').upper() # BUY or SELL
+            price = float(rt.get('price', 0.0))
+            qty = float(rt.get('amount', 0.0))
+            timestamp = rt.get('timestamp', 0) / 1000.0
+            
+            # Convert slash symbol (e.g. BTC/EUR) to dash (e.g. BTC-EUR)
+            dash_symbol = symbol.replace("/", "-")
+            
+            if dash_symbol not in inventories:
+                inventories[dash_symbol] = []
+                
+            if side == 'BUY':
+                inventories[dash_symbol].append({"price": price, "qty": qty, "timestamp": timestamp})
+            elif side == 'SELL':
+                # Pair with BUY inventory (FIFO)
+                remaining_qty = qty
+                matched_cost = 0.0
+                matched_qty = 0.0
+                
+                while remaining_qty > 0 and inventories[dash_symbol]:
+                    buy_node = inventories[dash_symbol][0]
+                    if buy_node["qty"] <= remaining_qty:
+                        matched_cost += buy_node["qty"] * buy_node["price"]
+                        matched_qty += buy_node["qty"]
+                        remaining_qty -= buy_node["qty"]
+                        inventories[dash_symbol].pop(0)
+                    else:
+                        matched_cost += remaining_qty * buy_node["price"]
+                        matched_qty += remaining_qty
+                        buy_node["qty"] -= remaining_qty
+                        remaining_qty = 0
+                        
+                if matched_qty > 0:
+                    avg_entry = matched_cost / matched_qty
+                    pnl = (price - avg_entry) * matched_qty
+                    pnl_pct = pnl / matched_cost if matched_cost > 0 else 0.0
+                    completed_trades.append({
+                        "exit_time": timestamp,
+                        "symbol": dash_symbol,
+                        "direction": "BUY",
+                        "quantity": matched_qty,
+                        "entry_price": avg_entry,
+                        "exit_price": price,
+                        "pnl": pnl,
+                        "pnl_percent": pnl_pct,
+                        "exit_reason": "EXCHANGE FILL"
+                    })
+        completed_trades.sort(key=lambda x: x['exit_time'], reverse=True)
+        return completed_trades
+    except Exception as e:
+        logging.error(f"Error reconstructing trades from exchange: {e}")
+        return []
+
 @app.get("/api/trades")
 def get_trades():
-    return orchestrator.execution_engine.closed_trades
+    local_trades = database.load_trades()
+    config_path = os.path.expanduser("~/.nexustrader/config.json")
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, "r") as f:
+                cfg = json.load(f)
+            if cfg.get("trading_mode") == "live":
+                creds = cfg.get("api_credentials", {})
+                api_key = creds.get("api_key")
+                api_secret = creds.get("api_secret")
+                broker = cfg.get("broker", "kraken").lower()
+                
+                if api_key and api_secret:
+                    import ccxt
+                    exchange_class = getattr(ccxt, broker)
+                    exchange = exchange_class({
+                        'apiKey': api_key,
+                        'secret': api_secret,
+                        'enableRateLimit': True,
+                    })
+                    exchange_trades = reconstruct_trades_from_exchange(exchange)
+                    if exchange_trades:
+                        merged = list(local_trades)
+                        for et in exchange_trades:
+                            matched = False
+                            et_time = int(et["exit_time"])
+                            for lt in merged:
+                                if abs(int(lt["exit_time"]) - et_time) < 15:
+                                    matched = True
+                                    break
+                            if not matched:
+                                merged.append(et)
+                        merged.sort(key=lambda x: x["exit_time"], reverse=True)
+                        return merged
+        except Exception as e:
+            logging.error(f"Error merging exchange trades: {e}")
+            
+    return local_trades
 
 @app.get("/api/history")
 def get_ticker_history(ticker: str = "ETH-EUR"):
