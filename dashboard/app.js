@@ -1039,7 +1039,9 @@ function updateExchangeStatus() {
             if (!data.holdings || data.holdings.length === 0) {
                 elHoldingsContainer.innerHTML = `<p style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 10px;">No holdings found.</p>`;
             } else {
+                let totalEur = 0;
                 data.holdings.forEach(h => {
+                    totalEur += h.value_eur;
                     const row = document.createElement("div");
                     row.style.cssText = "display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 8px; font-size: 12px; transition: var(--transition);";
                     row.innerHTML = `
@@ -1049,6 +1051,15 @@ function updateExchangeStatus() {
                     `;
                     elHoldingsContainer.appendChild(row);
                 });
+                
+                // Add Total row
+                const totalRow = document.createElement("div");
+                totalRow.style.cssText = "display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; margin-top: 6px; background: rgba(0, 240, 255, 0.04); border: 1px solid rgba(0, 240, 255, 0.15); border-radius: 8px; font-size: 12px; font-weight: 600;";
+                totalRow.innerHTML = `
+                    <span style="color: var(--text-primary);">Total Holdings Value</span>
+                    <span style="color: var(--neon-blue); font-family: monospace;">€${totalEur.toFixed(2)}</span>
+                `;
+                elHoldingsContainer.appendChild(totalRow);
             }
             
             // Render Open Orders
