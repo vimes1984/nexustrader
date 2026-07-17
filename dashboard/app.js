@@ -18,6 +18,7 @@ const tickerLatest = {};
 let activePosition = null;
 let currentPrice = 0.0;
 let balance = 100.0;
+let equity = 100.0;
 let initialBalance = 100.0;
 let totalClosedPnL = 0.0;
 let isStopped = false;
@@ -192,6 +193,7 @@ function handleSocketMessage(msg) {
 // Process Init Message
 function handleInitState(data) {
     balance = data.balance;
+    equity = data.equity !== undefined ? data.equity : data.balance;
     if (data.initial_balance !== undefined) {
         initialBalance = data.initial_balance;
     }
@@ -250,7 +252,7 @@ function handleInitState(data) {
     currentWeights = data.weights;
     renderWeights(currentWeights);
     renderTradeLog(data.trades);
-    updatePerformanceKPIs(data.trades, balance);
+    updatePerformanceKPIs(data.trades, equity);
     
     // Switch to active ticker history initial loading
     fetch(`/api/history?ticker=${activeTicker}&t=${Date.now()}`)
@@ -297,8 +299,10 @@ function handleTick(data) {
     elPrice.textContent = `€${currentPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
     
     // Update balance & equity card
-    elBalance.textContent = `€${data.balance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-    elEquity.textContent = `€${data.equity.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    balance = data.balance;
+    equity = data.equity !== undefined ? data.equity : data.balance;
+    elBalance.textContent = `€${balance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    elEquity.textContent = `€${equity.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
     
     // Update unrealized calculations
     activePosition = data.position;
@@ -448,7 +452,9 @@ function switchTicker(ticker) {
 function handleTradeOpened(data) {
     activePosition = data.position;
     balance = data.balance;
+    equity = data.equity !== undefined ? data.equity : data.balance;
     elBalance.textContent = `€${balance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    elEquity.textContent = `€${equity.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
     
     // Pulse card glow
     const card = document.getElementById("equity-card");
@@ -459,7 +465,9 @@ function handleTradeOpened(data) {
 function handleTradeClosed(data) {
     activePosition = null;
     balance = data.balance;
+    equity = data.equity !== undefined ? data.equity : data.balance;
     elBalance.textContent = `€${balance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    elEquity.textContent = `€${equity.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
     
     // Add trade to execution log and update stats
     renderTradeClosedState(data.trade);
@@ -612,11 +620,11 @@ function renderTradeClosedState(closedTrade) {
         .then(res => res.json())
         .then(trades => {
             renderTradeLog(trades);
-            updatePerformanceKPIs(trades, balance);
+            updatePerformanceKPIs(trades, equity);
         });
 }
 
-function updatePerformanceKPIs(trades, currentBalance) {
+function updatePerformanceKPIs(trades, currentEquity) {
     if (!trades || trades.length === 0) {
         elWinrate.textContent = "0.0%";
         elTradeCount.textContent = "0 trades completed";
@@ -633,7 +641,7 @@ function updatePerformanceKPIs(trades, currentBalance) {
     elTradeCount.textContent = `${trades.length} trades completed`;
     
     // Net profit
-    const netPnL = currentBalance - initialBalance;
+    const netPnL = currentEquity - initialBalance;
     const netPct = (netPnL / initialBalance) * 100;
     
     elTotalPnL.textContent = `${netPnL >= 0 ? '+' : ''}€${netPnL.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
@@ -855,7 +863,7 @@ if (elTriggerBlogBtn) {
                             .then(res => res.json())
                             .then(trades => {
                                 renderTradeLog(trades);
-                                updatePerformanceKPIs(trades, balance);
+                                updatePerformanceKPIs(trades, equity);
                             });
                     }
                 } else {

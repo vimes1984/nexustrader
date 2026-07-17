@@ -232,7 +232,8 @@ class NexusTraderOrchestrator:
                     "type": "trade_opened",
                     "ticker": ticker,
                     "position": update_event["data"],
-                    "balance": self.execution_engine.balance
+                    "balance": self.execution_engine.balance,
+                    "equity": current_equity
                 }))
             
         # 3. If no position is open for this ticker, check strategy ensemble signals
@@ -279,14 +280,16 @@ class NexusTraderOrchestrator:
                                 "type": "trade_opened",
                                 "ticker": ticker,
                                 "position": self.execution_engine.active_positions[ticker],
-                                "balance": self.execution_engine.balance
+                                "balance": self.execution_engine.balance,
+                                "equity": current_equity
                             }))
                         else:
                             self._run_async(self.broadcast_message({
                                 "type": "limit_order_placed",
                                 "ticker": ticker,
                                 "order": self.execution_engine.pending_limit_orders[ticker],
-                                "balance": self.execution_engine.balance
+                                "balance": self.execution_engine.balance,
+                                "equity": current_equity
                             }))
 
         # 4. Broadcast real-time update to all clients
