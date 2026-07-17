@@ -101,7 +101,15 @@ function initChart() {
             maintainAspectRatio: false,
             plugins: {
                 legend: {
-                    display: false
+                    display: true,
+                    position: 'top',
+                    labels: {
+                        color: '#94a3b8',
+                        font: {
+                            family: 'Space Grotesk',
+                            size: 11
+                        }
+                    }
                 }
             },
             scales: {

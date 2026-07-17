@@ -503,9 +503,9 @@ input[type="range"]::-webkit-slider-thumb {
 
 /* Ticker Switcher Tabs */
 .ticker-tab {
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid var(--border-color);
-    color: var(--text-secondary);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
     padding: 8px 16px;
     border-radius: 10px;
     cursor: pointer;
@@ -519,16 +519,16 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 .ticker-tab:hover {
-    background: rgba(255, 255, 255, 0.05);
-    border-color: rgba(0, 240, 255, 0.3);
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(0, 240, 255, 0.4);
     transform: translateY(-1px);
 }
 
 .ticker-tab.active {
-    background: rgba(0, 240, 255, 0.05);
+    background: rgba(0, 240, 255, 0.1);
     border-color: var(--neon-blue);
-    color: var(--text-primary);
-    box-shadow: 0 0 10px rgba(0, 240, 255, 0.15);
+    color: #ffffff;
+    box-shadow: 0 0 10px rgba(0, 240, 255, 0.25);
 }
 
 .ticker-tab-name {
