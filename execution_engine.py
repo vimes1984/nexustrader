@@ -416,7 +416,8 @@ class ExecutionEngine:
                 "exit_time": time.time(),
                 "strategy_signals": pos["strategy_signals"],
                 "sentiment_sources": pos.get("sentiment_sources", {}),
-                "policy_brain": active_brain_name
+                "policy_brain": active_brain_name,
+                "trading_mode": self.trading_mode
             }
 
             # Save trade to DB

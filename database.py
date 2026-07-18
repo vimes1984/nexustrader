@@ -85,6 +85,9 @@ def init_db():
         if "policy_brain" not in columns:
             logging.info("Migrating trades table: adding policy_brain column...")
             cursor.execute("ALTER TABLE trades ADD COLUMN policy_brain TEXT")
+        if "trading_mode" not in columns:
+            logging.info("Migrating trades table: adding trading_mode column...")
+            cursor.execute("ALTER TABLE trades ADD COLUMN trading_mode TEXT DEFAULT 'paper'")
     except Exception as e:
         logging.error(f"Error migrating trades table: {e}")
 
@@ -296,8 +299,8 @@ def save_trade(trade):
         signals_str = json.dumps(trade.get('strategy_signals', []))
         sources_str = json.dumps(trade.get('sentiment_sources', {}))
         cursor.execute("""
-        INSERT INTO trades (symbol, direction, quantity, entry_price, exit_price, pnl, pnl_percent, exit_reason, entry_time, exit_time, strategy_signals, sentiment_sources, policy_brain)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO trades (symbol, direction, quantity, entry_price, exit_price, pnl, pnl_percent, exit_reason, entry_time, exit_time, strategy_signals, sentiment_sources, policy_brain, trading_mode)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             trade['symbol'],
             trade['direction'],
@@ -311,7 +314,8 @@ def save_trade(trade):
             float(trade['exit_time']),
             signals_str,
             sources_str,
-            trade.get('policy_brain', 'Default Brain')
+            trade.get('policy_brain', 'Default Brain'),
+            trade.get('trading_mode', 'paper')
         ))
         
         # Update policy_brain's accumulated efficacy metrics
@@ -336,13 +340,16 @@ def save_trade(trade):
     finally:
         conn.close()
 
-def load_trades():
-    """Loads all trades from database."""
+def load_trades(trading_mode=None):
+    """Loads trades from database, optionally filtered by trading_mode."""
     conn = get_db_connection()
     cursor = conn.cursor()
     trades = []
     try:
-        cursor.execute("SELECT * FROM trades ORDER BY exit_time ASC")
+        if trading_mode:
+            cursor.execute("SELECT * FROM trades WHERE trading_mode = ? ORDER BY exit_time ASC", (trading_mode,))
+        else:
+            cursor.execute("SELECT * FROM trades ORDER BY exit_time ASC")
         rows = cursor.fetchall()
         for r in rows:
             trade = dict(r)

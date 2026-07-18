@@ -538,11 +538,20 @@ function handleSocketMessage(msg) {
         case "tick":
             handleTick(msg);
             break;
+        case "sim_tick":
+            handleSimTick(msg);
+            break;
         case "trade_opened":
             handleTradeOpened(msg);
             break;
+        case "sim_trade_opened":
+            // Can be handled if needed, or ignored since we rely on sim_tick position updates
+            break;
         case "trade_closed":
             handleTradeClosed(msg);
+            break;
+        case "sim_trade_closed":
+            handleSimTradeClosed(msg);
             break;
         case "learning_update":
             handleLearningUpdate(msg);
@@ -2179,6 +2188,11 @@ elNavTabs.forEach(tab => {
         if (targetTabId === "tab-neural") {
             loadWeightsHistory(activeTicker);
             loadNeuralBrains(activeTicker);
+        } else if (targetTabId === "tab-simulator") {
+            loadNeuralBrains(activeTicker);
+            if (!simChart) {
+                initSimChart();
+            }
         } else if (targetTabId === "tab-logs") {
             fetchSystemLogs();
         }
@@ -2570,6 +2584,18 @@ document.addEventListener("DOMContentLoaded", () => {
             const ticker = runSimBtn.getAttribute("data-brain-ticker");
             if (!name || !ticker) return;
             
+            // Clear prior sim logs & charts
+            simChartLabels.length = 0;
+            simChartData.length = 0;
+            simCompletedTrades.length = 0;
+            if (simChart) {
+                simChart.update();
+            }
+            const tbody = document.getElementById("sim-trade-log-body");
+            if (tbody) {
+                tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-secondary); padding: 20px;">Initializing simulation...</td></tr>`;
+            }
+            
             showToast(`Initializing simulation loop on '${name}'...`, "info");
             
             // 1. Activate the brain
@@ -2711,3 +2737,155 @@ window.closeTradeDetailsModal = function() {
     const modal = document.getElementById("trade-details-modal");
     if (modal) modal.style.display = "none";
 };
+
+// -------------------------------------------------------------
+// Separate Training Simulator Telemetry and Layout Routines
+// -------------------------------------------------------------
+let simChart;
+let simChartLabels = [];
+let simChartData = [];
+let simCompletedTrades = [];
+
+function initSimChart() {
+    const canvas = document.getElementById('simChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    simChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: simChartLabels,
+            datasets: [{
+                label: 'Simulated Equity ($)',
+                data: simChartData,
+                borderColor: '#a855f7',
+                borderWidth: 2,
+                tension: 0.15,
+                pointRadius: 2,
+                fill: 'origin',
+                backgroundColor: 'rgba(168, 85, 247, 0.05)'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                x: {
+                    grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                    ticks: { color: 'rgba(255, 255, 255, 0.4)', font: { size: 9 } }
+                },
+                y: {
+                    grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                    ticks: { color: 'rgba(255, 255, 255, 0.4)', font: { size: 9 } }
+                }
+            }
+        }
+    });
+}
+
+function handleSimTick(data) {
+    const simProgressContainer = document.getElementById("sim-progress-container");
+    if (simProgressContainer) {
+        if (data.sim_index !== undefined && data.sim_index !== null && data.sim_total) {
+            simProgressContainer.style.display = "flex";
+            const percent = (data.sim_index / data.sim_total) * 100;
+            document.getElementById("sim-progress-bar").style.width = `${percent}%`;
+            document.getElementById("sim-progress-label").textContent = `${data.sim_index} / ${data.sim_total} (${percent.toFixed(1)}%)`;
+        } else {
+            simProgressContainer.style.display = "none";
+        }
+    }
+
+    const simBalance = data.balance !== undefined ? data.balance : 100.0;
+    const simEquity = data.equity !== undefined ? data.equity : simBalance;
+    
+    document.getElementById("val-sim-equity").textContent = `$${simEquity.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    
+    const label = data.timestamp ? data.timestamp.split(" ")[1] || data.timestamp.split("T")[1]?.slice(0, 5) || data.timestamp : "";
+    if (simChartLabels.length === 0 || simChartLabels[simChartLabels.length - 1] !== label) {
+        simChartLabels.push(label);
+        simChartData.push(simEquity);
+        if (simChartLabels.length > 200) {
+            simChartLabels.shift();
+            simChartData.shift();
+        }
+        if (simChart) {
+            simChart.update();
+        }
+    }
+    
+    let unrealized = 0.0;
+    let unrealizedPct = 0.0;
+    const pos = data.position;
+    if (pos && data.price > 0) {
+        const entry = pos.entry_price;
+        const qty = pos.quantity;
+        if (pos.direction === "BUY") {
+            unrealized = (data.price - entry) * qty;
+        } else {
+            unrealized = (entry - data.price) * qty;
+        }
+        unrealizedPct = entry > 0 ? (unrealized / (entry * qty)) * 100 : 0.0;
+    }
+    document.getElementById("val-sim-unrealized-pnl").textContent = `Sim Active PnL: ${unrealized >= 0 ? '+' : ''}$${unrealized.toFixed(2)} (${unrealizedPct.toFixed(2)}%)`;
+}
+
+function handleSimTradeClosed(data) {
+    const trade = data.trade;
+    if (!trade) return;
+    simCompletedTrades.unshift(trade);
+    renderSimTradeLog(simCompletedTrades);
+    updateSimPerformanceKPIs(simCompletedTrades, data.equity);
+}
+
+function renderSimTradeLog(trades) {
+    const tbody = document.getElementById("sim-trade-log-body");
+    if (!tbody) return;
+    tbody.innerHTML = "";
+    if (trades.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-secondary); padding: 20px;">No simulation trades run yet. Start the simulator below.</td></tr>`;
+        return;
+    }
+    
+    trades.forEach(t => {
+        const row = document.createElement("tr");
+        row.style.borderBottom = "1px solid var(--border-color)";
+        row.style.cursor = "pointer";
+        row.style.transition = "background-color 0.15s";
+        row.addEventListener("mouseover", () => row.style.backgroundColor = "rgba(255,255,255,0.02)");
+        row.addEventListener("mouseout", () => row.style.backgroundColor = "transparent");
+        
+        const dateStr = new Date(t.exit_time * 1000).toLocaleTimeString();
+        const pnlColor = t.pnl >= 0 ? 'var(--neon-green)' : 'var(--neon-red)';
+        
+        row.innerHTML = `
+            <td style="padding: 8px 4px; color: var(--text-muted); font-family: monospace;">${dateStr}</td>
+            <td style="padding: 8px 4px; font-weight: bold; color: var(--text-primary);">${t.symbol}</td>
+            <td style="padding: 8px 4px;"><span class="badge ${t.direction === 'BUY' ? 'badge-buy' : 'badge-sell'}">${t.direction}</span></td>
+            <td style="padding: 8px 4px; font-family: monospace;">$${t.entry_price.toFixed(2)}</td>
+            <td style="padding: 8px 4px; font-family: monospace;">$${t.exit_price.toFixed(2)}</td>
+            <td style="padding: 8px 4px; font-family: monospace;">${t.quantity.toFixed(4)}</td>
+            <td style="padding: 8px 4px; text-align: right; font-weight: bold; color: ${pnlColor}; font-family: monospace;">${t.pnl >= 0 ? '+' : ''}$${t.pnl.toFixed(2)}</td>
+            <td style="padding: 8px 4px; text-align: right; font-weight: bold; color: ${pnlColor}; font-family: monospace;">${t.pnl_percent >= 0 ? '+' : ''}${(t.pnl_percent * 100).toFixed(2)}%</td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+function updateSimPerformanceKPIs(trades, currentEquity) {
+    if (!trades) return;
+    const winCount = trades.filter(t => t.pnl > 0).length;
+    const wr = trades.length > 0 ? (winCount / trades.length) * 100 : 0.0;
+    
+    document.getElementById("val-sim-winrate").textContent = `${wr.toFixed(1)}%`;
+    document.getElementById("val-sim-trade-count").textContent = `${trades.length} trades completed`;
+    
+    const realizedPnL = trades.reduce((sum, t) => sum + t.pnl, 0);
+    const initialBal = 100.0;
+    const netPct = (realizedPnL / initialBal) * 100;
+    
+    document.getElementById("val-sim-total-pnl").textContent = `${realizedPnL >= 0 ? '+' : ''}$${realizedPnL.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    document.getElementById("val-sim-total-pnl-percent").textContent = `${realizedPnL >= 0 ? '+' : ''}${netPct.toFixed(2)}% growth`;
+}

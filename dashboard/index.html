@@ -145,6 +145,10 @@
                 <i data-lucide="brain-circuit" style="width: 16px; height: 16px;"></i>
                 Neural Core
             </button>
+            <button class="nav-tab" data-tab="tab-simulator" style="flex: 1; min-width: 90px; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 12px; background: transparent; border: 1px solid transparent; color: var(--text-secondary); border-radius: 8px; font-family: inherit; font-size: 12px; font-weight: 500; cursor: pointer; transition: var(--transition);">
+                <i data-lucide="play-circle" style="width: 16px; height: 16px; color: var(--neon-purple);"></i>
+                Training Simulator
+            </button>
             <button class="nav-tab" data-tab="tab-agents" style="flex: 1; min-width: 90px; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 12px; background: transparent; border: 1px solid transparent; color: var(--text-secondary); border-radius: 8px; font-family: inherit; font-size: 12px; font-weight: 500; cursor: pointer; transition: var(--transition);">
                 <i data-lucide="bot" style="width: 16px; height: 16px;"></i>
                 AI Agent Nexus
@@ -409,8 +413,152 @@
                         </div>
                     </article>
  
-                    <!-- Saved Neural Brains (Multi-Brain Selection & Custom Training) -->
+
+                    <!-- Brain Profiles Reference -->
                     <article class="glass-panel" style="padding: 24px; margin-top: 20px;">
+                        <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="info" style="width: 15px; height: 15px; color: var(--neon-blue);"></i>
+                            Brain Profiles Reference
+                        </h3>
+                        <div style="display: flex; flex-direction: column; gap: 10px; font-size: 11px; line-height: 1.4;">
+                            <div style="border-left: 2px solid var(--neon-blue); padding-left: 8px;">
+                                <strong style="color: var(--neon-blue);">🧠 Default Brain (Multi-Regime)</strong>
+                                <p style="color: var(--text-secondary); font-size: 10px; margin-top: 2px;">
+                                    Balanced allocator. Adapts weights dynamically using continuous Policy Gradient adjustments across all inputs (O-U process regime shifts, RSI momentum, news sentiment).
+                                </p>
+                            </div>
+                            <div style="border-left: 2px solid var(--neon-green); padding-left: 8px;">
+                                <strong style="color: var(--neon-green);">⚡ High-Freq Scalper (Volatile range)</strong>
+                                <p style="color: var(--text-secondary); font-size: 10px; margin-top: 2px;">
+                                    Optimized for ranges and high-noise volatility. Focuses allocations on fast Bollinger sweep reversions under high ATR, tight stops (lower profit targets) and fast entry cooldowns.
+                                </p>
+                            </div>
+                            <div style="border-left: 2px solid var(--neon-purple); padding-left: 8px;">
+                                <strong style="color: var(--neon-purple);">📈 Trend Follower (Structural drift)</strong>
+                                <p style="color: var(--text-secondary); font-size: 10px; margin-top: 2px;">
+                                    Regime bias for low reversion speed ($\theta < 0.05$). Routes resources to Bollinger/Kalman-filter trend riders. Uses wider ATR limits to capture major breakouts.
+                                </p>
+                            </div>
+                        </div>
+                    </article>
+ 
+                    <!-- Neural Network DNA Topology Matrix Visualization -->
+                    <article class="glass-panel" style="padding: 24px; margin-top: 20px;">
+                        <h3 style="font-size: 15px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="network" style="width: 16px; height: 16px; color: var(--neon-purple);"></i>
+                            Policy Net Connection Matrix
+                        </h3>
+                        <p style="font-size: 11px; color: var(--text-secondary); margin-bottom: 15px; line-height: 1.4;">
+                            Shows the current reinforcement learning synapse mapping from inputs to allocations.
+                        </p>
+                        <div style="display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 8px; border: 1px solid var(--border-color); font-family: monospace; font-size: 9px; text-align: center;">
+                            <!-- Header Row -->
+                            <div style="grid-column: span 8; display: grid; grid-template-columns: repeat(8, 1fr); border-bottom: 1px solid var(--border-color); padding-bottom: 4px; color: var(--text-muted); font-weight: bold;">
+                                <span>MR</span><span>TH</span><span>RSI</span><span>MC</span><span>BB</span><span>ATR</span><span>WN</span><span>SN</span>
+                            </div>
+                            <!-- Rows (mapping inputs to 7 allocations) -->
+                            <div style="grid-column: span 8; display: grid; grid-template-columns: repeat(8, 1fr); color: var(--neon-blue);">
+                                <span>●</span><span>○</span><span>●</span><span>○</span><span>●</span><span>○</span><span>○</span><span>●</span>
+                            </div>
+                            <div style="grid-column: span 8; display: grid; grid-template-columns: repeat(8, 1fr); color: var(--neon-purple);">
+                                <span>○</span><span>●</span><span>○</span><span>●</span><span>○</span><span>●</span><span>●</span><span>○</span>
+                            </div>
+                            <div style="grid-column: span 8; display: grid; grid-template-columns: repeat(8, 1fr); color: var(--neon-green);">
+                                <span>●</span><span>●</span><span>○</span><span>○</span><span>●</span><span>○</span><span>○</span><span>●</span>
+                            </div>
+                            <div style="grid-column: span 8; display: grid; grid-template-columns: repeat(8, 1fr); color: var(--neon-red);">
+                                <span>○</span><span>○</span><span>●</span><span>●</span><span>○</span><span>●</span><span>○</span><span>○</span>
+                            </div>
+                            <div style="grid-column: span 8; display: grid; grid-template-columns: repeat(8, 1fr); color: var(--neon-orange);">
+                                <span>●</span><span>○</span><span>○</span><span>○</span><span>○</span><span>○</span><span>●</span><span>●</span>
+                            </div>
+                            <div style="grid-column: span 8; display: grid; grid-template-columns: repeat(8, 1fr); color: var(--neon-blue);">
+                                <span>○</span><span>●</span><span>●</span><span>○</span><span>●</span><span>●</span><span>○</span><span>○</span>
+                            </div>
+                            <div style="grid-column: span 8; display: grid; grid-template-columns: repeat(8, 1fr); color: var(--neon-purple);">
+                                <span>●</span><span>○</span><span>●</span><span>●</span><span>○</span><span>○</span><span>●</span><span>●</span>
+                            </div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px; font-size: 10px; color: var(--text-muted);">
+                            <span>● Synapse Engaged</span>
+                            <span>○ Inactive Pathway</span>
+                        </div>
+                    </article>
+                </div>
+            </main>
+        </div>
+
+        <!-- TAB CONTENT 2.5: TRAINING SIMULATOR -->
+        <div id="tab-simulator" class="tab-content">
+            <main class="main-content" style="grid-template-columns: 2fr 1fr; gap: 20px; align-items: start; display: grid;">
+                <!-- Left Column: Simulation Stats, Chart, Trade Logs -->
+                <div style="display: flex; flex-direction: column; gap: 20px;">
+                    <!-- Simulation KPIs -->
+                    <section style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
+                        <div class="glass-panel kpi-card" style="border-color: var(--neon-purple); background: rgba(168, 85, 247, 0.02); padding: 15px; border-radius: 8px;">
+                            <div class="kpi-title" style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">Simulated Equity</div>
+                            <div class="kpi-value" id="val-sim-equity" style="font-size: 20px; font-weight: bold; margin-top: 5px; color: var(--neon-purple);">$100.00</div>
+                            <div class="kpi-sub" id="val-sim-unrealized-pnl" style="font-size: 9px; color: var(--text-secondary); margin-top: 2px;">Sim Active PnL: $0.00 (0.00%)</div>
+                        </div>
+                        <div class="glass-panel kpi-card" style="padding: 15px; border-radius: 8px;">
+                            <div class="kpi-title" style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">Sim Success Rate (Wins)</div>
+                            <div class="kpi-value" id="val-sim-winrate" style="font-size: 20px; font-weight: bold; margin-top: 5px; color: var(--text-primary);">0.0%</div>
+                            <div class="kpi-sub" id="val-sim-trade-count" style="font-size: 9px; color: var(--text-secondary); margin-top: 2px;">0 trades completed</div>
+                        </div>
+                        <div class="glass-panel kpi-card" style="padding: 15px; border-radius: 8px;">
+                            <div class="kpi-title" style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">Sim Total Profit</div>
+                            <div class="kpi-value" id="val-sim-total-pnl" style="font-size: 20px; font-weight: bold; margin-top: 5px; color: var(--text-primary);">$0.00</div>
+                            <div class="kpi-sub" id="val-sim-total-pnl-percent" style="font-size: 9px; color: var(--text-secondary); margin-top: 2px;">0.00% growth</div>
+                        </div>
+                    </section>
+
+                    <!-- Simulation chart -->
+                    <article class="glass-panel" style="padding: 24px;">
+                        <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 15px; display: flex; align-items: center; justify-content: space-between;">
+                            <span style="display: flex; align-items: center; gap: 8px;">
+                                <i data-lucide="trending-up" style="width: 16px; height: 16px; color: var(--neon-purple);"></i>
+                                Simulation Training Equity Curve
+                            </span>
+                        </h3>
+                        <div style="height: 220px; position: relative;">
+                            <canvas id="simChart"></canvas>
+                        </div>
+                    </article>
+
+                    <!-- Simulation Trades table -->
+                    <article class="glass-panel" style="padding: 24px;">
+                        <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="history" style="width: 16px; height: 16px; color: var(--neon-purple);"></i>
+                            Simulation Closed Trades Log
+                        </h3>
+                        <div style="overflow-x: auto; max-height: 250px;">
+                            <table style="width: 100%; border-collapse: collapse; font-size: 11px; text-align: left;">
+                                <thead>
+                                    <tr style="border-bottom: 1px solid var(--border-color); color: var(--text-muted); font-weight: 600;">
+                                        <th style="padding: 8px 4px;">Time</th>
+                                        <th style="padding: 8px 4px;">Asset</th>
+                                        <th style="padding: 8px 4px;">Type</th>
+                                        <th style="padding: 8px 4px;">Entry</th>
+                                        <th style="padding: 8px 4px;">Exit</th>
+                                        <th style="padding: 8px 4px;">Qty</th>
+                                        <th style="padding: 8px 4px; text-align: right;">PnL ($)</th>
+                                        <th style="padding: 8px 4px; text-align: right;">PnL (%)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="sim-trade-log-body">
+                                    <tr>
+                                        <td colspan="8" style="text-align: center; color: var(--text-secondary); padding: 20px;">No simulation trades run yet. Start the simulator below.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </article>
+                </div>
+
+                <!-- Right Column: Brain Management and specs -->
+                <div style="display: flex; flex-direction: column; gap: 20px;">
+                    <!-- Saved Neural Brains (Multi-Brain Selection & Custom Training) -->
+                    <article class="glass-panel" style="padding: 24px;">
                         <h3 style="font-size: 15px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
                             <i data-lucide="folders" style="width: 16px; height: 16px; color: var(--neon-purple);"></i>
                             Saved Neural Brains
@@ -484,77 +632,6 @@
                                 <i data-lucide="play" style="width: 12px; height: 12px;"></i>
                                 Run Simulation on this Brain
                             </button>
-                        </div>
-                    </article>
- 
-                    <!-- Brain Profiles Reference -->
-                    <article class="glass-panel" style="padding: 24px; margin-top: 20px;">
-                        <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
-                            <i data-lucide="info" style="width: 15px; height: 15px; color: var(--neon-blue);"></i>
-                            Brain Profiles Reference
-                        </h3>
-                        <div style="display: flex; flex-direction: column; gap: 10px; font-size: 11px; line-height: 1.4;">
-                            <div style="border-left: 2px solid var(--neon-blue); padding-left: 8px;">
-                                <strong style="color: var(--neon-blue);">🧠 Default Brain (Multi-Regime)</strong>
-                                <p style="color: var(--text-secondary); font-size: 10px; margin-top: 2px;">
-                                    Balanced allocator. Adapts weights dynamically using continuous Policy Gradient adjustments across all inputs (O-U process regime shifts, RSI momentum, news sentiment).
-                                </p>
-                            </div>
-                            <div style="border-left: 2px solid var(--neon-green); padding-left: 8px;">
-                                <strong style="color: var(--neon-green);">⚡ High-Freq Scalper (Volatile range)</strong>
-                                <p style="color: var(--text-secondary); font-size: 10px; margin-top: 2px;">
-                                    Optimized for ranges and high-noise volatility. Focuses allocations on fast Bollinger sweep reversions under high ATR, tight stops (lower profit targets) and fast entry cooldowns.
-                                </p>
-                            </div>
-                            <div style="border-left: 2px solid var(--neon-purple); padding-left: 8px;">
-                                <strong style="color: var(--neon-purple);">📈 Trend Follower (Structural drift)</strong>
-                                <p style="color: var(--text-secondary); font-size: 10px; margin-top: 2px;">
-                                    Regime bias for low reversion speed ($\theta < 0.05$). Routes resources to Bollinger/Kalman-filter trend riders. Uses wider ATR limits to capture major breakouts.
-                                </p>
-                            </div>
-                        </div>
-                    </article>
- 
-                    <!-- Neural Network DNA Topology Matrix Visualization -->
-                    <article class="glass-panel" style="padding: 24px; margin-top: 20px;">
-                        <h3 style="font-size: 15px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
-                            <i data-lucide="network" style="width: 16px; height: 16px; color: var(--neon-purple);"></i>
-                            Policy Net Connection Matrix
-                        </h3>
-                        <p style="font-size: 11px; color: var(--text-secondary); margin-bottom: 15px; line-height: 1.4;">
-                            Shows the current reinforcement learning synapse mapping from inputs to allocations.
-                        </p>
-                        <div style="display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 8px; border: 1px solid var(--border-color); font-family: monospace; font-size: 9px; text-align: center;">
-                            <!-- Header Row -->
-                            <div style="grid-column: span 8; display: grid; grid-template-columns: repeat(8, 1fr); border-bottom: 1px solid var(--border-color); padding-bottom: 4px; color: var(--text-muted); font-weight: bold;">
-                                <span>MR</span><span>TH</span><span>RSI</span><span>MC</span><span>BB</span><span>ATR</span><span>WN</span><span>SN</span>
-                            </div>
-                            <!-- Rows (mapping inputs to 7 allocations) -->
-                            <div style="grid-column: span 8; display: grid; grid-template-columns: repeat(8, 1fr); color: var(--neon-blue);">
-                                <span>●</span><span>○</span><span>●</span><span>○</span><span>●</span><span>○</span><span>○</span><span>●</span>
-                            </div>
-                            <div style="grid-column: span 8; display: grid; grid-template-columns: repeat(8, 1fr); color: var(--neon-purple);">
-                                <span>○</span><span>●</span><span>○</span><span>●</span><span>○</span><span>●</span><span>●</span><span>○</span>
-                            </div>
-                            <div style="grid-column: span 8; display: grid; grid-template-columns: repeat(8, 1fr); color: var(--neon-green);">
-                                <span>●</span><span>●</span><span>○</span><span>○</span><span>●</span><span>○</span><span>○</span><span>●</span>
-                            </div>
-                            <div style="grid-column: span 8; display: grid; grid-template-columns: repeat(8, 1fr); color: var(--neon-red);">
-                                <span>○</span><span>○</span><span>●</span><span>●</span><span>○</span><span>●</span><span>○</span><span>○</span>
-                            </div>
-                            <div style="grid-column: span 8; display: grid; grid-template-columns: repeat(8, 1fr); color: var(--neon-orange);">
-                                <span>●</span><span>○</span><span>○</span><span>○</span><span>○</span><span>○</span><span>●</span><span>●</span>
-                            </div>
-                            <div style="grid-column: span 8; display: grid; grid-template-columns: repeat(8, 1fr); color: var(--neon-blue);">
-                                <span>○</span><span>●</span><span>●</span><span>○</span><span>●</span><span>●</span><span>○</span><span>○</span>
-                            </div>
-                            <div style="grid-column: span 8; display: grid; grid-template-columns: repeat(8, 1fr); color: var(--neon-purple);">
-                                <span>●</span><span>○</span><span>●</span><span>●</span><span>○</span><span>○</span><span>●</span><span>●</span>
-                            </div>
-                        </div>
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px; font-size: 10px; color: var(--text-muted);">
-                            <span>● Synapse Engaged</span>
-                            <span>○ Inactive Pathway</span>
                         </div>
                     </article>
                 </div>

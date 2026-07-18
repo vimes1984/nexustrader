@@ -304,10 +304,12 @@ class NexusTraderOrchestrator:
                 logging.error(f"Error logging portfolio history point: {e}")
         
         if update_event:
+            event_type = "sim_trade_closed" if self.is_simulating else "trade_closed"
+            event_open_type = "sim_trade_opened" if self.is_simulating else "trade_opened"
             if update_event["event"] == "closed":
                 # Broadcast closed trade
                 self._run_async(self.broadcast_message({
-                    "type": "trade_closed",
+                    "type": event_type,
                     "trade": update_event["data"],
                     "balance": self.execution_engine.balance,
                     "equity": current_equity
@@ -315,7 +317,7 @@ class NexusTraderOrchestrator:
             elif update_event["event"] == "filled":
                 # Broadcast filled order to open trade
                 self._run_async(self.broadcast_message({
-                    "type": "trade_opened",
+                    "type": event_open_type,
                     "ticker": ticker,
                     "position": update_event["data"],
                     "balance": self.execution_engine.balance,
@@ -396,7 +398,7 @@ class NexusTraderOrchestrator:
 
         # 4. Broadcast real-time update to all clients
         self._run_async(self.broadcast_message({
-            "type": "tick",
+            "type": "sim_tick" if self.is_simulating else "tick",
             "ticker": ticker,
             "price": current_price,
             "timestamp": str(row['timestamp']),
@@ -546,8 +548,8 @@ def reconstruct_trades_from_exchange(exchange):
         # Sort raw trades chronologically
         raw_trades.sort(key=lambda x: x.get('timestamp', 0))
         
-        # FIFO inventory tracking per symbol
-        inventories = {} # symbol -> list of dicts: {"price": float, "qty": float, "timestamp": float}
+        # Position tracking per symbol to support both long and short offsets
+        active_positions = {}
         completed_trades = []
         
         for rt in raw_trades:
@@ -557,48 +559,78 @@ def reconstruct_trades_from_exchange(exchange):
             qty = float(rt.get('amount', 0.0))
             timestamp = rt.get('timestamp', 0) / 1000.0
             
-            # Convert slash symbol (e.g. BTC/EUR) to dash (e.g. BTC-EUR)
             dash_symbol = symbol.replace("/", "-")
             
-            if dash_symbol not in inventories:
-                inventories[dash_symbol] = []
-                
-            if side == 'BUY':
-                inventories[dash_symbol].append({"price": price, "qty": qty, "timestamp": timestamp})
-            elif side == 'SELL':
-                # Pair with BUY inventory (FIFO)
-                remaining_qty = qty
-                matched_cost = 0.0
-                matched_qty = 0.0
-                
-                while remaining_qty > 0 and inventories[dash_symbol]:
-                    buy_node = inventories[dash_symbol][0]
-                    if buy_node["qty"] <= remaining_qty:
-                        matched_cost += buy_node["qty"] * buy_node["price"]
-                        matched_qty += buy_node["qty"]
-                        remaining_qty -= buy_node["qty"]
-                        inventories[dash_symbol].pop(0)
-                    else:
-                        matched_cost += remaining_qty * buy_node["price"]
-                        matched_qty += remaining_qty
-                        buy_node["qty"] -= remaining_qty
-                        remaining_qty = 0
+            if dash_symbol not in active_positions:
+                active_positions[dash_symbol] = {
+                    "direction": side,
+                    "price": price,
+                    "qty": qty,
+                    "timestamp": timestamp
+                }
+            else:
+                pos = active_positions[dash_symbol]
+                if pos["direction"] == side:
+                    # Scale up position size
+                    total_qty = pos["qty"] + qty
+                    pos["price"] = ((pos["qty"] * pos["price"]) + (qty * price)) / total_qty
+                    pos["qty"] = total_qty
+                else:
+                    # Offset position size
+                    if pos["qty"] <= qty:
+                        # Full close
+                        pnl = 0.0
+                        if pos["direction"] == "BUY": # Long offset by SELL
+                            pnl = (price - pos["price"]) * pos["qty"]
+                        else: # Short offset by BUY
+                            pnl = (pos["price"] - price) * pos["qty"]
                         
-                if matched_qty > 0:
-                    avg_entry = matched_cost / matched_qty
-                    pnl = (price - avg_entry) * matched_qty
-                    pnl_pct = pnl / matched_cost if matched_cost > 0 else 0.0
-                    completed_trades.append({
-                        "exit_time": timestamp,
-                        "symbol": dash_symbol,
-                        "direction": "BUY",
-                        "quantity": matched_qty,
-                        "entry_price": avg_entry,
-                        "exit_price": price,
-                        "pnl": pnl,
-                        "pnl_percent": pnl_pct,
-                        "exit_reason": "EXCHANGE FILL"
-                    })
+                        pnl_pct = pnl / (pos["price"] * pos["qty"]) if pos["price"] > 0 else 0.0
+                        completed_trades.append({
+                            "exit_time": timestamp,
+                            "symbol": dash_symbol,
+                            "direction": pos["direction"],
+                            "quantity": pos["qty"],
+                            "entry_price": pos["price"],
+                            "exit_price": price,
+                            "pnl": pnl,
+                            "pnl_percent": pnl_pct,
+                            "exit_reason": "EXCHANGE FILL"
+                        })
+                        
+                        remaining_qty = qty - pos["qty"]
+                        if remaining_qty > 0:
+                            # Position reversed
+                            active_positions[dash_symbol] = {
+                                "direction": side,
+                                "price": price,
+                                "qty": remaining_qty,
+                                "timestamp": timestamp
+                            }
+                        else:
+                            del active_positions[dash_symbol]
+                    else:
+                        # Partial close
+                        pnl = 0.0
+                        if pos["direction"] == "BUY":
+                            pnl = (price - pos["price"]) * qty
+                        else:
+                            pnl = (pos["price"] - price) * qty
+                        
+                        pnl_pct = pnl / (pos["price"] * qty) if pos["price"] > 0 else 0.0
+                        completed_trades.append({
+                            "exit_time": timestamp,
+                            "symbol": dash_symbol,
+                            "direction": pos["direction"],
+                            "quantity": qty,
+                            "entry_price": pos["price"],
+                            "exit_price": price,
+                            "pnl": pnl,
+                            "pnl_percent": pnl_pct,
+                            "exit_reason": "EXCHANGE FILL"
+                        })
+                        pos["qty"] -= qty
+                        
         completed_trades.sort(key=lambda x: x['exit_time'], reverse=True)
         return completed_trades
     except Exception as e:
@@ -609,11 +641,13 @@ def reconstruct_trades_from_exchange(exchange):
 def get_trades():
     config_path = os.path.expanduser("~/.nexustrader/config.json")
     is_live = False
+    trading_mode = "paper"
     if os.path.exists(config_path):
         try:
             with open(config_path, "r") as f:
                 cfg = json.load(f)
-            if cfg.get("trading_mode") == "live":
+            trading_mode = cfg.get("trading_mode", "paper")
+            if trading_mode == "live":
                 is_live = True
                 creds = cfg.get("api_credentials", {})
                 api_key = creds.get("api_key")
@@ -635,8 +669,8 @@ def get_trades():
             if is_live:
                 return []
             
-    # For paper trading or simulation mode, return database-stored trades
-    local_trades = database.load_trades()
+    # For paper trading or simulation mode, return database-stored trades matching that mode
+    local_trades = database.load_trades(trading_mode)
     return local_trades
 
 @app.get("/api/portfolio/history")
@@ -1772,6 +1806,33 @@ async def websocket_endpoint(websocket: WebSocket):
         else:
             model_dna = "NN-DEFAULT"
             
+        trades_to_send = []
+        if orchestrator.execution_engine.trading_mode == "live":
+            config_path = os.path.expanduser("~/.nexustrader/config.json")
+            if os.path.exists(config_path):
+                try:
+                    with open(config_path, "r") as f:
+                        cfg = json.load(f)
+                    creds = cfg.get("api_credentials", {})
+                    api_key = creds.get("api_key")
+                    api_secret = creds.get("api_secret")
+                    broker = cfg.get("broker", "kraken").lower()
+                    if api_key and api_secret:
+                        import ccxt
+                        exchange_class = getattr(ccxt, broker)
+                        exchange = exchange_class({
+                            'apiKey': api_key,
+                            'secret': api_secret,
+                            'enableRateLimit': True,
+                        })
+                        exchange_trades = reconstruct_trades_from_exchange(exchange)
+                        if exchange_trades:
+                            trades_to_send = exchange_trades
+                except Exception as e:
+                    logging.error(f"Error fetching live trades for websocket init: {e}")
+        else:
+            trades_to_send = orchestrator.execution_engine.closed_trades
+
         init_state = {
             "type": "init",
             "tickers": orchestrator.tickers,
@@ -1786,7 +1847,7 @@ async def websocket_endpoint(websocket: WebSocket):
             } if ensemble else {},
             "risk_mode": orchestrator.probability_engine.risk_mode,
             "strategies": [s.name for s in ensemble.strategies] if ensemble else [],
-            "trades": orchestrator.execution_engine.closed_trades,
+            "trades": trades_to_send,
             "lifetime_steps": steps,
             "model_dna": model_dna
         }
