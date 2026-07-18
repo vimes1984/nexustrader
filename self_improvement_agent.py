@@ -259,32 +259,32 @@ Current Session Data:
 """
                 from quant_utils import query_gemini_robust
                 advice_text = query_gemini_robust(gemini_api_key, prompt)
+                
+                # Separate the advice and the JSON block
+                advice_clean = advice_text
+                json_block = ""
+                if "```json" in advice_text:
+                    parts = advice_text.split("```json")
+                    advice_clean = parts[0]
+                    json_block = parts[1].split("```")[0].strip()
+                
+                report_lines.append(advice_clean)
+                
+                if json_block:
+                    adjustments = json.loads(json_block)
+                    r_risk = adjustments.get("recommended_risk_mode")
+                    r_tp = adjustments.get("recommended_tp_multiplier")
+                    r_sl = adjustments.get("recommended_sl_multiplier")
                     
-                    # Separate the advice and the JSON block
-                    advice_clean = advice_text
-                    json_block = ""
-                    if "```json" in advice_text:
-                        parts = advice_text.split("```json")
-                        advice_clean = parts[0]
-                        json_block = parts[1].split("```")[0].strip()
-                    
-                    report_lines.append(advice_clean)
-                    
-                    if json_block:
-                        adjustments = json.loads(json_block)
-                        r_risk = adjustments.get("recommended_risk_mode")
-                        r_tp = adjustments.get("recommended_tp_multiplier")
-                        r_sl = adjustments.get("recommended_sl_multiplier")
-                        
-                        if r_risk:
-                            save_setting("risk_mode", r_risk)
-                            report_lines.append(f"\n📊 **Auto-Applied Setting**: Risk Mode adjusted to `{r_risk}`")
-                        if r_tp:
-                            save_setting("opt_tp_multiplier", str(r_tp))
-                            report_lines.append(f"\n📊 **Auto-Applied Setting**: Take Profit Multiplier adjusted to `{r_tp}x ATR`")
-                        if r_sl:
-                            save_setting("opt_sl_multiplier", str(r_sl))
-                            report_lines.append(f"\n📊 **Auto-Applied Setting**: Stop Loss Multiplier adjusted to `{r_sl}x ATR`")
+                    if r_risk:
+                        save_setting("risk_mode", r_risk)
+                        report_lines.append(f"\n📊 **Auto-Applied Setting**: Risk Mode adjusted to `{r_risk}`")
+                    if r_tp:
+                        save_setting("opt_tp_multiplier", str(r_tp))
+                        report_lines.append(f"\n📊 **Auto-Applied Setting**: Take Profit Multiplier adjusted to `{r_tp}x ATR`")
+                    if r_sl:
+                        save_setting("opt_sl_multiplier", str(r_sl))
+                        report_lines.append(f"\n📊 **Auto-Applied Setting**: Stop Loss Multiplier adjusted to `{r_sl}x ATR`")
             except Exception as e:
                 report_lines.append(f"Error calling Gemini AI for PhD analysis: {e}")
                 
