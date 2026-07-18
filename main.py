@@ -972,6 +972,26 @@ def get_system_logs(limit: int = 100):
         return {"status": "error", "message": f"Could not fetch logs: {e}"}
 
 # -------------------------------------------------------------
+# Log UI notification to system logs REST API
+# -------------------------------------------------------------
+@app.post("/api/system/log_notification")
+async def log_notification(request: Request):
+    try:
+        body = await request.json()
+        message = body.get("message", "")
+        msg_type = body.get("type", "success")
+        log_msg = f"[NOTIFICATION] [{msg_type.upper()}] {message}"
+        if msg_type == "error":
+            logging.error(log_msg)
+        elif msg_type == "warning":
+            logging.warning(log_msg)
+        else:
+            logging.info(log_msg)
+        return {"status": "success"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+# -------------------------------------------------------------
 # AI Brain selection, saving & custom training REST API
 # -------------------------------------------------------------
 @app.get("/api/neural/brains")

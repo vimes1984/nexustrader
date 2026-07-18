@@ -44,6 +44,13 @@ function showToast(message, type = "success") {
     unreadCount++;
     updateNotificationsUI();
     
+    // Post notification to backend logs
+    fetch('/api/system/log_notification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: message, type: type })
+    }).catch(err => console.warn("Failed to log notification to server: ", err));
+    
     toast.style.background = "rgba(15, 23, 42, 0.9)";
     toast.style.color = "#ffffff";
     toast.style.borderLeft = `4px solid ${color}`;
