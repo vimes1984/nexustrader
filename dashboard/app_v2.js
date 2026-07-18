@@ -2285,6 +2285,7 @@ function loadNeuralBrains(ticker) {
                         </div>
                         <div style="display: flex; justify-content: space-between; align-items: center; font-size: 9px; color: var(--text-muted); gap: 4px;">
                             <span>DNA: <span style="font-family: monospace; color: var(--neon-blue); font-weight: bold;">${b.model_dna}</span></span>
+                            <span>Steps: <span style="color: var(--neon-purple); font-weight: bold;">${b.training_steps || 0}</span></span>
                             <span>${dateStr}</span>
                         </div>
                     </div>
@@ -2348,6 +2349,7 @@ function selectBrainForSpecs(name, ticker) {
                 document.getElementById("details-brain-w2").textContent = data.w2_shape;
                 document.getElementById("details-brain-params").textContent = data.total_params;
                 document.getElementById("details-brain-lr").textContent = `${data.learning_rate} / ${data.weight_floor}`;
+                document.getElementById("details-brain-steps").textContent = data.training_steps || 0;
                 
                 // Populate trade attribution stats
                 document.getElementById("stats-brain-trades").textContent = data.trade_count;

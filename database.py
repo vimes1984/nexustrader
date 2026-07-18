@@ -87,6 +87,16 @@ def init_db():
             cursor.execute("ALTER TABLE trades ADD COLUMN policy_brain TEXT")
     except Exception as e:
         logging.error(f"Error migrating trades table: {e}")
+
+    # Check and migrate policy_brains table
+    try:
+        cursor.execute("PRAGMA table_info(policy_brains)")
+        pb_cols = [row[1] for row in cursor.fetchall()]
+        if len(pb_cols) > 0 and "training_steps" not in pb_cols:
+            logging.info("Migrating policy_brains table: adding training_steps column...")
+            cursor.execute("ALTER TABLE policy_brains ADD COLUMN training_steps INTEGER DEFAULT 0")
+    except Exception as e:
+        logging.error(f"Error migrating policy_brains table: {e}")
         
     # Create settings table (balance, weights)
     cursor.execute("""
@@ -123,6 +133,7 @@ def init_db():
         model_dna TEXT,
         weights TEXT,
         created_at REAL,
+        training_steps INTEGER DEFAULT 0,
         PRIMARY KEY (name, ticker)
     )
     """)
@@ -285,13 +296,13 @@ def load_setting(key, default=None):
 # -------------------------------------------------------------
 # Neural Policy Brains Table Operations
 # -------------------------------------------------------------
-def save_policy_brain(name: str, ticker: str, model_dna: str, weights: str):
+def save_policy_brain(name: str, ticker: str, model_dna: str, weights: str, training_steps: int = 0):
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
         cursor.execute(
-            "INSERT OR REPLACE INTO policy_brains (name, ticker, model_dna, weights, created_at) VALUES (?, ?, ?, ?, ?)",
-            (name, ticker, model_dna, weights, time.time())
+            "INSERT OR REPLACE INTO policy_brains (name, ticker, model_dna, weights, created_at, training_steps) VALUES (?, ?, ?, ?, ?, ?)",
+            (name, ticker, model_dna, weights, time.time(), training_steps)
         )
         conn.commit()
         return True
@@ -305,10 +316,10 @@ def load_policy_brain(name: str, ticker: str):
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute("SELECT weights, model_dna FROM policy_brains WHERE name = ? AND ticker = ?", (name, ticker))
+        cursor.execute("SELECT weights, model_dna, training_steps FROM policy_brains WHERE name = ? AND ticker = ?", (name, ticker))
         row = cursor.fetchone()
         if row:
-            return {"weights": row[0], "model_dna": row[1]}
+            return {"weights": row[0], "model_dna": row[1], "training_steps": row[2] if row[2] is not None else 0}
         return None
     except Exception as e:
         logging.error(f"Error loading policy brain {name}: {e}")
@@ -320,9 +331,9 @@ def list_policy_brains(ticker: str):
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute("SELECT name, model_dna, created_at FROM policy_brains WHERE ticker = ? ORDER BY created_at DESC", (ticker,))
+        cursor.execute("SELECT name, model_dna, created_at, training_steps FROM policy_brains WHERE ticker = ? ORDER BY created_at DESC", (ticker,))
         rows = cursor.fetchall()
-        return [{"name": r[0], "model_dna": r[1], "created_at": r[2]} for r in rows]
+        return [{"name": r[0], "model_dna": r[1], "created_at": r[2], "training_steps": r[3] if r[3] is not None else 0} for r in rows]
     except Exception as e:
         logging.error(f"Error listing policy brains: {e}")
         return []

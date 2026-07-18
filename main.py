@@ -189,6 +189,20 @@ class NexusTraderOrchestrator:
         database.save_setting(steps_key, str(steps))
         last_save_time = time.strftime('%H:%M:%S', time.localtime())
         
+        # Also update the active brain profile's training_steps in database!
+        active_brain_name = database.load_setting(f"active_policy_brain_{ticker}", "Default Brain")
+        try:
+            conn = database.get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE policy_brains SET training_steps = ? WHERE name = ? AND ticker = ?",
+                (steps, active_brain_name, ticker)
+            )
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            logging.error(f"Error updating active brain training steps: {e}")
+        
         # Save weights to weights history table
         weights_dict = {
             ensemble.strategies[i].name: float(new_weights[i])
@@ -476,12 +490,16 @@ async def startup_event():
         existing_brains = database.list_policy_brains(ticker)
         brain_names = [b["name"] for b in existing_brains]
         
+        # Load current steps setting
+        steps_key = f"lifetime_training_steps_{ticker}"
+        lifetime_steps = int(database.load_setting(steps_key, "0"))
+        
         if "Default Brain" not in brain_names:
-            database.save_policy_brain("Default Brain", ticker, model_dna, current_weights_json)
+            database.save_policy_brain("Default Brain", ticker, model_dna, current_weights_json, lifetime_steps)
         if "High-Freq Scalper" not in brain_names:
-            database.save_policy_brain("High-Freq Scalper", ticker, model_dna, current_weights_json)
+            database.save_policy_brain("High-Freq Scalper", ticker, model_dna, current_weights_json, lifetime_steps)
         if "Trend Follower" not in brain_names:
-            database.save_policy_brain("Trend Follower", ticker, model_dna, current_weights_json)
+            database.save_policy_brain("Trend Follower", ticker, model_dna, current_weights_json, lifetime_steps)
             
     # Force seed the new prompts in database settings
     database.save_setting("prompt_self_improvement", DEFAULT_PROMPT_QUANT)
@@ -1080,6 +1098,7 @@ def get_brain_specs(name: str, ticker: str):
         "size_bytes": size_bytes,
         "dna": brain.get("model_dna", "NN-ARCH-UNKNOWN"),
         "created_at": brain.get("created_at", time.time()),
+        "training_steps": brain.get("training_steps", 0),
         "w1_shape": w1_shape,
         "b1_shape": b1_shape,
         "w2_shape": w2_shape,
@@ -1155,7 +1174,11 @@ def save_neural_brain(name: str, ticker: str):
     dna_hash = hashlib.md5(topo_str.encode('utf-8')).hexdigest()[:6].upper()
     model_dna = f"NN-{dna_hash}"
     
-    success = database.save_policy_brain(name, ticker, model_dna, current_weights_json)
+    # Load current steps setting to store on the snapshot
+    steps_key = f"lifetime_training_steps_{ticker}"
+    lifetime_steps = int(database.load_setting(steps_key, "0"))
+    
+    success = database.save_policy_brain(name, ticker, model_dna, current_weights_json, lifetime_steps)
     if success:
         return {"status": "success", "message": f"Saved brain snapshot '{name}'."}
     return {"status": "error", "message": "Failed to save brain."}
