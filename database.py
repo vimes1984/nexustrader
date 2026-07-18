@@ -111,6 +111,18 @@ def init_db():
     )
     """)
     
+    # Create policy brains table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS policy_brains (
+        name TEXT,
+        ticker TEXT,
+        model_dna TEXT,
+        weights TEXT,
+        created_at REAL,
+        PRIMARY KEY (name, ticker)
+    )
+    """)
+    
     # Commit and close
     conn.commit()
     conn.close()
@@ -264,3 +276,64 @@ def load_setting(key, default=None):
     finally:
         conn.close()
     return val
+
+# -------------------------------------------------------------
+# Neural Policy Brains Table Operations
+# -------------------------------------------------------------
+def save_policy_brain(name: str, ticker: str, model_dna: str, weights: str):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "INSERT OR REPLACE INTO policy_brains (name, ticker, model_dna, weights, created_at) VALUES (?, ?, ?, ?, ?)",
+            (name, ticker, model_dna, weights, time.time())
+        )
+        conn.commit()
+        return True
+    except Exception as e:
+        logging.error(f"Error saving policy brain {name}: {e}")
+        return False
+    finally:
+        conn.close()
+
+def load_policy_brain(name: str, ticker: str):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT weights, model_dna FROM policy_brains WHERE name = ? AND ticker = ?", (name, ticker))
+        row = cursor.fetchone()
+        if row:
+            return {"weights": row[0], "model_dna": row[1]}
+        return None
+    except Exception as e:
+        logging.error(f"Error loading policy brain {name}: {e}")
+        return None
+    finally:
+        conn.close()
+
+def list_policy_brains(ticker: str):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT name, model_dna, created_at FROM policy_brains WHERE ticker = ? ORDER BY created_at DESC", (ticker,))
+        rows = cursor.fetchall()
+        return [{"name": r[0], "model_dna": r[1], "created_at": r[2]} for r in rows]
+    except Exception as e:
+        logging.error(f"Error listing policy brains: {e}")
+        return []
+    finally:
+        conn.close()
+
+def delete_policy_brain(name: str, ticker: str):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM policy_brains WHERE name = ? AND ticker = ?", (name, ticker))
+        conn.commit()
+        return True
+    except Exception as e:
+        logging.error(f"Error deleting policy brain {name}: {e}")
+        return False
+    finally:
+        conn.close()
+

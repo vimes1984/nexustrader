@@ -835,6 +835,7 @@ function switchTicker(ticker) {
 
     // Fetch weights history
     loadWeightsHistory(ticker);
+    loadNeuralBrains(ticker);
         
     // Update active position/evaluation display for the new ticker from latest socket tick
     const tick = tickerLatest[ticker];
@@ -2047,6 +2048,7 @@ elNavTabs.forEach(tab => {
         // Refresh charts or widgets if needed when visible
         if (targetTabId === "tab-neural") {
             loadWeightsHistory(activeTicker);
+            loadNeuralBrains(activeTicker);
         }
     });
 });
@@ -2124,3 +2126,169 @@ setTimeout(() => {
     if (elNnLrOrig && elLrInput) elLrInput.value = elNnLrOrig.value;
     if (elNnFloorOrig && elFloorInput) elFloorInput.value = elNnFloorOrig.value;
 }, 1500);
+
+// -------------------------------------------------------------
+// Neural Policy Brain Selection & Custom Training Handlers
+// -------------------------------------------------------------
+function loadNeuralBrains(ticker) {
+    const listContainer = document.getElementById("neural-brains-list");
+    const activeTickerEl = document.getElementById("brains-active-ticker");
+    if (activeTickerEl) activeTickerEl.textContent = ticker;
+    if (!listContainer) return;
+    
+    fetch(`/api/neural/brains?ticker=${ticker}&t=${Date.now()}`)
+        .then(res => res.json())
+        .then(data => {
+            listContainer.innerHTML = "";
+            const brains = data.brains || [];
+            const activeBrain = data.active_brain || "Default Brain";
+            
+            if (brains.length === 0) {
+                listContainer.innerHTML = `<div style="color: var(--text-secondary); text-align: center; padding: 15px 0; font-size: 11px;">No brains initialized.</div>`;
+                return;
+            }
+            
+            brains.forEach(b => {
+                const isActive = b.name === activeBrain;
+                const isDefault = ["Default Brain", "High-Freq Scalper", "Trend Follower"].includes(b.name);
+                
+                const item = document.createElement("div");
+                item.className = "glass-panel";
+                item.style.padding = "10px 12px";
+                item.style.borderRadius = "8px";
+                item.style.display = "flex";
+                item.style.justifyContent = "space-between";
+                item.style.alignItems = "center";
+                item.style.border = isActive ? "1px solid var(--neon-purple)" : "1px solid var(--border-color)";
+                item.style.background = isActive ? "rgba(168, 85, 247, 0.05)" : "rgba(255, 255, 255, 0.01)";
+                item.style.fontSize = "11px";
+                item.style.gap = "8px";
+                item.style.marginBottom = "6px";
+                
+                // Format creation date
+                const dateStr = new Date(b.created_at * 1000).toLocaleString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' });
+                
+                item.innerHTML = `
+                    <div style="flex: 1; display: flex; flex-direction: column; gap: 2px; overflow: hidden; text-align: left;">
+                        <div style="display: flex; align-items: center; gap: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                            <strong style="color: ${isActive ? 'var(--neon-purple)' : 'var(--text-primary)'};">${b.name}</strong>
+                            ${isActive ? '<span style="font-size: 8px; color: var(--neon-purple); background: rgba(168,85,247,0.15); padding: 1px 4px; border-radius: 4px; font-weight: 700; text-transform: uppercase;">Active</span>' : ''}
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 9px; color: var(--text-muted); gap: 4px;">
+                            <span>DNA: <span style="font-family: monospace; color: var(--neon-blue); font-weight: bold;">${b.model_dna}</span></span>
+                            <span>${dateStr}</span>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 6px; align-items: center; flex-shrink: 0;">
+                        ${!isActive ? `<button class="btn" onclick="activateNeuralBrain('${b.name}', '${ticker}')" style="padding: 3px 6px; font-size: 9px; height: auto; border-color: rgba(168,85,247,0.3); color: var(--neon-purple);">Activate</button>` : ''}
+                        ${(!isDefault) ? `<button class="btn" onclick="deleteNeuralBrain('${b.name}', '${ticker}')" style="padding: 3px 6px; font-size: 9px; height: auto; border-color: rgba(244,63,94,0.3); color: var(--neon-red);"><i data-lucide="trash-2" style="width: 10px; height: 10px;"></i></button>` : ''}
+                    </div>
+                `;
+                listContainer.appendChild(item);
+            });
+            lucide.createIcons();
+        })
+        .catch(err => console.error("Error loading neural brains:", err));
+}
+
+// Global scope functions for the button onclick triggers
+window.activateNeuralBrain = function(name, ticker) {
+    showToast(`Activating brain '${name}'...`, "info");
+    fetch(`/api/neural/brain/activate?name=${encodeURIComponent(name)}&ticker=${encodeURIComponent(ticker)}`, { method: 'POST' })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === "success") {
+                showToast(`Policy brain '${name}' successfully activated!`, "success");
+                loadNeuralBrains(ticker);
+                
+                // Update the active model DNA badge in NeuralCore Card
+                fetch(`/api/neural/brains?ticker=${ticker}&t=${Date.now()}`)
+                    .then(res => res.json())
+                    .then(resData => {
+                        const activeDetails = resData.brains.find(b => b.name === name);
+                        if (activeDetails) {
+                            const dnaBadge = document.getElementById("val-model-dna");
+                            if (dnaBadge) dnaBadge.textContent = activeDetails.model_dna;
+                        }
+                    });
+            } else {
+                showToast(`Failed to activate brain: ${data.message}`, "error");
+            }
+        })
+        .catch(err => {
+            showToast("Error activating policy brain.", "error");
+            console.error(err);
+        });
+};
+
+window.deleteNeuralBrain = function(name, ticker) {
+    if (!confirm(`Are you sure you want to delete custom brain '${name}'? This cannot be undone.`)) return;
+    
+    showToast(`Deleting brain '${name}'...`, "info");
+    fetch(`/api/neural/brain/delete?name=${encodeURIComponent(name)}&ticker=${encodeURIComponent(ticker)}`, { method: 'POST' })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === "success") {
+                showToast(`Brain '${name}' deleted.`, "success");
+                loadNeuralBrains(ticker);
+            } else {
+                showToast(`Failed to delete brain: ${data.message}`, "error");
+            }
+        })
+        .catch(err => {
+            showToast("Error deleting brain.", "error");
+            console.error(err);
+        });
+};
+
+// Hook up Clone Snapshot button
+document.addEventListener("DOMContentLoaded", () => {
+    const btnSnapshot = document.getElementById("btn-save-brain-snapshot");
+    const btnTrain = document.getElementById("btn-train-new-brain");
+    
+    if (btnSnapshot) {
+        btnSnapshot.addEventListener("click", () => {
+            const name = prompt("Enter a name for this policy brain snapshot:", `Snapshot-${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'})}`);
+            if (!name) return; // user cancelled
+            
+            showToast(`Saving brain snapshot '${name}'...`, "info");
+            fetch(`/api/neural/brain/save?name=${encodeURIComponent(name.trim())}&ticker=${encodeURIComponent(activeTicker)}`, { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === "success") {
+                        showToast(`Saved brain snapshot: ${name}`, "success");
+                        loadNeuralBrains(activeTicker);
+                    } else {
+                        showToast(`Failed to snapshot: ${data.message}`, "error");
+                    }
+                })
+                .catch(err => {
+                    showToast("Error saving brain snapshot.", "error");
+                    console.error(err);
+                });
+        });
+    }
+    
+    if (btnTrain) {
+        btnTrain.addEventListener("click", () => {
+            const name = prompt("Enter a name for your new training brain:", "Brain-Alpha");
+            if (!name) return;
+            
+            showToast(`Initializing fresh network weights as '${name}'...`, "info");
+            fetch(`/api/neural/brain/train?name=${encodeURIComponent(name.trim())}&ticker=${encodeURIComponent(activeTicker)}`, { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === "success") {
+                        showToast(`New training brain '${name}' initialized & activated!`, "success");
+                        loadNeuralBrains(activeTicker);
+                    } else {
+                        showToast(`Failed to initialize new brain: ${data.message}`, "error");
+                    }
+                })
+                .catch(err => {
+                    showToast("Error creating fresh training brain.", "error");
+                    console.error(err);
+                });
+        });
+    }
+});

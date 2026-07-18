@@ -336,7 +336,35 @@
                             </button>
                         </div>
                     </article>
-
+ 
+                    <!-- Saved Neural Brains (Multi-Brain Selection & Custom Training) -->
+                    <article class="glass-panel" style="padding: 24px; margin-top: 20px;">
+                        <h3 style="font-size: 15px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="folders" style="width: 16px; height: 16px; color: var(--neon-purple);"></i>
+                            Saved Neural Brains
+                        </h3>
+                        <p style="font-size: 11px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.4;">
+                            Select which trained policy brain drives strategy allocations for <span id="brains-active-ticker" class="color-blue" style="font-weight: 700;">BTC-USD</span>.
+                        </p>
+                        
+                        <!-- List of Brains -->
+                        <div id="neural-brains-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 220px; overflow-y: auto; margin-bottom: 15px; padding-right: 2px;">
+                            <!-- Seeded and custom brains loaded here dynamically -->
+                        </div>
+                        
+                        <!-- Create New Brain / Snapshot Controls -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                            <button class="btn" id="btn-save-brain-snapshot" style="font-size: 11px; padding: 6px 8px; justify-content: center; gap: 4px; border-color: rgba(168,85,247,0.3); color: var(--neon-purple);">
+                                <i data-lucide="camera" style="width: 12px; height: 12px;"></i>
+                                Snapshot Current
+                            </button>
+                            <button class="btn btn-primary" id="btn-train-new-brain" style="font-size: 11px; padding: 6px 8px; justify-content: center; gap: 4px;">
+                                <i data-lucide="plus" style="width: 12px; height: 12px;"></i>
+                                Train New Brain
+                            </button>
+                        </div>
+                    </article>
+ 
                     <!-- Neural Network DNA Topology Matrix Visualization -->
                     <article class="glass-panel" style="padding: 24px; margin-top: 20px;">
                         <h3 style="font-size: 15px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">

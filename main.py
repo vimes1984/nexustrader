@@ -458,6 +458,31 @@ orchestrator = NexusTraderOrchestrator()
 @app.on_event("startup")
 async def startup_event():
     await orchestrator.initialize()
+    
+    # Seed default policy brains for all tickers
+    for ticker in orchestrator.tickers:
+        learner = orchestrator.learning_engines.get(ticker)
+        if not learner:
+            continue
+        ensemble = orchestrator.ensembles.get(ticker)
+        num_strats = len(ensemble.strategies) if ensemble else 6
+        
+        current_weights_json = learner.policy_net.to_json()
+        import hashlib
+        topo_str = f"PolicyNet-8x12x{num_strats}"
+        dna_hash = hashlib.md5(topo_str.encode('utf-8')).hexdigest()[:6].upper()
+        model_dna = f"NN-{dna_hash}"
+        
+        existing_brains = database.list_policy_brains(ticker)
+        brain_names = [b["name"] for b in existing_brains]
+        
+        if "Default Brain" not in brain_names:
+            database.save_policy_brain("Default Brain", ticker, model_dna, current_weights_json)
+        if "High-Freq Scalper" not in brain_names:
+            database.save_policy_brain("High-Freq Scalper", ticker, model_dna, current_weights_json)
+        if "Trend Follower" not in brain_names:
+            database.save_policy_brain("Trend Follower", ticker, model_dna, current_weights_json)
+            
     # Auto-start live stream on startup (true live data)
     orchestrator.start_stream(mode="live", poll_interval=5)
     try:
@@ -910,6 +935,118 @@ def update_system_config(trading_mode: str, risk_mode: str, max_drawdown: float,
         logging.info(f"Initial portfolio balance baseline updated to: ${initial_balance:.2f}")
 
     logging.info(f"Trailing Stop: {trailing_stop}, Cooldown: {cooldown}h, TP mult: {tp_multiplier}x, SL mult: {sl_multiplier}x, NN lr: {nn_lr}, NN floor: {nn_floor}, NN discount: {nn_discount}, NN exploration: {nn_exploration} updated.")
+    
+    return {"status": "success"}
+
+# -------------------------------------------------------------
+# AI Brain selection, saving & custom training REST API
+# -------------------------------------------------------------
+@app.get("/api/neural/brains")
+def get_neural_brains(ticker: str):
+    brains = database.list_policy_brains(ticker)
+    active_name = database.load_setting(f"active_policy_brain_{ticker}", "Default Brain")
+    return {
+        "brains": brains,
+        "active_brain": active_name
+    }
+
+@app.post("/api/neural/brain/activate")
+def activate_neural_brain(name: str, ticker: str):
+    brain = database.load_policy_brain(name, ticker)
+    if not brain:
+        return {"status": "error", "message": f"Brain '{name}' not found."}
+    
+    database.save_setting(f"policy_net_weights_{ticker}", brain["weights"])
+    database.save_setting(f"active_policy_brain_{ticker}", name)
+    
+    learner = orchestrator.learning_engines.get(ticker)
+    if learner:
+        try:
+            learner.policy_net.from_json(brain["weights"])
+            logging.info(f"Hot-loaded active policy brain '{name}' for {ticker}.")
+            
+            ensemble = orchestrator.ensembles.get(ticker)
+            ingest = orchestrator.data_ingestions.get(ticker)
+            if ensemble and ingest and ingest.history_df is not None:
+                df = ingest.history_df
+                state = learner.get_state_vector(
+                    df.iloc[-1].to_dict(),
+                    list(df['close'].values[-60:]),
+                    [t for t in orchestrator.execution_engine.closed_trades if t['symbol'] == ticker]
+                )
+                ensemble.weights = learner.select_weights(state)
+                
+                import hashlib
+                topo_str = f"PolicyNet-8x12x{len(ensemble.strategies)}"
+                dna_hash = hashlib.md5(topo_str.encode('utf-8')).hexdigest()[:6].upper()
+                model_dna = f"NN-{dna_hash}"
+                
+                orchestrator._run_async(orchestrator.broadcast_message({
+                    "type": "learning_update",
+                    "ticker": ticker,
+                    "weights": {
+                        ensemble.strategies[i].name: float(ensemble.weights[i])
+                        for i in range(len(ensemble.weights))
+                    },
+                    "pnl": 0.0,
+                    "lifetime_steps": int(database.load_setting(f"lifetime_training_steps_{ticker}", "0")),
+                    "model_dna": model_dna,
+                    "last_save_time": time.strftime('%H:%M:%S', time.localtime())
+                }))
+        except Exception as e:
+            return {"status": "error", "message": f"Hot-load exception: {e}"}
+            
+    return {"status": "success", "message": f"Brain '{name}' activated."}
+
+@app.post("/api/neural/brain/save")
+def save_neural_brain(name: str, ticker: str):
+    learner = orchestrator.learning_engines.get(ticker)
+    if not learner:
+        return {"status": "error", "message": "Learning engine not initialized."}
+        
+    current_weights_json = learner.policy_net.to_json()
+    ensemble = orchestrator.ensembles.get(ticker)
+    num_strats = len(ensemble.strategies) if ensemble else 6
+    import hashlib
+    topo_str = f"PolicyNet-8x12x{num_strats}"
+    dna_hash = hashlib.md5(topo_str.encode('utf-8')).hexdigest()[:6].upper()
+    model_dna = f"NN-{dna_hash}"
+    
+    success = database.save_policy_brain(name, ticker, model_dna, current_weights_json)
+    if success:
+        return {"status": "success", "message": f"Saved brain snapshot '{name}'."}
+    return {"status": "error", "message": "Failed to save brain."}
+
+@app.post("/api/neural/brain/delete")
+def delete_neural_brain(name: str, ticker: str):
+    if name in ["Default Brain", "High-Freq Scalper", "Trend Follower"]:
+        return {"status": "error", "message": "Cannot delete default pre-seeded brains."}
+    success = database.delete_policy_brain(name, ticker)
+    if success:
+        return {"status": "success", "message": f"Deleted brain '{name}'."}
+    return {"status": "error", "message": "Failed to delete brain."}
+
+@app.post("/api/neural/brain/train")
+def train_new_brain(name: str, ticker: str):
+    ensemble = orchestrator.ensembles.get(ticker)
+    num_strats = len(ensemble.strategies) if ensemble else 6
+    
+    from learning_engine import LearningEngine
+    fresh_learner = LearningEngine(num_strategies=num_strats, learning_rate=0.15)
+    fresh_weights_json = fresh_learner.policy_net.to_json()
+    
+    import hashlib
+    topo_str = f"PolicyNet-8x12x{num_strats}"
+    dna_hash = hashlib.md5(topo_str.encode('utf-8')).hexdigest()[:6].upper()
+    model_dna = f"NN-{dna_hash}"
+    
+    database.save_policy_brain(name, ticker, model_dna, fresh_weights_json)
+    database.save_setting(f"lifetime_training_steps_{ticker}", "0")
+    
+    activate_res = activate_neural_brain(name, ticker)
+    if activate_res["status"] == "success":
+        return {"status": "success", "message": f"Initialized and activated brain '{name}'."}
+    return activate_res
     
     return {"status": "success"}
 
