@@ -719,24 +719,24 @@ Return ONLY a JSON block containing the key "revised_prompt_blog_agent" with you
 """
         from quant_utils import query_gemini_robust
         raw_text = query_gemini_robust(api_key, prompt)
-            if raw_text.startswith("```json"):
-                raw_text = raw_text[7:]
-            if raw_text.endswith("```"):
-                raw_text = raw_text[:-3]
-            raw_text = raw_text.strip()
-            
-            res_data = json.loads(raw_text)
-            revised = res_data.get("revised_prompt_blog_agent")
-            if revised:
-                # Save setting helper
-                import sqlite3
-                conn = sqlite3.connect(os.path.expanduser("~/.nexustrader/nexustrader.db"))
-                c = conn.cursor()
-                c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", ("prompt_blog_agent", str(revised)))
-                conn.commit()
-                conn.close()
-                print("Meta-optimization: Successfully updated prompt_blog_agent in database settings.")
-                return revised
+        if raw_text.startswith("```json"):
+            raw_text = raw_text[7:]
+        if raw_text.endswith("```"):
+            raw_text = raw_text[:-3]
+        raw_text = raw_text.strip()
+        
+        res_data = json.loads(raw_text)
+        revised = res_data.get("revised_prompt_blog_agent")
+        if revised:
+            # Save setting helper
+            import sqlite3
+            conn = sqlite3.connect(os.path.expanduser("~/.nexustrader/nexustrader.db"))
+            c = conn.cursor()
+            c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", ("prompt_blog_agent", str(revised)))
+            conn.commit()
+            conn.close()
+            print("Meta-optimization: Successfully updated prompt_blog_agent in database settings.")
+            return revised
     except Exception as e:
         print(f"Failed to meta-optimize prompt_blog_agent: {e}")
     return None

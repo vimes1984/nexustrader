@@ -1394,6 +1394,11 @@ Our platform features:
 4. Multi-Brain repository (Activate, snapshot, delete, or train new brain from scratch).
 5. Real-time System Logs terminal panel to display service output.
 
+Your current priorities:
+- Keep the repository documentation (README.md) and module comments spruced up, visually engaging (using shields/badges), and maintained to top-tier open-source standards.
+- Actively scan system error logs for any exceptions or warnings, locate the source, and design robust self-healing corrections.
+- Ensure comprehensive unit test coverage exists by identifying untested branches and writing robust mock test cases.
+
 Design and implement ONE clean, production-grade, non-breaking feature or UI widget (e.g., system logs refreshers, expected value gauges, or correlation heatmaps).
 Return your response STRICTLY in JSON format containing "explanation" and "modifications" find-and-replace rules."""
 

@@ -1,5 +1,12 @@
 # 🌌 NexusTrader: Self-Learning Algorithmic Trading Ensemble
 
+<p align="center">
+  <img src="https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11-blue?style=for-the-badge&logo=python&logoColor=white" alt="Python Version" />
+  <img src="https://img.shields.io/badge/FastAPI-0.95%2B-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI" />
+  <img src="https://img.shields.io/badge/SQLite-3.x-003B57?style=for-the-badge&logo=sqlite&logoColor=white" alt="SQLite" />
+  <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License" />
+</p>
+
 NexusTrader is a state-of-the-art, self-learning quantitative trading system that utilizes a **Policy Gradient Neural Network** to dynamically allocate weights across an ensemble of trading strategies. By combining real-time regime estimation, volatility-adjusted position sizing, and online reinforcement learning, the system adapts to shifting market structures (trend-following vs. mean-reverting) in real-time.
 
 Features include a **headless daemon server**, an interactive **pywebview Desktop GUI** dashboard, a persistent **SQLite Database** layer, and an automated **Weekly Blog Agent** that writes detailed performance attribution reports.

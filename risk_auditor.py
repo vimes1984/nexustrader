@@ -75,27 +75,27 @@ Recent trades telemetry:
         logging.info("Requesting Risk Audit evaluation from Gemini...")
         from quant_utils import query_gemini_robust
         advice_text = query_gemini_robust(gemini_api_key, prompt)
+        
+        advice_clean = advice_text
+        json_block = ""
+        if "```json" in advice_text:
+            parts = advice_text.split("```json")
+            advice_clean = parts[0]
+            json_block = parts[1].split("```")[0].strip()
             
-            advice_clean = advice_text
-            json_block = ""
-            if "```json" in advice_text:
-                parts = advice_text.split("```json")
-                advice_clean = parts[0]
-                json_block = parts[1].split("```")[0].strip()
-                
-            report_lines.append(advice_clean)
+        report_lines.append(advice_clean)
+        
+        if json_block:
+            adjustments = json.loads(json_block)
+            r_drawdown = adjustments.get("recommended_max_daily_loss")
+            r_cooldown = adjustments.get("recommended_loss_cooldown_hours")
             
-            if json_block:
-                adjustments = json.loads(json_block)
-                r_drawdown = adjustments.get("recommended_max_daily_loss")
-                r_cooldown = adjustments.get("recommended_loss_cooldown_hours")
-                
-                if r_drawdown is not None:
-                    save_setting("max_daily_drawdown", str(r_drawdown))
-                    report_lines.append(f"\n📊 **Auto-Applied Setting**: Max Daily Drawdown adjusted to `{r_drawdown}%`")
-                if r_cooldown is not None:
-                    save_setting("loss_cooldown_hours", str(r_cooldown))
-                    report_lines.append(f"\n📊 **Auto-Applied Setting**: Loss Cooldown adjusted to `{r_cooldown} hours`")
+            if r_drawdown is not None:
+                save_setting("max_daily_drawdown", str(r_drawdown))
+                report_lines.append(f"\n📊 **Auto-Applied Setting**: Max Daily Drawdown adjusted to `{r_drawdown}%`")
+            if r_cooldown is not None:
+                save_setting("loss_cooldown_hours", str(r_cooldown))
+                report_lines.append(f"\n📊 **Auto-Applied Setting**: Loss Cooldown adjusted to `{r_cooldown} hours`")
     except Exception as e:
         logging.error(f"Gemini API call failed: {e}")
         return f"Gemini API call failed: {e}"
@@ -128,17 +128,17 @@ Return ONLY a JSON block containing the key "revised_prompt_risk_auditor" with y
 """
         from quant_utils import query_gemini_robust
         raw_text = query_gemini_robust(gemini_api_key, meta_prompt)
-            if raw_text.startswith("```json"):
-                raw_text = raw_text[7:]
-            if raw_text.endswith("```"):
-                raw_text = raw_text[:-3]
-            raw_text = raw_text.strip()
-            
-            res_data = json.loads(raw_text)
-            revised = res_data.get("revised_prompt_risk_auditor")
-            if revised:
-                save_setting("prompt_risk_auditor", revised)
-                report_lines.append(f"\n🛡️ **AI Prompt Meta-Optimization**: Evolved Risk Auditor prompt template closer to target.")
+        if raw_text.startswith("```json"):
+            raw_text = raw_text[7:]
+        if raw_text.endswith("```"):
+            raw_text = raw_text[:-3]
+        raw_text = raw_text.strip()
+        
+        res_data = json.loads(raw_text)
+        revised = res_data.get("revised_prompt_risk_auditor")
+        if revised:
+            save_setting("prompt_risk_auditor", revised)
+            report_lines.append(f"\n🛡️ **AI Prompt Meta-Optimization**: Evolved Risk Auditor prompt template closer to target.")
     except Exception as e:
         logging.error(f"Failed to meta-optimize prompt_risk_auditor: {e}")
         

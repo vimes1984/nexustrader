@@ -57,22 +57,22 @@ Current news sentiment weight factor in Strategy Ensemble: {settings.get("recomm
         logging.info("Requesting Sentiment evaluation from Gemini...")
         from quant_utils import query_gemini_robust
         advice_text = query_gemini_robust(gemini_api_key, prompt)
+        
+        advice_clean = advice_text
+        json_block = ""
+        if "```json" in advice_text:
+            parts = advice_text.split("```json")
+            advice_clean = parts[0]
+            json_block = parts[1].split("```")[0].strip()
             
-            advice_clean = advice_text
-            json_block = ""
-            if "```json" in advice_text:
-                parts = advice_text.split("```json")
-                advice_clean = parts[0]
-                json_block = parts[1].split("```")[0].strip()
-                
-            report_lines.append(advice_clean)
-            
-            if json_block:
-                adjustments = json.loads(json_block)
-                r_weight = adjustments.get("recommended_news_sentiment_weight")
-                if r_weight is not None:
-                    save_setting("recommended_news_sentiment_weight", str(r_weight))
-                    report_lines.append(f"\n📊 **Auto-Applied Setting**: News Sentiment Weight adjusted to `{r_weight}`")
+        report_lines.append(advice_clean)
+        
+        if json_block:
+            adjustments = json.loads(json_block)
+            r_weight = adjustments.get("recommended_news_sentiment_weight")
+            if r_weight is not None:
+                save_setting("recommended_news_sentiment_weight", str(r_weight))
+                report_lines.append(f"\n📊 **Auto-Applied Setting**: News Sentiment Weight adjusted to `{r_weight}`")
     except Exception as e:
         logging.error(f"Gemini API call failed: {e}")
         return f"Gemini API call failed: {e}"
@@ -105,17 +105,17 @@ Return ONLY a JSON block containing the key "revised_prompt_sentiment_agent" wit
 """
         from quant_utils import query_gemini_robust
         raw_text = query_gemini_robust(gemini_api_key, meta_prompt)
-            if raw_text.startswith("```json"):
-                raw_text = raw_text[7:]
-            if raw_text.endswith("```"):
-                raw_text = raw_text[:-3]
-            raw_text = raw_text.strip()
-            
-            res_data = json.loads(raw_text)
-            revised = res_data.get("revised_prompt_sentiment_agent")
-            if revised:
-                save_setting("prompt_sentiment_agent", revised)
-                report_lines.append(f"\n📡 **AI Prompt Meta-Optimization**: Evolved Sentiment Sentinel prompt template closer to target.")
+        if raw_text.startswith("```json"):
+            raw_text = raw_text[7:]
+        if raw_text.endswith("```"):
+            raw_text = raw_text[:-3]
+        raw_text = raw_text.strip()
+        
+        res_data = json.loads(raw_text)
+        revised = res_data.get("revised_prompt_sentiment_agent")
+        if revised:
+            save_setting("prompt_sentiment_agent", revised)
+            report_lines.append(f"\n📡 **AI Prompt Meta-Optimization**: Evolved Sentiment Sentinel prompt template closer to target.")
     except Exception as e:
         logging.error(f"Failed to meta-optimize prompt_sentiment_agent: {e}")
         
