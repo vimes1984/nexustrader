@@ -96,7 +96,7 @@ class ExecutionEngine:
             total_bal = balance_info.get('total', {})
             
             # 1. Quote Currency Balance (cash ready to invest)
-            usd_cash = float(total_bal.get('USD', total_bal.get('EUR', 0.0)))
+            usd_cash = float(total_bal.get('USD', total_bal.get('ZUSD', total_bal.get('EUR', total_bal.get('ZEUR', 0.0)))))
             if usd_cash >= 0:
                 self.balance = usd_cash
                 database.save_setting("portfolio_balance", str(self.balance))
@@ -113,10 +113,23 @@ class ExecutionEngine:
                 
             for asset, qty in total_bal.items():
                 qty = float(qty)
-                if qty <= 0 or asset in ['USD', 'EUR']:
+                if qty <= 0 or asset in ['USD', 'ZUSD', 'EUR', 'ZEUR']:
                     continue
-                if asset in prices:
-                    total_value_usd += qty * prices[asset]
+                    
+                # Map Kraken specific asset symbols to Standard Tickers
+                norm_asset = asset
+                if asset == "XXBT": norm_asset = "BTC"
+                if asset == "XETH": norm_asset = "ETH"
+                if asset == "XXRP": norm_asset = "XRP"
+                
+                price_rate = 0.0
+                if norm_asset in prices:
+                    price_rate = prices[norm_asset]
+                elif asset in prices:
+                    price_rate = prices[asset]
+                    
+                if price_rate > 0:
+                    total_value_usd += qty * price_rate
                     
             self.live_equity = total_value_usd
             self.live_holdings = {k: float(v) for k, v in total_bal.items() if float(v) > 0.000001}
@@ -252,6 +265,7 @@ class ExecutionEngine:
                 "stop_loss": sl,
                 "entry_time": time.time(),
                 "strategy_signals": strategy_signals,
+                "entry_state": evaluation.get("state", []),
                 "sentiment_sources": evaluation.get("sentiment_sources", {}),
                 "fee_paid": fee
             }
@@ -268,6 +282,7 @@ class ExecutionEngine:
                 "stop_loss": sl,
                 "entry_time": time.time(),
                 "strategy_signals": strategy_signals,
+                "entry_state": evaluation.get("state", []),
                 "sentiment_sources": evaluation.get("sentiment_sources", {}),
                 "fee": fee
             }
@@ -302,6 +317,7 @@ class ExecutionEngine:
                     "stop_loss": order["stop_loss"],
                     "entry_time": time.time(),
                     "strategy_signals": order["strategy_signals"],
+                    "entry_state": order.get("entry_state", []),
                     "sentiment_sources": order.get("sentiment_sources", {}),
                     "fee_paid": order["fee"]
                 }
@@ -433,6 +449,7 @@ class ExecutionEngine:
                 try:
                     self.learning_callback(
                         symbol,
+                        pos.get("entry_state", []),
                         pos["strategy_signals"],
                         direction,
                         pnl_percent
@@ -458,16 +475,21 @@ class ExecutionEngine:
             last_prices = getattr(self, "last_known_prices", {})
             
             for asset, qty in holdings.items():
-                if asset in ["EUR", "USD"]:
+                if asset in ["EUR", "USD", "ZUSD", "ZEUR"]:
                     total_value += qty
                 else:
+                    norm_asset = asset
+                    if asset == "XXBT": norm_asset = "BTC"
+                    if asset == "XETH": norm_asset = "ETH"
+                    if asset == "XXRP": norm_asset = "XRP"
+                    
                     price = None
-                    for key in [f"{asset}-USD", f"{asset}/USD", f"{asset}-EUR", f"{asset}/EUR", f"XXBT-USD", f"XETH-USD", f"XXRP-USD", f"XXBT-EUR", f"XETH-EUR", f"XXRP-EUR"]:
+                    for key in [f"{norm_asset}-USD", f"{norm_asset}/USD", f"{asset}-USD", f"{asset}/USD", f"BTC-USD", f"ETH-USD", f"XRP-USD"]:
                         if key in current_prices and current_prices[key] is not None:
                             price = float(current_prices[key])
                             break
                     if price is None or price == 0.0:
-                        price = float(last_prices.get(asset, 0.0))
+                        price = float(last_prices.get(norm_asset, last_prices.get(asset, 0.0)))
                     
                     total_value += qty * price
             return float(total_value)

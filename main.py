@@ -165,21 +165,25 @@ class NexusTraderOrchestrator:
         if self.loop and self.loop.is_running():
             asyncio.run_coroutine_threadsafe(coro, self.loop)
 
-    def on_trade_closed(self, ticker, strategy_signals, direction, pnl_percent):
+    def on_trade_closed(self, ticker, entry_state, strategy_signals, direction, pnl_percent):
         """Callback from ExecutionEngine when a trade is closed."""
         logging.info(f"[{ticker}] Trade closed with PnL%: {pnl_percent*100:.2f}%. Training Policy Network...")
         
         learner = self.learning_engines[ticker]
         ensemble = self.strategy_ensembles[ticker]
         
-        # Reconstruct the state vector when the trade was evaluated
-        latest_tick = self.latest_ticks.get(ticker, {})
-        state = learner.get_state_vector(
-            latest_tick or {},
-            ensemble.price_history,
-            [t for t in self.execution_engine.closed_trades if t['symbol'] == ticker]
-        )
-        
+        # Use the stored entry state vector rather than reconstructing a wrong one at exit!
+        if entry_state and len(entry_state) == 8:
+            state = entry_state
+        else:
+            # Fallback if entry state was not captured
+            latest_tick = self.latest_ticks.get(ticker, {})
+            state = learner.get_state_vector(
+                latest_tick or {},
+                ensemble.price_history,
+                [t for t in self.execution_engine.closed_trades if t['symbol'] == ticker]
+            )
+            
         # Run backpropagation on neural network weights using PnL as reward
         new_weights = learner.learn_from_trade(
             state,
@@ -368,6 +372,7 @@ class NexusTraderOrchestrator:
                     row=row,
                     history_df=ingestor.data
                 )
+                evaluation["state"] = state
                 
                 # If viable, open position
                 if evaluation["is_viable"]:
