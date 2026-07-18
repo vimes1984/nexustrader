@@ -1305,6 +1305,7 @@ elResetBtn.addEventListener("click", () => {
                 
                 // Re-establish stats
                 balance = 100.0;
+                initialBalance = 100.0;
                 elBalance.textContent = "$100.00";
                 elEquity.textContent = "$100.00";
                 elUnrealized.textContent = "Active Trade Profit: $0.00 (0.00%)";

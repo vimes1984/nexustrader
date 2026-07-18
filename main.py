@@ -813,14 +813,19 @@ def control_simulation(action: str, speed: float = 0.2, mode: str = "live"):
         database.save_setting("portfolio_balance", "100.00")
         database.save_setting("initial_portfolio_balance", "100.00")
         
-        # Completely clear trades and ticks history from SQLite
+        # Completely clear trades, ticks and portfolio history from SQLite
         conn = database.get_db_connection()
         cursor = conn.cursor()
         try:
             cursor.execute("DELETE FROM trades")
             cursor.execute("DELETE FROM ticks")
+            cursor.execute("DELETE FROM portfolio_history")
+            cursor.execute(
+                "INSERT INTO portfolio_history (timestamp, equity, pnl) VALUES (?, ?, ?)",
+                (time.time(), 100.0, 0.0)
+            )
             conn.commit()
-            logging.info("Cleared all trades and ticks tables in DB reset.")
+            logging.info("Cleared all trades, ticks, and portfolio history tables in DB reset.")
         except Exception as e:
             logging.error(f"Error clearing DB tables on reset: {e}")
         finally:
