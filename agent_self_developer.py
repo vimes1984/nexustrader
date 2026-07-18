@@ -96,15 +96,15 @@ The "find" blocks MUST MATCH EXACTLY (whitespace, newlines, etc.) to the existin
         logging.info("Requesting new feature design from Gemini...")
         from quant_utils import query_gemini_robust
         raw_text = query_gemini_robust(gemini_api_key, contents)
-            
-            # Remove any markdown wrappers if present
-            if raw_text.startswith("```json"):
-                raw_text = raw_text[7:]
-            if raw_text.endswith("```"):
-                raw_text = raw_text[:-3]
-            raw_text = raw_text.strip()
-            
-            response_data = json.loads(raw_text)
+        
+        # Remove any markdown wrappers if present
+        if raw_text.startswith("```json"):
+            raw_text = raw_text[7:]
+        if raw_text.endswith("```"):
+            raw_text = raw_text[:-3]
+        raw_text = raw_text.strip()
+        
+        response_data = json.loads(raw_text)
     except Exception as e:
         logging.error(f"Gemini API call failed: {e}")
         return f"Gemini API call failed: {e}"
@@ -246,18 +246,18 @@ Return ONLY a JSON block containing the key "revised_prompt_self_developer" with
 """
         from quant_utils import query_gemini_robust
         raw_text = query_gemini_robust(gemini_api_key, prompt)
-            if raw_text.startswith("```json"):
-                raw_text = raw_text[7:]
-            if raw_text.endswith("```"):
-                raw_text = raw_text[:-3]
-            raw_text = raw_text.strip()
-            
-            res_data = json.loads(raw_text)
-            revised = res_data.get("revised_prompt_self_developer")
-            if revised:
-                save_setting("prompt_self_developer", revised)
-                logging.info("Meta-optimization: Successfully updated prompt_self_developer in database settings.")
-                return revised
+        if raw_text.startswith("```json"):
+            raw_text = raw_text[7:]
+        if raw_text.endswith("```"):
+            raw_text = raw_text[:-3]
+        raw_text = raw_text.strip()
+        
+        res_data = json.loads(raw_text)
+        revised = res_data.get("revised_prompt_self_developer")
+        if revised:
+            save_setting("prompt_self_developer", revised)
+            logging.info("Meta-optimization: Successfully updated prompt_self_developer in database settings.")
+            return revised
     except Exception as e:
         logging.error(f"Failed to meta-optimize prompt_self_developer: {e}")
     return None
