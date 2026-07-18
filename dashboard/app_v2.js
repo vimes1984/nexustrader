@@ -4,8 +4,8 @@ let chart = null;
 let weightsChart = null;
 
 // Notifications State
-const notificationsList = [];
-let unreadCount = 0;
+const notificationsList = JSON.parse(localStorage.getItem("nexustrader_alerts_history") || "[]");
+let unreadCount = notificationsList.filter(n => !n.read).length;
 
 // Cybernetic Floating Toast Notifications
 function showToast(message, type = "success") {
@@ -41,7 +41,12 @@ function showToast(message, type = "success") {
         read: false
     };
     notificationsList.unshift(notification);
+    // Cap alerts list at 100 entries to prevent memory leak
+    if (notificationsList.length > 100) {
+        notificationsList.length = 100;
+    }
     unreadCount++;
+    localStorage.setItem("nexustrader_alerts_history", JSON.stringify(notificationsList));
     updateNotificationsUI();
     
     // Post notification to backend logs
@@ -313,6 +318,9 @@ function updateNotificationsUI() {
 
 // Notification Bell Dropdown Toggle Listeners
 document.addEventListener("DOMContentLoaded", () => {
+    // Initial render of persisted alerts
+    updateNotificationsUI();
+
     const bellBtn = document.getElementById("notification-bell-btn");
     const dropdown = document.getElementById("notification-dropdown");
     const clearBtn = document.getElementById("clear-notifications-btn");
@@ -326,6 +334,7 @@ document.addEventListener("DOMContentLoaded", () => {
             // Mark all as read when opening
             if (!isOpen) {
                 notificationsList.forEach(n => n.read = true);
+                localStorage.setItem("nexustrader_alerts_history", JSON.stringify(notificationsList));
                 updateNotificationsUI();
             }
         });
@@ -342,6 +351,7 @@ document.addEventListener("DOMContentLoaded", () => {
         clearBtn.addEventListener("click", (e) => {
             e.stopPropagation();
             notificationsList.length = 0;
+            localStorage.removeItem("nexustrader_alerts_history");
             updateNotificationsUI();
             if (dropdown) dropdown.style.display = "none";
         });
