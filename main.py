@@ -397,6 +397,7 @@ class NexusTraderOrchestrator:
             model_dna = "NN-DEFAULT"
 
         # 4. Broadcast real-time update to all clients
+        active_brain_name = database.load_setting(f"active_policy_brain_{ticker}", "Default Brain")
         self._run_async(self.broadcast_message({
             "type": "sim_tick" if self.is_simulating else "tick",
             "ticker": ticker,
@@ -415,6 +416,7 @@ class NexusTraderOrchestrator:
             "broker": self.execution_engine.config.get("broker", "kraken"),
             "lifetime_steps": steps,
             "model_dna": model_dna,
+            "active_brain": active_brain_name,
             "sim_index": row.get('_sim_index', None),
             "sim_total": row.get('_sim_total', None),
             "indicators": {
@@ -1833,6 +1835,10 @@ async def websocket_endpoint(websocket: WebSocket):
         else:
             trades_to_send = orchestrator.execution_engine.closed_trades
 
+        active_brains = {}
+        for t in orchestrator.tickers:
+            active_brains[t] = database.load_setting(f"active_policy_brain_{t}", "Default Brain")
+
         init_state = {
             "type": "init",
             "tickers": orchestrator.tickers,
@@ -1849,7 +1855,8 @@ async def websocket_endpoint(websocket: WebSocket):
             "strategies": [s.name for s in ensemble.strategies] if ensemble else [],
             "trades": trades_to_send,
             "lifetime_steps": steps,
-            "model_dna": model_dna
+            "model_dna": model_dna,
+            "active_brains": active_brains
         }
         await websocket.send_text(json.dumps(init_state))
         

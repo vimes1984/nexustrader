@@ -169,25 +169,29 @@
 
         <!-- KPI Grid (Global to active tabs) -->
         <section class="dashboard-grid" aria-label="Key Performance Indicators" style="margin-bottom: 20px;">
-            <div class="glass-panel kpi-card" id="equity-card">
+            <div class="glass-panel kpi-card" id="equity-card" style="position: relative;">
                 <div class="kpi-title">Total Portfolio Value</div>
                 <div class="kpi-value" id="val-equity">$100.00</div>
                 <div class="kpi-sub" id="val-unrealized-pnl">Active Trade Profit: $0.00 (0.00%)</div>
+                <span class="kpi-brain-badge" id="kpi-brain-equity" style="font-size: 8px; font-weight: bold; padding: 2px 6px; border-radius: 4px; background: rgba(168,85,247,0.12); color: var(--neon-purple); border: 1px solid rgba(168,85,247,0.3); font-family: monospace; position: absolute; top: 10px; right: 10px;">🧠 Default Brain</span>
             </div>
-            <div class="glass-panel kpi-card" id="balance-card">
+            <div class="glass-panel kpi-card" id="balance-card" style="position: relative;">
                 <div class="kpi-title">Cash Ready to Invest</div>
                 <div class="kpi-value" id="val-balance">$100.00</div>
                 <div class="kpi-sub">Ready to deploy</div>
+                <span class="kpi-brain-badge" id="kpi-brain-balance" style="font-size: 8px; font-weight: bold; padding: 2px 6px; border-radius: 4px; background: rgba(168,85,247,0.12); color: var(--neon-purple); border: 1px solid rgba(168,85,247,0.3); font-family: monospace; position: absolute; top: 10px; right: 10px;">🧠 Default Brain</span>
             </div>
-            <div class="glass-panel kpi-card" id="winrate-card">
+            <div class="glass-panel kpi-card" id="winrate-card" style="position: relative;">
                 <div class="kpi-title">Success Rate (Wins)</div>
                 <div class="kpi-value" id="val-winrate">0.0%</div>
                 <div class="kpi-sub" id="val-trade-count">0 trades completed</div>
+                <span class="kpi-brain-badge" id="kpi-brain-winrate" style="font-size: 8px; font-weight: bold; padding: 2px 6px; border-radius: 4px; background: rgba(168,85,247,0.12); color: var(--neon-purple); border: 1px solid rgba(168,85,247,0.3); font-family: monospace; position: absolute; top: 10px; right: 10px;">🧠 Default Brain</span>
             </div>
-            <div class="glass-panel kpi-card" id="totalpnl-card">
+            <div class="glass-panel kpi-card" id="totalpnl-card" style="position: relative;">
                 <div class="kpi-title">Total Profit</div>
                 <div class="kpi-value" id="val-total-pnl">$0.00</div>
                 <div class="kpi-sub" id="val-total-pnl-percent">0.00% growth</div>
+                <span class="kpi-brain-badge" id="kpi-brain-totalpnl" style="font-size: 8px; font-weight: bold; padding: 2px 6px; border-radius: 4px; background: rgba(168,85,247,0.12); color: var(--neon-purple); border: 1px solid rgba(168,85,247,0.3); font-family: monospace; position: absolute; top: 10px; right: 10px;">🧠 Default Brain</span>
             </div>
         </section>
 

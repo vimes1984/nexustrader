@@ -384,6 +384,7 @@ let isStopped = false;
 let currentWeights = {};
 let globalTradingMode = "paper";
 let globalBrokerName = "kraken";
+let globalActiveBrains = {};
 let weightsHistoryChart = null;
 
 // Colors mapping for strategies
@@ -569,12 +570,16 @@ function handleSocketMessage(msg) {
 
 // Process Init Message
 function handleInitState(data) {
+    if (data.active_brains) {
+        globalActiveBrains = data.active_brains;
+    }
     balance = data.balance;
     equity = data.equity !== undefined ? data.equity : data.balance;
     completedTrades = data.trades || [];
     if (data.initial_balance !== undefined) {
         initialBalance = data.initial_balance;
     }
+    updateKpiBrainBadges();
     
     // Update initial neural memory diagnostic badge
     const elEpochs = document.getElementById("neural-lifetime-epochs");
@@ -712,6 +717,14 @@ function handleTick(data) {
         }
     }
 
+    // Store latest active brain
+    if (data.active_brain) {
+        globalActiveBrains[data.ticker] = data.active_brain;
+        if (data.ticker === activeTicker) {
+            updateKpiBrainBadges();
+        }
+    }
+
     // Store latest tick for this symbol
     tickerLatest[data.ticker] = data;
     
@@ -819,18 +832,26 @@ function handleTick(data) {
     // Push chart data if not in portfolio mode
     if (!isPortfolioMode) {
         const timeLabel = data.timestamp.split(" ")[1] || data.timestamp.split("T")[1]?.slice(0, 5) || data.timestamp;
-        chartLabels.push(timeLabel);
-        priceData.push(currentPrice);
-        bbUpperData.push(data.indicators.bb_upper);
-        bbLowerData.push(data.indicators.bb_lower);
+        
+        if (chartLabels.length > 0 && chartLabels[chartLabels.length - 1] === timeLabel) {
+            // Update last candle data point
+            priceData[priceData.length - 1] = currentPrice;
+            bbUpperData[bbUpperData.length - 1] = data.indicators.bb_upper;
+            bbLowerData[bbLowerData.length - 1] = data.indicators.bb_lower;
+        } else {
+            // Append new candle data point
+            chartLabels.push(timeLabel);
+            priceData.push(currentPrice);
+            bbUpperData.push(data.indicators.bb_upper);
+            bbLowerData.push(data.indicators.bb_lower);
 
-        if (chartLabels.length > maxChartPoints) {
-            chartLabels.shift();
-            priceData.shift();
-            bbUpperData.shift();
-            bbLowerData.shift();
+            if (chartLabels.length > maxChartPoints) {
+                chartLabels.shift();
+                priceData.shift();
+                bbUpperData.shift();
+                bbLowerData.shift();
+            }
         }
-
         chart.update('none'); // Update without full recalculation transition for smooth updates
     }
 
@@ -871,10 +892,22 @@ function handleTick(data) {
     }
 }
 
+function updateKpiBrainBadges() {
+    const badges = document.querySelectorAll(".kpi-brain-badge");
+    let text = "Portfolio Ensemble";
+    if (!isPortfolioMode && activeTicker) {
+        text = globalActiveBrains[activeTicker] || "Default Brain";
+    }
+    badges.forEach(b => {
+        b.textContent = `🧠 ${text}`;
+    });
+}
+
 // Switch Active Ticker Handler
 function switchTicker(ticker) {
     isPortfolioMode = false;
     activeTicker = ticker;
+    updateKpiBrainBadges();
     
     // Toggle UI visibility
     const elTf = document.getElementById("portfolio-timeframes");
@@ -975,6 +1008,7 @@ function switchTicker(ticker) {
 function switchPortfolioMode(enable) {
     if (!enable) return;
     isPortfolioMode = true;
+    updateKpiBrainBadges();
     
     // Toggle UI visibility
     const elTf = document.getElementById("portfolio-timeframes");
@@ -2222,9 +2256,25 @@ function updateExchangeStatus() {
                 elHoldingsContainer.innerHTML = `<p style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 10px;">No holdings found.</p>`;
             } else {
                 let totalUsd = 0;
+                let usdCash = 0;
                 data.holdings.forEach(h => {
                     totalUsd += h.value_usd;
+                    if (h.asset === "USD" || h.asset === "ZUSD") {
+                        usdCash = h.quantity;
+                    }
                 });
+                
+                if (globalTradingMode === "live") {
+                    equity = totalUsd;
+                    balance = usdCash;
+                    if (elEquity) elEquity.textContent = `$${equity.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                    if (elBalance) elBalance.textContent = `$${balance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                    const portEqEl = document.getElementById("tab-portfolio-equity");
+                    if (portEqEl) {
+                        portEqEl.textContent = `$${equity.toFixed(2)}`;
+                    }
+                    updatePerformanceKPIs(completedTrades, equity);
+                }
                 
                 data.holdings.forEach(h => {
                     const share = totalUsd > 0 ? ((h.value_usd / totalUsd) * 100).toFixed(1) : "0.0";
@@ -2590,6 +2640,8 @@ window.activateNeuralBrain = function(name, ticker) {
         .then(data => {
             if (data.status === "success") {
                 showToast(`Policy brain '${name}' successfully activated!`, "success");
+                globalActiveBrains[ticker] = name;
+                updateKpiBrainBadges();
                 loadNeuralBrains(ticker);
                 
                 // Update the active model DNA badge in NeuralCore Card

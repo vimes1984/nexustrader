@@ -238,12 +238,53 @@ class DataIngestion:
                         }
                 
                 if row is not None:
-                    # Append and recompute technical indicators
-                    self.data = pd.concat([self.data, pd.DataFrame([row])]).drop_duplicates(subset=['timestamp'])
+                    if not self.data.empty:
+                        last_idx = self.data.index[-1]
+                        last_ts = self.data.loc[last_idx, 'timestamp']
+                        
+                        # Parse last timestamp
+                        if isinstance(last_ts, str):
+                            last_ts_dt = pd.to_datetime(last_ts)
+                        else:
+                            last_ts_dt = last_ts
+                            
+                        now_dt = pd.Timestamp.now(tz=last_ts_dt.tz if hasattr(last_ts_dt, 'tz') else None)
+                        
+                        # Calculate interval duration limit in seconds
+                        seconds_limit = 3600
+                        if self.interval == '1m':
+                            seconds_limit = 60
+                        elif self.interval == '5m':
+                            seconds_limit = 300
+                        elif self.interval == '15m':
+                            seconds_limit = 900
+                        elif self.interval == '1d':
+                            seconds_limit = 86400
+                            
+                        # If pandas Timestamps are timezone-naive/aware, strip tz for simple comparison
+                        now_naive = now_dt.tz_localize(None) if hasattr(now_dt, 'tz_localize') and now_dt.tz is not None else now_dt
+                        last_naive = last_ts_dt.tz_localize(None) if hasattr(last_ts_dt, 'tz_localize') and last_ts_dt.tz is not None else last_ts_dt
+                        time_diff = (now_naive - last_naive).total_seconds()
+                        
+                        if time_diff < seconds_limit:
+                            # Update the last candle
+                            self.data.loc[last_idx, 'close'] = price
+                            self.data.loc[last_idx, 'high'] = max(self.data.loc[last_idx, 'high'], price)
+                            self.data.loc[last_idx, 'low'] = min(self.data.loc[last_idx, 'low'], price)
+                        else:
+                            # Append new candle
+                            row['timestamp'] = last_ts_dt + pd.Timedelta(seconds=seconds_limit)
+                            self.data = pd.concat([self.data, pd.DataFrame([row])], ignore_index=True)
+                    else:
+                        self.data = pd.DataFrame([row])
+                        
                     self.compute_technical_indicators()
-                    
                     updated_row = self.data.iloc[-1].to_dict()
-                    # Notify subscribers
+                    
+                    # Convert pandas Timestamp to string format for JSON serialization
+                    if 'timestamp' in updated_row and not isinstance(updated_row['timestamp'], str):
+                        updated_row['timestamp'] = str(updated_row['timestamp'])
+                        
                     for callback in self.subscribers:
                         callback(updated_row)
                         
