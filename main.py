@@ -175,7 +175,8 @@ class NexusTraderOrchestrator:
         
         # Save updated network parameters to database and track training statistics
         weights_json = learner.policy_net.to_json()
-        database.save_setting(f"policy_net_weights_{ticker}", weights_json)
+        if self.mode != "simulation":
+            database.save_setting(f"policy_net_weights_{ticker}", weights_json)
         
         # Model DNA signature is a stable representation of the Policy Network's architecture topology
         import hashlib
@@ -186,23 +187,25 @@ class NexusTraderOrchestrator:
         # Increment and save lifetime training steps
         steps_key = f"lifetime_training_steps_{ticker}"
         steps = int(database.load_setting(steps_key, "0")) + 1
-        database.save_setting(steps_key, str(steps))
+        if self.mode != "simulation":
+            database.save_setting(steps_key, str(steps))
         last_save_time = time.strftime('%H:%M:%S', time.localtime())
         
         # Also update the active brain profile's training_steps and weights in database!
-        active_brain_name = database.load_setting(f"active_policy_brain_{ticker}", "Default Brain")
-        try:
-            conn = database.get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute(
-                "UPDATE policy_brains SET training_steps = ?, weights = ? WHERE name = ? AND ticker = ?",
-                (steps, weights_json, active_brain_name, ticker)
-            )
-            conn.commit()
-            conn.close()
-            logging.info(f"Successfully persisted updated weights and epochs count for active brain '{active_brain_name}' in database.")
-        except Exception as e:
-            logging.error(f"Error updating active brain weights and training steps: {e}")
+        if self.mode != "simulation":
+            active_brain_name = database.load_setting(f"active_policy_brain_{ticker}", "Default Brain")
+            try:
+                conn = database.get_db_connection()
+                cursor = conn.cursor()
+                cursor.execute(
+                    "UPDATE policy_brains SET training_steps = ?, weights = ? WHERE name = ? AND ticker = ?",
+                    (steps, weights_json, active_brain_name, ticker)
+                )
+                conn.commit()
+                conn.close()
+                logging.info(f"Successfully persisted updated weights and epochs count for active brain '{active_brain_name}' in database.")
+            except Exception as e:
+                logging.error(f"Error updating active brain weights and training steps: {e}")
         
         # Save weights to weights history table
         weights_dict = {
@@ -442,13 +445,14 @@ class NexusTraderOrchestrator:
             if ws in self.connected_websockets:
                 self.connected_websockets.remove(ws)
 
-    def start_stream(self, mode="live", speed=0.2, poll_interval=5):
+    def start_stream(self, mode="live", speed=0.2, poll_interval=5, brain=None):
         """Starts real-time live trading feed or simulation playback for all tickers."""
         if self.is_simulating:
             self.stop_stream()
             
         self.mode = mode
         self.is_simulating = True
+        self.sim_brain = brain
         
         for ticker in self.tickers:
             if ticker in self.data_ingestions:
@@ -457,13 +461,31 @@ class NexusTraderOrchestrator:
                     lambda row, t=ticker: self.process_tick(row, t)
                 )
                 if mode == "live":
+                    # Restore global active brain from DB for live trading to ensure it's not contaminated
+                    active_name = database.load_setting(f"active_policy_brain_{ticker}", "Default Brain")
+                    brain_data = database.load_policy_brain(active_name, ticker)
+                    if brain_data and ticker in self.learning_engines:
+                        try:
+                            self.learning_engines[ticker].policy_net.from_json(brain_data["weights"])
+                            logging.info(f"Restored global active brain '{active_name}' for live/paper trading on {ticker}.")
+                        except Exception as e:
+                            logging.error(f"Error restoring global active brain weights: {e}")
                     self.data_ingestions[ticker].start_live_stream(interval_seconds=poll_interval)
                 else:
+                    # In simulation mode, load the selected brain uniquely
+                    if brain:
+                        brain_data = database.load_policy_brain(brain, ticker)
+                        if brain_data and ticker in self.learning_engines:
+                            try:
+                                self.learning_engines[ticker].policy_net.from_json(brain_data["weights"])
+                                logging.info(f"Loaded simulation brain '{brain}' for {ticker} dynamically.")
+                            except Exception as e:
+                                logging.error(f"Error loading simulation brain weights: {e}")
                     self.data_ingestions[ticker].start_simulation_stream(
                         speed_seconds=speed,
                         start_index=150
                     )
-        logging.info(f"Multi-asset streaming started in {mode} mode.")
+        logging.info(f"Multi-asset streaming started in {mode} mode. Brain: {brain}")
 
     def stop_stream(self):
         self.is_simulating = False
@@ -849,10 +871,10 @@ def get_weights_history(ticker: str = "ETH-USD"):
         return []
 
 @app.post("/api/control")
-def control_simulation(action: str, speed: float = 0.2, mode: str = "live"):
+def control_simulation(action: str, speed: float = 0.2, mode: str = "live", brain: str = None):
     if action == "start":
-        orchestrator.start_stream(mode=mode, speed=speed, poll_interval=5)
-        return {"status": "started", "mode": mode, "speed": speed}
+        orchestrator.start_stream(mode=mode, speed=speed, poll_interval=5, brain=brain)
+        return {"status": "started", "mode": mode, "speed": speed, "brain": brain}
     elif action == "stop":
         orchestrator.stop_stream()
         return {"status": "stopped"}

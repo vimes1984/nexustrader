@@ -363,6 +363,51 @@
                             </div>
                         </div>
                     </article>
+
+                    <!-- Policy Gradient Neural Inputs -->
+                    <article class="glass-panel" style="padding: 24px; margin-top: 20px;">
+                        <h3 style="font-size: 15px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="cpu" style="width: 16px; height: 16px; color: var(--neon-blue);"></i>
+                            Live Neural Input Vector
+                        </h3>
+                        <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 20px; line-height: 1.4;">
+                            Real-time 7D mathematical state vector processed by the policy gradient network to adjust strategy allocations.
+                        </p>
+                        
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
+                            <div style="background: rgba(255,255,255,0.01); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
+                                <span style="display: block; color: var(--text-muted); font-size: 9px; text-transform: uppercase;">Market Regime</span>
+                                <strong id="neural-val-regime" style="color: var(--neon-purple); font-size: 14px;">Mean Reverting</strong>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.01); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
+                                <span style="display: block; color: var(--text-muted); font-size: 9px; text-transform: uppercase;">Mean-Reversion Speed (θ)</span>
+                                <strong id="neural-val-theta" style="color: var(--text-primary); font-family: monospace; font-size: 14px;">0.0000</strong>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.01); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
+                                <span style="display: block; color: var(--text-muted); font-size: 9px; text-transform: uppercase;">Relative Strength (RSI)</span>
+                                <strong id="neural-val-rsi" style="color: var(--text-primary); font-family: monospace; font-size: 14px;">50.0000</strong>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.01); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
+                                <span style="display: block; color: var(--text-muted); font-size: 9px; text-transform: uppercase;">MACD Normalized Histogram</span>
+                                <strong id="neural-val-macd" style="color: var(--text-primary); font-family: monospace; font-size: 14px;">0.0000</strong>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.01); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
+                                <span style="display: block; color: var(--text-muted); font-size: 9px; text-transform: uppercase;">BB Distance Position</span>
+                                <strong id="neural-val-bb" style="color: var(--text-primary); font-family: monospace; font-size: 14px;">0.0000</strong>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.01); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
+                                <span style="display: block; color: var(--text-muted); font-size: 9px; text-transform: uppercase;">ATR Volatility Ratio</span>
+                                <strong id="neural-val-atr" style="color: var(--text-primary); font-family: monospace; font-size: 14px;">0.0000</strong>
+                            </div>
+                            <div style="grid-column: span 2; background: rgba(255,255,255,0.01); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <span style="display: block; color: var(--text-muted); font-size: 9px; text-transform: uppercase;">Recent 10-Trade Win Trend</span>
+                                    <strong id="neural-val-wintrend" style="color: var(--neon-green); font-size: 14px;">0.0%</strong>
+                                </div>
+                                <span style="font-size: 10px; color: var(--text-secondary);">Reinforcement signal strength</span>
+                            </div>
+                        </div>
+                    </article>
                 </div>
 
                 <div class="main-right-column">

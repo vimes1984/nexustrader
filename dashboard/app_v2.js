@@ -582,10 +582,10 @@ function handleInitState(data) {
     updateKpiBrainBadges();
     
     // Update initial neural memory diagnostic badge
-    const elEpochs = document.getElementById("neural-lifetime-epochs");
-    const elDna = document.getElementById("neural-model-dna");
+    const elEpochs = document.getElementById("val-lifetime-steps");
+    const elDna = document.getElementById("val-model-dna");
     if (elEpochs && data.lifetime_steps !== undefined) {
-        elEpochs.textContent = `${data.lifetime_steps} epochs`;
+        elEpochs.textContent = data.lifetime_steps;
     }
     if (elDna && data.model_dna !== undefined) {
         elDna.textContent = data.model_dna;
@@ -753,10 +753,10 @@ function handleTick(data) {
     // Update cooldown status badge if it is active ticker
     if (data.ticker === activeTicker) {
         // Update neural memory diagnostics
-        const elEpochs = document.getElementById("neural-lifetime-epochs");
-        const elDna = document.getElementById("neural-model-dna");
+        const elEpochs = document.getElementById("val-lifetime-steps");
+        const elDna = document.getElementById("val-model-dna");
         if (elEpochs && data.lifetime_steps !== undefined) {
-            elEpochs.textContent = `${data.lifetime_steps} epochs`;
+            elEpochs.textContent = data.lifetime_steps;
         }
         if (elDna && data.model_dna !== undefined) {
             elDna.textContent = data.model_dna;
@@ -1009,10 +1009,10 @@ function switchTicker(ticker) {
             renderWeights(currentWeights);
             
             // Update neural diagnostics
-            const elEpochs = document.getElementById("neural-lifetime-epochs");
-            const elDna = document.getElementById("neural-model-dna");
+            const elEpochs = document.getElementById("val-lifetime-steps");
+            const elDna = document.getElementById("val-model-dna");
             if (elEpochs && data.lifetime_steps !== undefined) {
-                elEpochs.textContent = `${data.lifetime_steps} epochs`;
+                elEpochs.textContent = data.lifetime_steps;
             }
             if (elDna && data.model_dna !== undefined) {
                 elDna.textContent = data.model_dna;
@@ -1141,12 +1141,12 @@ function handleLearningUpdate(data) {
     
     // Update memory diagnostics UI
     if (data.ticker === activeTicker) {
-        const elEpochs = document.getElementById("neural-lifetime-epochs");
-        const elDna = document.getElementById("neural-model-dna");
+        const elEpochs = document.getElementById("val-lifetime-steps");
+        const elDna = document.getElementById("val-model-dna");
         const elFooter = document.getElementById("neural-memory-footer");
         
         if (elEpochs && data.lifetime_steps !== undefined) {
-            elEpochs.textContent = `${data.lifetime_steps} epochs`;
+            elEpochs.textContent = data.lifetime_steps;
         }
         if (elDna && data.model_dna !== undefined) {
             elDna.textContent = data.model_dna;
@@ -2859,42 +2859,36 @@ document.addEventListener("DOMContentLoaded", () => {
             
             showToast(`Initializing simulation loop on '${name}'...`, "info");
             
-            // 1. Activate the brain
-            fetch(`/api/neural/brain/activate?name=${encodeURIComponent(name)}&ticker=${encodeURIComponent(ticker)}`, { method: 'POST' })
+            // 1. Reset the simulation
+            fetch("/api/control?action=reset", { method: 'POST' })
                 .then(res => res.json())
-                .then(actData => {
-                    if (actData.status !== "success") {
-                        showToast(`Activation failed: ${actData.message}`, "error");
-                        return;
-                    }
-                    
-                    // 2. Reset the simulation
-                    fetch("/api/control?action=reset", { method: 'POST' })
+                .then(() => {
+                    // 2. Start simulation playback at speed=0.05 with the selected brain uniquely
+                    fetch(`/api/control?action=start&mode=simulation&speed=0.05&brain=${encodeURIComponent(name)}`, { method: 'POST' })
                         .then(res => res.json())
-                        .then(() => {
-                            // 3. Start simulation playback at speed=0.05
-                            fetch("/api/control?action=start&mode=simulation&speed=0.05", { method: 'POST' })
-                                .then(res => res.json())
-                                .then(startData => {
-                                    if (startData.status === "started") {
-                                        showToast(`Simulation started on brain '${name}'!`, "success");
-                                        loadNeuralBrains(ticker);
-                                        
-                                        // Update status badge UI
-                                        isStopped = false;
-                                        elPlayPauseText.textContent = "Pause";
-                                        elPlayPauseBtn.querySelector("i").setAttribute("data-lucide", "pause");
-                                        document.getElementById("status-text").textContent = "Simulating";
-                                        document.getElementById("bot-status").classList.remove("stopped");
-                                        lucide.createIcons();
-                                    } else {
-                                        showToast("Failed to start simulation.", "error");
-                                    }
-                                });
+                        .then(startData => {
+                            if (startData.status === "started") {
+                                showToast(`Simulation started uniquely on brain '${name}'!`, "success");
+                                loadNeuralBrains(ticker);
+                                
+                                // Update status badge UI
+                                isStopped = false;
+                                elPlayPauseText.textContent = "Pause";
+                                elPlayPauseBtn.querySelector("i").setAttribute("data-lucide", "pause");
+                                document.getElementById("status-text").textContent = "Simulating";
+                                document.getElementById("bot-status").classList.remove("stopped");
+                                lucide.createIcons();
+                            } else {
+                                showToast("Failed to start simulation.", "error");
+                            }
+                        })
+                        .catch(err => {
+                            showToast("Error starting simulation loop.", "error");
+                            console.error(err);
                         });
                 })
                 .catch(err => {
-                    showToast("Error triggering simulation loop.", "error");
+                    showToast("Error resetting simulation.", "error");
                     console.error(err);
                 });
         });
