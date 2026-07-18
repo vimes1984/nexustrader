@@ -189,19 +189,20 @@ class NexusTraderOrchestrator:
         database.save_setting(steps_key, str(steps))
         last_save_time = time.strftime('%H:%M:%S', time.localtime())
         
-        # Also update the active brain profile's training_steps in database!
+        # Also update the active brain profile's training_steps and weights in database!
         active_brain_name = database.load_setting(f"active_policy_brain_{ticker}", "Default Brain")
         try:
             conn = database.get_db_connection()
             cursor = conn.cursor()
             cursor.execute(
-                "UPDATE policy_brains SET training_steps = ? WHERE name = ? AND ticker = ?",
-                (steps, active_brain_name, ticker)
+                "UPDATE policy_brains SET training_steps = ?, weights = ? WHERE name = ? AND ticker = ?",
+                (steps, weights_json, active_brain_name, ticker)
             )
             conn.commit()
             conn.close()
+            logging.info(f"Successfully persisted updated weights and epochs count for active brain '{active_brain_name}' in database.")
         except Exception as e:
-            logging.error(f"Error updating active brain training steps: {e}")
+            logging.error(f"Error updating active brain weights and training steps: {e}")
         
         # Save weights to weights history table
         weights_dict = {
