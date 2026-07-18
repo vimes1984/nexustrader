@@ -7,9 +7,9 @@
   <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License" />
 </p>
 
-NexusTrader is a state-of-the-art, self-learning quantitative trading system that utilizes a **Policy Gradient Neural Network** to dynamically allocate weights across an ensemble of trading strategies. By combining real-time regime estimation, volatility-adjusted position sizing, and online reinforcement learning, the system adapts to shifting market structures (trend-following vs. mean-reverting) in real-time.
+NexusTrader is a production-grade, self-learning quantitative trading system that utilizes a **Policy Gradient Neural Network** to dynamically allocate weights across an ensemble of quantitative strategies in real-time. By combining online reinforcement learning, real-time regime estimation, volatility-adjusted stop placements, and a robust risk gatekeeper, the system continuously adapts to shifting market structures (trend-following vs. mean-reverting) without human intervention.
 
-Features include a **headless daemon server**, an interactive **pywebview Desktop GUI** dashboard, a persistent **SQLite Database** layer, and an automated **Weekly Blog Agent** that writes detailed performance attribution reports.
+It is designed as a **modular autonomous quant ecosystem**, orchestrating multiple dedicated AI Agents (PhD Quant, Dev Architect, Sentiment Sentinel, Risk Auditor, NeuralCore, and Reporter) to continuously tune hyperparameters, iterate UI improvements, audit portfolio risks, and publish performance commentary.
 
 ---
 
@@ -60,126 +60,135 @@ graph TD
 
 ## 🧩 Core Modules & Mechanics
 
-### 1. Data Ingestion Engine (`data_ingestion.py`)
-Responsible for fetching historical assets and streaming real-time market ticks.
-- **Historical Analysis**: Fetches 60 days of hourly data on startup to warm up strategies and train machine learning estimators.
-- **Regime Technical Indicators**: Computes SMA, EMA, MACD (signal & histogram), RSI (14), Bollinger Bands, and Average True Range (ATR).
-- **Dual Streaming Modes**: Runs simulated replay of historical bars (with adjustable speed) for backtesting, or schedules a background polling thread for real-time live trading.
+### 1. Data Ingestion Engine ([data_ingestion.py](file:///home/chris/nexustrader/data_ingestion.py))
+Responsible for historical warming and real-time candle stream aggregation.
+* **Warm-up Processing**: Downloads 60 days of historical hourly data on startup to warm up strategy indicators and initialize model shapes.
+* **Candle-Interval Aggregation**: Implements robust tick aggregation. When live ticks arrive via exchange polling, the engine updates the current candle's open/high/low/close boundaries and only appends a new row when the configured time interval (e.g., `1h`, `1m`) expires. This prevents chart flattening and database bloating.
+* **Indicators**: Computes SMA, EMA, MACD, RSI, Bollinger Bands, and Average True Range (ATR).
 
-### 2. Strategy Ensemble (`strategy_engine.py`)
-Maintains an ensemble of diverse trading strategies and blends their votes.
-- **EMA Crossover**: Trend-following strategy using MACD line vs. MACD signal crossings.
-- **RSI Reversion**: Reversal strategy triggering BUY when oversold (<35) and SELL when overbought (>65).
-- **BB Breakout**: Mean-reversion strategy triggering BUY below the lower Bollinger Band and SELL above the upper band.
-- **Kalman Trend Filter**: Custom 1D Kalman Filter tracing the true underlying price trend through high-frequency noise, triggering on crossover confirmations.
-- **Psychological Sweep (Liquidity Grab)**: Scans swing highs/lows for stop hunts. Triggers when price sweeps past recent levels and closes back inside, boosted if near round-number (€5/€10/€100) support/resistance.
-- **ML Random Forest**: Scikit-learn Classifier trained on normalized features to predict forward returns.
-- **Dynamic Weight Adjuster**: Uses an **Ornstein-Uhlenbeck (OU) process parameter estimator** to calculate the market's mean-reversion speed ($\theta$). If the regime is highly mean-reverting ($\theta > 0.05$), the ensemble boosts mean-reversion strategy weights and suppresses trend-following weights (and vice-versa).
+### 2. Strategy Ensemble ([strategy_engine.py](file:///home/chris/nexustrader/strategy_engine.py))
+Maintains an ensemble of trading strategies and blends their votes using weights assigned by the Policy Network:
+1. **EMA Crossover**: Trend-following strategy using MACD line vs. MACD signal crossings.
+2. **RSI Reversion**: Overbought/oversold reversal logic (triggers BUY < 35, SELL > 65).
+3. **BB Breakout**: Mean-reversion strategy triggering entries outside the Bollinger Band envelope.
+4. **Kalman Trend Filter**: Crossovers based on a custom 1D Kalman Filter tracing the true price trend through high-frequency noise.
+5. **Psychological Sweep (Liquidity Grab)**: Scans swing highs/lows for stop hunts. Triggers when price sweeps past support/resistance and closes back inside, boosted if near round numbers ($5/$10/$100).
+6. **ML Random Forest**: Scikit-learn Classifier trained on normalized features to predict forward returns.
+* **OU Regime Estimator**: Discretizes prices via an **Ornstein-Uhlenbeck (OU) process** ordinary least squares (OLS) regression to estimate the rate of mean reversion ($\theta$). When the market is highly mean-reverting ($\theta > 0.05$), it dynamically scales down trend-following strategies and boosts mean-reversion weights.
 
-### 3. Probability & Risk Engine (`probability_engine.py`)
-Acts as the mathematical gatekeeper before orders are routed.
-- **Win Probability ($P_{win}$)**: Maps ensemble signal strength via a sigmoid function, adjusted by RSI extremes and localized historical empirical win rates.
-- **Expected Value (EV)**: Assesses trade mathematical expectation: $EV = (P_{win} \times \text{Reward}) - ((1 - P_{win}) \times \text{Risk})$. Only trades with $EV > 0$ and $P_{win} \geq 45\%$ are executed.
-- **ATR Stops**: Computes stop-loss (SL) at $1.5 \times \text{ATR}$ and take-profit (TP) at $2.5 \times \text{ATR}$ to adapt to changing volatility.
-- **Kelly Sizing**: Sizes positions using the Kelly Criterion: $f^* = P_{win} - \frac{1 - P_{win}}{\text{Risk/Reward Ratio}}$. Sizing is scaled by a fraction depending on the Risk Profile (`conservative`, `aggressive`, `hyper_growth`).
+### 3. Probability & Risk Engine ([probability_engine.py](file:///home/chris/nexustrader/probability_engine.py))
+Acts as the mathematical gatekeeper before routing orders:
+* **Win Probability ($P_{win}$)**: Maps ensemble signal strength to a probability via a sigmoid function, adjusted by RSI extremes and recent empirical win rates.
+* **Expected Value (EV)**: Assesses trade expectancy: $EV = (P_{win} \times \text{Reward}) - ((1 - P_{win}) \times \text{Risk})$. Execution requires $EV > 0$ and $P_{win} \geq 45\%$.
+* **Volatility-Adjusted Stops**: Sets stop-loss (SL) at $1.5 \times \text{ATR}$ and take-profit (TP) at $2.5 \times \text{ATR}$.
+* **Kelly Sizing**: Calculates optimal sizing fraction: $f^* = P_{win} - \frac{1 - P_{win}}{\text{Risk/Reward Ratio}}$. Sizing is scaled by a fraction depending on the Risk Profile (`conservative`, `aggressive`, `hyper_growth`).
 
-### 4. Policy Gradient Learning Engine (`learning_engine.py`)
-An online reinforcement learning agent that optimizes strategy weights.
-- **State Vector (7D)**: Encodes Market Regime, OU Reversion Speed, Normalized RSI, MACD Histogram, Bollinger Band position, ATR Volatility ratio, and recent 10-trade Win Trend.
-- **Forward Pass**: A NumPy-based neural network (Xavier initialization, ReLU hidden layer, Softmax output) mapping the state to a probability distribution representing the 6 strategy weights.
-- **Backward Pass (Policy Gradient)**: When a trade closes, the system updates parameters. A positive PnL triggers gradient ascent to reward strategies that aligned with the entry direction, while a negative PnL penalizes them.
-- **Exploration Floor**: Imposes a minimum 5% allocation per strategy to ensure the network continues exploring the active parameter space.
+### 4. Policy Gradient Learning Engine ([learning_engine.py](file:///home/chris/nexustrader/learning_engine.py))
+An online reinforcement learning agent that optimizes strategy weights:
+* **State Vector (7D)**: Encodes Market Regime, OU Reversion Speed ($\theta$), RSI, MACD Histogram, Bollinger Band position, ATR ratio, and recent 10-trade Win Trend.
+* **Policy Network**: Hidden dimension layer mapping the state vector to a softmax probability distribution representing the 6 strategy weights.
+* **Policy Gradient Backpropagation**: Closed trades calculate a positive or negative PnL reward. Gradients are computed to perform gradient ascent, rewarding the strategies whose votes matched the profitable trade direction and penalizing the underperforming ones.
+* **Exploration Floor**: Imposes a minimum 5% allocation per strategy to prevent premature convergence and maintain parameter exploration.
 
-### 5. Execution Engine & Database (`execution_engine.py` & `database.py`)
-Handles trade lifecycle, balances, transaction fees (0.1%), and persistence.
-- **SQLite Database**: Stores ticks, completed trades (including the strategy signals at entry for attribution), and model settings.
-- **Modes**: Suppports paper trading (default) or routes orders to live broker endpoints (e.g. Kraken/Broker APIs) defined in `~/.nexustrader/config.json`.
-
----
-
-## 📈 Weekly Blog Agent & Operations Log (`blog_agent.py`)
-
-A separate agent runs weekly to audit the performance of the trading bot and document its self-learning progress.
-
-### Mechanics & attribution:
-1. **Performance Extraction**: Connects to the SQLite database to retrieve trades closed during the past week, computing overall PnL, Win Rate, and Profit Factor.
-2. **Strategy Attribution**: Analyzes the stored `strategy_signals` at the time of each trade entry to determine which strategy components voted correctly and calculates net PnL and win rates for each strategy component.
-3. **Neural Weight Audit**: Performs a forward pass on the Policy Network to audit current baseline weights and draws an ASCII visual chart representing the bot's current policy allocation.
-4. **AI Market Commentary**: If `GEMINI_API_KEY` is configured in the environment, the agent queries the Gemini API to transform raw data into a professional, witty, and deep market log in the persona of an expert quantitative researcher. If no API key is present, it falls back to a highly detailed, data-rich Markdown template.
-5. **Logs Indexing**: Saves posts to [blog/](blog/) and automatically updates the [blog/README.md](blog/README.md) index file.
+### 5. Execution Engine & Database ([execution_engine.py](file:///home/chris/nexustrader/execution_engine.py) & [database.py](file:///home/chris/nexustrader/database.py))
+* **Multi-Mode Execution**: Operates in paper trading (default) or live broker mode.
+* **Live Kraken Integration**: Connects via CCXT to Kraken to sync balances and route market orders. Includes a robust **Short-Position Inventory Tracker** that calculates offsetting executions (partial fills, sizing scaling, and reversals) because Kraken handles short positions through buy/sell offsets.
+* **Lock-Free SQLite WAL Mode**: Configures connection timeout (`30.0s`) and enables SQLite **Write-Ahead Logging (WAL) mode**. This completely eliminates `database is locked` exceptions during concurrent writes from background polling threads, REST API calls, and agent optimizers.
+* **Database Partitioning**: Segregates trades by `trading_mode` (`live`, `paper`, `simulation`) so backtest logs never contaminate live trade history or win-rate KPIs.
 
 ---
 
-## 🚀 Running the System
+## 🤖 The Autonomous Agent Network
+
+NexusTrader implements a cooperative multi-agent architecture where autonomous scripts optimize parameters and refine the bot:
+
+| Agent Name | Script | Role & Mechanics |
+| --- | --- | --- |
+| 📊 **PhD Quant** | [weekly_optimizer.py](file:///home/chris/nexustrader/weekly_optimizer.py) | Optimizes technical parameter boundaries, stop multipliers, and OLS regression windows by backtesting historical ticks. |
+| 📡 **Sentiment Sentinel** | [sentiment_agent.py](file:///home/chris/nexustrader/sentiment_agent.py) | Monitors web news feeds and social signals via NLP API analysis, computing trade correlations to adjust active sentiment source weights. |
+| 🛡️ **Risk Auditor** | [risk_auditor.py](file:///home/chris/nexustrader/risk_auditor.py) | Audits portfolio drawdowns, volatility, and equity floors, updating loss limits and cooldown constraints to protect capital. |
+| 🧠 **NeuralCore** | [nn_agent.py](file:///home/chris/nexustrader/nn_agent.py) | Tunes policy learning rates ($\eta$) and exploration floors by assessing recent gradient step variances and weight convergence. |
+| 📝 **NexusReporter** | [blog_agent.py](file:///home/chris/nexustrader/blog_agent.py) | Extracts trade logs, performs strategy PnL attribution, formats policy weight ASCII charts, and publishes quantitative reports to [blog/](file:///home/chris/nexustrader/blog/). |
+| ⚙️ **Dev Architect** | [agent_self_developer.py](file:///home/chris/nexustrader/agent_self_developer.py) | Autonomously scans front-end layouts and codebase loops, proposes and writes minor visual improvements or diagnostic helpers, runs syntax checks, and tests code before deployment. |
+| 🛠️ **Meta-Optimizer** | [self_improvement_agent.py](file:///home/chris/nexustrader/self_improvement_agent.py) | Periodically critique-refines the system prompts and instruction files of the other agents using LLM review. |
+
+---
+
+## 🖥️ Standalone GUI & Web Dashboard
+
+NexusTrader features a high-fidelity, modern dark-themed dashboard. Key dashboard tabs include:
+* **Dashboard Tab**: Real-time candle charts with moving averages and Bollinger Bands, a probability speedometer, Kelly sizing calculator, active trade logs, and dynamic NLP news weights. Includes **🧠 Active Brain indicators** on each KPI block detailing which neural weights drive the current symbol.
+* **Neural Core**: Details of the Policy Gradient network, state values (Regime, Theta, RSI, MACD, BB, ATR, WinTrend), and weights attribution curves.
+* **AI Agent Nexus**: Details of the autonomous quants, individual manual trigger buttons, and a **Concurrently Run All Agents** console overlay that runs optimization pipelines in parallel, tracking progress with visual success badges.
+* **Training Simulator**: Dedicated simulation section showing backtest speed control, progress playback, simulated equity charts, simulated closed trade logs, and simulation-only performance cards.
+* **Trading System Settings**: Risk profile selectors (`conservative`, `aggressive`, `hyper_growth`), custom initial balance inputs, exchange cooldown triggers, and credentials configuration.
+
+---
+
+## 🚀 Installation & Running
 
 ### Prerequisites
-Install the required packages in your Python environment:
+Install dependencies in your python environment:
 ```bash
 pip install -r requirements.txt
 ```
 
-### 1. Launching the Trading Bot
+### Configuration
+Configure settings in `~/.nexustrader/config.json` (created automatically on startup):
+```json
+{
+  "trading_mode": "paper",
+  "broker": "kraken",
+  "risk_profile": "conservative",
+  "initial_portfolio_balance": 100.0,
+  "api_credentials": {
+    "api_key": "YOUR_API_KEY",
+    "api_secret": "YOUR_API_SECRET"
+  }
+}
+```
 
-#### Interactive GUI / Desktop Application
-If a graphical environment (X11/Wayland) is available, run the standalone script. This launches the backend server and opens a high-fidelity desktop window via `pywebview`:
+### Launch Commands
+
+#### 1. Interactive Desktop GUI (Webview)
+To run the full backend server and launch the desktop window container concurrently:
 ```bash
 ./run_standalone.sh
 ```
 
-#### Headless Daemon Server
-To run the trading bot continuously in the background on a server:
+#### 2. Headless Daemon Server
+To run in the background on servers, VMs, or headless devices:
 ```bash
 ./start_daemon.sh
 ```
-This binds the FastAPI server to port `8000`. You can inspect logs at `nexustrader_log.txt` and access the dashboard by navigating to `http://localhost:8000` in any web browser.
+The server runs on port `8000`. Access the dashboard by opening `http://localhost:8000` in your web browser.
+
+#### 3. Deploying to Remote VM
+If developing locally and deploying to a Proxmox VM, run the deploy helper. This runs python unit tests, checks file syntax, pushes to GitHub, syncs code to the VM via rsync, and restarts the service daemon:
+```bash
+./deploy.sh
+```
 
 ---
 
-### 2. Running the Weekly Blog Agent
+## 📊 Developer API Reference
 
-To run the blog agent manually and generate the report for the last 7 days:
-```bash
-python3 blog_agent.py
-```
-
-#### Testing with Mock Data
-If you have just initialized the system and want to see the blog agent in action with populated trading history, run with the `--mock` flag. This populates the database with 12 realistic trades closed over the last 10 days and writes a sample blog post:
-```bash
-python3 blog_agent.py --mock
-```
-
-#### Scheduled Cron Job
-The weekly scheduler is configured in your Linux crontab to execute every Sunday at 11:59 PM (23:59). You can verify or edit this setup:
-- **Inspect current cron schedule**:
-  ```bash
-  crontab -l
-  ```
-- **Edit scheduling**:
-  ```bash
-  crontab -e
-  ```
+| Endpoint | Method | Description |
+| --- | --- | --- |
+| `/api/control` | POST | Starts or stops simulation stream / live streams. |
+| `/api/trades` | GET | Returns trades list, filtered by the current `trading_mode` or reconstructed from live exchange CCXT. |
+| `/api/history` | GET | Returns warmed historical candle data for the selected ticker. |
+| `/api/exchange/status` | GET | Queries live exchange CCXT account balances, leverage positions, and open limit orders. |
+| `/api/neural/brains` | GET | Lists saved brains, parameters, size, and trade counts. |
+| `/api/neural/brain/activate` | POST | Activates a specific policy brain for a given asset. |
+| `/api/system/optimize/parameters` | POST | Launches the PhD Quant Parameter Optimization pipeline. |
+| `/api/system/optimize/self_dev` | POST | Launches the Dev Architect autonomous codebase developer. |
+| `/api/system/optimize/nn` | POST | Launches the NeuralCore Network tuning agent. |
+| `/api/system/optimize/sentiment`| POST | Launches the Sentiment Sentinel weight correlation optimizer. |
+| `/api/blog/generate` | POST | Triggers the Weekly Reporter Agent to write attribution reports. |
 
 ---
 
-## 🛠️ Configuration & Customization
-Config files are stored in `~/.nexustrader/` (created automatically upon first run):
-- **Database**: `~/.nexustrader/nexustrader.db`
-- **Settings Config**: `~/.nexustrader/config.json`
-  Modify this file to switch between paper and live trading, select brokers, or insert API credentials:
-  ```json
-  {
-    "trading_mode": "paper",
-    "broker": "kraken",
-    "risk_profile": "conservative",
-    "api_credentials": {
-      "api_key": "YOUR_API_KEY",
-      "api_secret": "YOUR_API_SECRET"
-    }
-  }
-  ```
+## 🛡️ License
 
-> [!NOTE]
-> When `trading_mode` is set to `"live"`, the execution engine will route market orders to the selected broker API. Make sure to input valid API credentials and perform sandbox testing before deploying live capital.
-
-> [!IMPORTANT]
-> The Policy Gradient reinforcement learning network works entirely online. If you reset the dashboard configuration or clear the database, the network will wipe its learned parameters and reset to equal weights, restarting its exploration process.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
