@@ -1080,20 +1080,20 @@
 
         <!-- TAB CONTENT 5: SYSTEM ARCHITECTURE -->
         <div id="tab-architecture" class="tab-content">
-            <article class="glass-panel" style="padding: 24px; display: flex; flex-direction: column; gap: 20px;">
-                <h2 class="panel-title" style="display: flex; align-items: center; gap: 8px;">
-                    <i data-lucide="network" style="color: var(--neon-blue)"></i>
-                    NexusTrader Cybernetic Architecture Map
-                </h2>
-                <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.5; max-width: 800px; margin-bottom: 10px;">
-                    Below is the live diagnostic connection graph mapping the information flow and cognitive loops of the NexusTrader. 
-                    Market inputs traverse the strategy ensemble which feeds probability odds check routines, ultimately executing positions on exchange while neural core feedback adjusts the policy weights.
-                </p>
+            <article class="glass-panel" style="padding: 28px; display: flex; flex-direction: column; gap: 24px;">
+                <div style="border-bottom: 1px solid var(--border-color); padding-bottom: 16px;">
+                    <h2 class="panel-title" style="display: flex; align-items: center; gap: 8px; font-size: 18px;">
+                        <i data-lucide="network" style="color: var(--neon-blue); width: 22px; height: 22px;"></i>
+                        Production-Grade Systems Architecture Map
+                    </h2>
+                    <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.5; margin-top: 6px; max-width: 900px;">
+                        NexusTrader operates as an event-driven quantitative system. Below is a systems-engineered view mapping the actual data pipelines, mathematical gatekeepers, in-memory learning feedback loops, and decoupled agent optimization layers.
+                    </p>
+                </div>
 
                 <!-- Interactive SVG Map -->
-                <div style="background: rgba(8, 12, 20, 0.6); border: 1px solid var(--border-color); border-radius: 12px; padding: 20px; display: flex; justify-content: center; overflow-x: auto;">
-                    <svg width="860" height="420" viewBox="0 0 860 420" style="font-family: 'Space Grotesk', sans-serif;">
-                        <!-- Defs for markers and gradients -->
+                <div style="background: rgba(8, 12, 20, 0.75); border: 1px solid var(--border-color); border-radius: 12px; padding: 24px; display: flex; justify-content: center; overflow-x: auto;">
+                    <svg width="880" height="460" viewBox="0 0 880 460" style="font-family: 'Space Grotesk', sans-serif;">
                         <defs>
                             <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
                                 <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b" />
@@ -1107,114 +1107,163 @@
                             <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
                                 <path d="M 0 0 L 10 5 L 0 10 z" fill="#10b981" />
                             </marker>
-                            <marker id="arrow-orange" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                                <path d="M 0 0 L 10 5 L 0 10 z" fill="#f59e0b" />
-                            </marker>
                             <linearGradient id="blueGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                                <stop offset="0%" stop-color="#00f0ff" stop-opacity="0.2"/>
-                                <stop offset="100%" stop-color="#00f0ff" stop-opacity="0.05"/>
+                                <stop offset="0%" stop-color="#00f0ff" stop-opacity="0.15"/>
+                                <stop offset="100%" stop-color="#00f0ff" stop-opacity="0.02"/>
                             </linearGradient>
                             <linearGradient id="purpleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                                <stop offset="0%" stop-color="#a855f7" stop-opacity="0.2"/>
-                                <stop offset="100%" stop-color="#a855f7" stop-opacity="0.05"/>
+                                <stop offset="0%" stop-color="#a855f7" stop-opacity="0.15"/>
+                                <stop offset="100%" stop-color="#a855f7" stop-opacity="0.02"/>
                             </linearGradient>
                             <linearGradient id="greenGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                                <stop offset="0%" stop-color="#10b981" stop-opacity="0.2"/>
-                                <stop offset="100%" stop-color="#10b981" stop-opacity="0.05"/>
-                            </linearGradient>
-                            <linearGradient id="orangeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                                <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.2"/>
-                                <stop offset="100%" stop-color="#f59e0b" stop-opacity="0.05"/>
+                                <stop offset="0%" stop-color="#10b981" stop-opacity="0.15"/>
+                                <stop offset="100%" stop-color="#10b981" stop-opacity="0.02"/>
                             </linearGradient>
                         </defs>
 
-                        <!-- Blocks Connections Lines -->
-                        <!-- Ingestion to Ensemble -->
-                        <path d="M 130 90 L 175 90" stroke="#00f0ff" stroke-width="2" marker-end="url(#arrow-blue)" fill="none" />
-                        <!-- Ensemble to NeuralCore Brain -->
-                        <path d="M 230 145 L 230 195" stroke="#a855f7" stroke-width="1.5" marker-end="url(#arrow-purple)" fill="none" />
-                        <!-- NeuralCore Brain to Ensemble (weights feed) -->
-                        <path d="M 270 195 L 270 145" stroke="#a855f7" stroke-width="1.5" stroke-dasharray="4,4" marker-end="url(#arrow-purple)" fill="none" />
-                        <!-- Ensemble to Probability -->
-                        <path d="M 330 90 L 375 90" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)" fill="none" />
-                        <!-- Probability to Execution -->
-                        <path d="M 505 90 L 555 90" stroke="#00f0ff" stroke-width="2" marker-end="url(#arrow-blue)" fill="none" />
-                        <!-- Execution to Exchange -->
-                        <path d="M 685 90 L 735 90" stroke="#00f0ff" stroke-width="2" marker-end="url(#arrow-blue)" fill="none" />
-                        <!-- Execution to NeuralCore feedback -->
-                        <path d="M 620 135 L 620 300 L 330 300" stroke="#a855f7" stroke-width="1.5" stroke-dasharray="3,3" marker-end="url(#arrow-purple)" fill="none" />
-                        <!-- NeuralCore feedback to NeuralCore -->
-                        <path d="M 230 300 L 230 255" stroke="#a855f7" stroke-width="1.5" stroke-dasharray="3,3" marker-end="url(#arrow-purple)" fill="none" />
-
-                        <!-- Dashed Agent Tuning Lines -->
-                        <!-- Quant to Ensemble -->
-                        <path d="M 110 340 L 110 270 L 200 270 L 200 145" stroke="#a855f7" stroke-width="1.2" stroke-dasharray="3,3" marker-end="url(#arrow-purple)" fill="none" />
-                        <!-- Dev to Ingestion & Execution -->
-                        <path d="M 250 340 L 250 280 L 70 280 L 70 130" stroke="#00f0ff" stroke-width="1.2" stroke-dasharray="3,3" marker-end="url(#arrow-blue)" fill="none" />
-                        <path d="M 250 340 L 250 290 L 590 290 L 590 135" stroke="#00f0ff" stroke-width="1.2" stroke-dasharray="3,3" marker-end="url(#arrow-blue)" fill="none" />
-                        <!-- Reporter to Blog -->
-                        <path d="M 390 340 L 390 225 L 735 225" stroke="#10b981" stroke-width="1.2" stroke-dasharray="3,3" marker-end="url(#arrow-green)" fill="none" />
-                        <!-- NN Opt to Brain -->
-                        <path d="M 530 340 L 530 260 L 310 260 L 310 255" stroke="#f59e0b" stroke-width="1.2" stroke-dasharray="3,3" marker-end="url(#arrow-orange)" fill="none" />
-
-                        <!-- Flow annotation text -->
-                        <text x="630" y="285" fill="#a855f7" font-size="10" font-weight="600">PnL Trade Telemetry Feedback</text>
-                        <text x="280" y="175" fill="#a855f7" font-size="10" font-weight="600">Trust Weights</text>
-                        <text x="515" y="80" fill="#00f0ff" font-size="10" font-weight="600">Trade Signals</text>
-
-                        <!-- Block 1: Ingestion -->
-                        <rect x="10" y="50" width="120" height="80" rx="8" fill="url(#blueGrad)" stroke="#00f0ff" stroke-width="1" />
-                        <text x="70" y="80" text-anchor="middle" fill="#00f0ff" font-size="13" font-weight="700">Data Ingest</text>
-                        <text x="70" y="98" text-anchor="middle" fill="#94a3b8" font-size="10">Yahoo Finance API</text>
-                        <text x="70" y="112" text-anchor="middle" fill="#64748b" font-size="9">Feeds & Orderbook</text>
-
-                        <!-- Block 2: Ensemble -->
-                        <rect x="175" y="50" width="155" height="95" rx="8" fill="url(#purpleGrad)" stroke="#a855f7" stroke-width="1" />
-                        <text x="252" y="78" text-anchor="middle" fill="#a855f7" font-size="13" font-weight="700">Strategy Ensemble</text>
-                        <text x="252" y="95" text-anchor="middle" fill="#94a3b8" font-size="9">EMA, RSI, BB, Kalman</text>
-                        <text x="252" y="110" text-anchor="middle" fill="#94a3b8" font-size="9">Sentiment & Random Forest</text>
-                        <text x="252" y="128" text-anchor="middle" fill="#64748b" font-size="9">(7 algorithms)</text>
-
-                        <!-- Block 3: NeuralCore policy net -->
-                        <rect x="175" y="195" width="155" height="60" rx="8" fill="url(#purpleGrad)" stroke="#a855f7" stroke-width="1" />
-                        <text x="252" y="222" text-anchor="middle" fill="#a855f7" font-size="13" font-weight="700">NeuralCore Brain</text>
-                        <text x="252" y="238" text-anchor="middle" fill="#94a3b8" font-size="10">Policy Gradient Net</text>
-
-                        <!-- Block 4: Probability Engine -->
-                        <rect x="375" y="50" width="130" height="80" rx="8" fill="url(#blueGrad)" stroke="#00f0ff" stroke-width="1" />
-                        <text x="440" y="80" text-anchor="middle" fill="#00f0ff" font-size="13" font-weight="700">Probability Engine</text>
-                        <text x="440" y="98" text-anchor="middle" fill="#94a3b8" font-size="10">Kelly Sizing & Odds</text>
-                        <text x="440" y="112" text-anchor="middle" fill="#64748b" font-size="9">Signal Strength Check</text>
-
-                        <!-- Block 5: Execution Engine -->
-                        <rect x="555" y="50" width="130" height="85" rx="8" fill="url(#blueGrad)" stroke="#00f0ff" stroke-width="1" />
-                        <text x="620" y="80" text-anchor="middle" fill="#00f0ff" font-size="13" font-weight="700">Execution Engine</text>
-                        <text x="620" y="98" text-anchor="middle" fill="#94a3b8" font-size="10">Simulated / Live API</text>
-                        <text x="620" y="115" text-anchor="middle" fill="#64748b" font-size="9">Leverage & Limits</text>
-
-                        <!-- Block 6: Exchange -->
-                        <rect x="735" y="50" width="115" height="80" rx="8" fill="url(#greenGrad)" stroke="#10b981" stroke-width="1" />
-                        <text x="792" y="80" text-anchor="middle" fill="#10b981" font-size="13" font-weight="700">Kraken Exchange</text>
-                        <text x="792" y="98" text-anchor="middle" fill="#94a3b8" font-size="10">Order Book Execution</text>
-                        <text x="792" y="112" text-anchor="middle" fill="#64748b" font-size="9">Secure CCXT REST</text>
-
-                        <!-- Block 7: GitHub & Blog -->
-                        <rect x="735" y="195" width="115" height="60" rx="8" fill="url(#greenGrad)" stroke="#10b981" stroke-width="1" />
-                        <text x="792" y="220" text-anchor="middle" fill="#10b981" font-size="12" font-weight="700">GitHub / UI Blog</text>
-                        <text x="792" y="238" text-anchor="middle" fill="#94a3b8" font-size="9">Weekly Reports</text>
-
-                        <!-- Background Overlay for Agents (Bottom Row) -->
-                        <rect x="10" y="340" width="840" height="70" rx="10" fill="rgba(255,255,255,0.01)" stroke="rgba(255,255,255,0.05)" stroke-width="1" />
-                        <text x="25" y="360" fill="#94a3b8" font-size="11" font-weight="600" text-anchor="start">AUTONOMOUS QUANT TEAM (CRON SCHEDULE SYSTEM)</text>
+                        <!-- Flow Lines (Runtime Processing Loop) -->
+                        <!-- Ingestion to Regime -->
+                        <path d="M 130 90 L 165 90" stroke="#00f0ff" stroke-width="2" marker-end="url(#arrow-blue)" fill="none" />
+                        <!-- State Vector (Regime -> Policy Net) -->
+                        <path d="M 230 135 L 230 185" stroke="#a855f7" stroke-width="2" marker-end="url(#arrow-purple)" fill="none" />
+                        <!-- Policy Allocation Weights back to Signal Combiner -->
+                        <path d="M 310 185 L 310 135" stroke="#a855f7" stroke-width="1.5" stroke-dasharray="3,3" marker-end="url(#arrow-purple)" fill="none" />
+                        <!-- Blended Signal (Regime -> Probability Gate) -->
+                        <path d="M 345 90 L 375 90" stroke="#00f0ff" stroke-width="2" marker-end="url(#arrow-blue)" fill="none" />
+                        <!-- Viable Sized Order (Probability -> Execution) -->
+                        <path d="M 505 90 L 535 90" stroke="#00f0ff" stroke-width="2" marker-end="url(#arrow-blue)" fill="none" />
+                        <!-- Execution -> Broker API -->
+                        <path d="M 665 90 L 695 90" stroke="#10b981" stroke-width="2" marker-end="url(#arrow-green)" fill="none" />
                         
-                        <!-- Mini representation of agents -->
-                        <text x="45" y="390" fill="#a855f7" font-size="11" font-weight="600">📊 PhD Quant</text>
-                        <text x="175" y="390" fill="#00f0ff" font-size="11" font-weight="600">⚙️ Dev Architect</text>
-                        <text x="325" y="390" fill="#10b981" font-size="11" font-weight="600">📝 Reporter AI</text>
-                        <text x="465" y="390" fill="#f59e0b" font-size="11" font-weight="600">🎓 NeuralCore Opt</text>
-                        <text x="615" y="390" fill="#a855f7" font-size="11" font-weight="600">📡 Sentinel</text>
-                        <text x="735" y="390" fill="#f43f5e" font-size="11" font-weight="600">🛡️ Risk Auditor</text>
+                        <!-- Closed Trade PnL Reward Feedback loop -->
+                        <!-- Broker -> Execution (Trade Close Notification) -->
+                        <path d="M 755 130 L 755 310 L 665 310" stroke="#a855f7" stroke-width="1.5" stroke-dasharray="4,4" marker-end="url(#arrow-purple)" fill="none" />
+                        <!-- Execution -> Learning Engine (Telemetry payload) -->
+                        <path d="M 535 310 L 345 310" stroke="#a855f7" stroke-width="1.5" stroke-dasharray="4,4" marker-end="url(#arrow-purple)" fill="none" />
+                        <!-- Learning Engine -> Policy Net (Backprop weights update) -->
+                        <path d="M 230 310 L 230 245" stroke="#a855f7" stroke-width="2" marker-end="url(#arrow-purple)" fill="none" />
+
+                        <!-- Decoupled DB Sync (SQLite WAL File System) -->
+                        <path d="M 600 132 L 600 230 L 695 230" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)" fill="none" />
+                        <path d="M 270 245 L 270 280 L 695 280" stroke="#64748b" stroke-width="1.2" stroke-dasharray="4,4" marker-end="url(#arrow)" fill="none" />
+
+                        <!-- Core Labels -->
+                        <text x="312" y="160" fill="#a855f7" font-size="9" font-weight="600">Trust Weights</text>
+                        <text x="515" y="80" fill="#00f0ff" font-size="9" font-weight="600">Kelly Sized Orders</text>
+                        <text x="460" y="325" fill="#a855f7" font-size="9" font-weight="600">Closed Trade PnL Reward Feedback</text>
+                        <text x="610" y="180" fill="#64748b" font-size="9" font-weight="600">Write-Ahead SQLite log</text>
+
+                        <!-- Box 1: Ingestion & indicator computation -->
+                        <rect x="10" y="50" width="120" height="80" rx="8" fill="url(#blueGrad)" stroke="#00f0ff" stroke-width="1.5" />
+                        <text x="70" y="78" text-anchor="middle" fill="#00f0ff" font-size="12" font-weight="700">1. Data Ingest</text>
+                        <text x="70" y="96" text-anchor="middle" fill="#94a3b8" font-size="9">Tick Stream Aggregator</text>
+                        <text x="70" y="110" text-anchor="middle" fill="#64748b" font-size="8">Candle Bounds Rescaling</text>
+
+                        <!-- Box 2: Regime Estimation & Signal Blend -->
+                        <rect x="165" y="50" width="180" height="85" rx="8" fill="url(#blueGrad)" stroke="#00f0ff" stroke-width="1.5" />
+                        <text x="255" y="76" text-anchor="middle" fill="#00f0ff" font-size="12" font-weight="700">2. Regime & Ensemble</text>
+                        <text x="255" y="93" text-anchor="middle" fill="#94a3b8" font-size="9">OLS Reversion Speed (θ)</text>
+                        <text x="255" y="108" text-anchor="middle" fill="#64748b" font-size="8">blends 6 strategies signal</text>
+
+                        <!-- Box 3: Policy Gradient Allocator -->
+                        <rect x="165" y="185" width="180" height="60" rx="8" fill="url(#purpleGrad)" stroke="#a855f7" stroke-width="1.5" />
+                        <text x="255" y="212" text-anchor="middle" fill="#a855f7" font-size="12" font-weight="700">3. Policy Gradient Net</text>
+                        <text x="255" y="228" text-anchor="middle" fill="#94a3b8" font-size="9">Softmax Strategy Weights</text>
+
+                        <!-- Box 4: Probability Gatekeeper -->
+                        <rect x="375" y="50" width="130" height="80" rx="8" fill="url(#blueGrad)" stroke="#00f0ff" stroke-width="1.5" />
+                        <text x="440" y="78" text-anchor="middle" fill="#00f0ff" font-size="12" font-weight="700">4. Prob Gatekeeper</text>
+                        <text x="440" y="95" text-anchor="middle" fill="#94a3b8" font-size="9">Expected Value check</text>
+                        <text x="440" y="110" text-anchor="middle" fill="#64748b" font-size="8">Kelly Sizing Sieve</text>
+
+                        <!-- Box 5: Inventory Execution -->
+                        <rect x="535" y="50" width="130" height="80" rx="8" fill="url(#blueGrad)" stroke="#00f0ff" stroke-width="1.5" />
+                        <text x="600" y="78" text-anchor="middle" fill="#00f0ff" font-size="12" font-weight="700">5. Execution Engine</text>
+                        <text x="600" y="95" text-anchor="middle" fill="#94a3b8" font-size="9">Inventory Short Tracker</text>
+                        <text x="600" y="110" text-anchor="middle" fill="#64748b" font-size="8">SL/TP volatility placement</text>
+
+                        <!-- Box 6: Broker REST API -->
+                        <rect x="695" y="50" width="175" height="80" rx="8" fill="url(#greenGrad)" stroke="#10b981" stroke-width="1.5" />
+                        <text x="782" y="78" text-anchor="middle" fill="#10b981" font-size="12" font-weight="700">6. Broker / Simulator</text>
+                        <text x="782" y="95" text-anchor="middle" fill="#94a3b8" font-size="9">CCXT Live API / Simulator Engine</text>
+                        <text x="782" y="110" text-anchor="middle" fill="#64748b" font-size="8">Order Execution & Balance Updates</text>
+
+                        <!-- Box 7: Write-Ahead SQLite database -->
+                        <rect x="695" y="185" width="175" height="110" rx="8" fill="rgba(255,255,255,0.01)" stroke="#64748b" stroke-width="1" />
+                        <text x="782" y="210" text-anchor="middle" fill="#94a3b8" font-size="11" font-weight="700">SQLite WAL Database</text>
+                        <text x="782" y="228" text-anchor="middle" fill="#64748b" font-size="9">settings (risk_profile, active_brains)</text>
+                        <text x="782" y="243" text-anchor="middle" fill="#64748b" font-size="9">trades (live, paper, simulation)</text>
+                        <text x="782" y="258" text-anchor="middle" fill="#64748b" font-size="9">policy_brains (weight configs)</text>
+                        <text x="782" y="273" text-anchor="middle" fill="#64748b" font-size="9">portfolio_history (equity curve)</text>
+
+                        <!-- Box 8: Reinforcement Learning Backprop -->
+                        <rect x="165" y="295" width="180" height="60" rx="8" fill="url(#purpleGrad)" stroke="#a855f7" stroke-width="1.5" />
+                        <text x="255" y="320" text-anchor="middle" fill="#a855f7" font-size="12" font-weight="700">7. Learning Engine</text>
+                        <text x="255" y="336" text-anchor="middle" fill="#94a3b8" font-size="9">Online Reinforcement Backprop</text>
+
+                        <!-- Decoupled Cron optimization layer (Bottom) -->
+                        <rect x="10" y="380" width="860" height="70" rx="10" fill="rgba(255,255,255,0.01)" stroke="rgba(255,255,255,0.05)" stroke-width="1" />
+                        <text x="25" y="400" fill="#94a3b8" font-size="10" font-weight="600" text-anchor="start">DECOUPLED OPTIMIZATION LAYER (CRON DAEMONS / SYSTEMD)</text>
+                        
+                        <!-- Represent cron flows -->
+                        <text x="40" y="430" fill="#a855f7" font-size="10" font-weight="600">📊 PhD Quant (parameter optimization sweeps via SQLite ticks)</text>
+                        <text x="460" y="430" fill="#00f0ff" font-size="10" font-weight="600">📡 Sentinel (computes news correlations & updates sources)</text>
+                        <text x="40" y="445" fill="#10b981" font-size="10" font-weight="600">📝 Reporter (summarizes closed trades & writes blogs)</text>
+                        <text x="460" y="445" fill="#f43f5e" font-size="10" font-weight="600">🛡️ Risk Auditor (audits equity drawdowns & locks cooldowns)</text>
                     </svg>
+                </div>
+
+                <!-- Systems Engineer Descriptions Grid -->
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; font-size: 13px; line-height: 1.5; margin-top: 10px;">
+                    <div style="background: rgba(255,255,255,0.01); padding: 18px; border-radius: 10px; border: 1px solid var(--border-color);">
+                        <strong style="color: var(--neon-blue); display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+                            <i data-lucide="cpu" style="width: 16px; height: 16px;"></i>
+                            1. Subsystem A: Event Ingestion & State Vector
+                        </strong>
+                        <p style="color: var(--text-secondary); font-size: 12px;">
+                            Raw tick feeds arrive via CCXT exchange polling (live/paper) or history loops (simulation). Ticks are rescaled into time-boundary candles. The system runs OLS regression on historical closes to compute the Ornstein-Uhlenbeck mean-reversion speed ($\theta$) and constructs a 7D state vector (Regime, $\theta$, RSI, MACD, BB, ATR, WinTrend).
+                        </p>
+                    </div>
+
+                    <div style="background: rgba(255,255,255,0.01); padding: 18px; border-radius: 10px; border: 1px solid var(--border-color);">
+                        <strong style="color: var(--neon-purple); display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+                            <i data-lucide="brain" style="width: 16px; height: 16px;"></i>
+                            2. Subsystem B: Neural Allocator & Ensembling
+                        </strong>
+                        <p style="color: var(--text-secondary); font-size: 12px;">
+                            The 7D state vector is processed by the Policy Gradient Neural Network, which outputs a Softmax probability distribution. These probabilities serve as trust weights to combine signals from 6 strategies (EMA Crossover, RSI, BB Reversion, Kalman Filter, stop hunt sweeps, and Random Forest).
+                        </p>
+                    </div>
+
+                    <div style="background: rgba(255,255,255,0.01); padding: 18px; border-radius: 10px; border: 1px solid var(--border-color);">
+                        <strong style="color: var(--neon-green); display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+                            <i data-lucide="activity" style="width: 16px; height: 16px;"></i>
+                            3. Subsystem C: EV Filters & execution
+                        </strong>
+                        <p style="color: var(--text-secondary); font-size: 12px;">
+                            The combined signal is evaluated by the Probability Engine. It validates expected trade value ($EV > 0$) and computes sizing fractions using the Kelly Criterion. If viable, the order is routed to Execution. The Execution Engine sets volatility-adjusted SL/TP stops, offsets positions using a Short-Position Inventory Tracker, and routes orders via CCXT.
+                        </p>
+                    </div>
+
+                    <div style="background: rgba(255,255,255,0.01); padding: 18px; border-radius: 10px; border: 1px solid var(--border-color);">
+                        <strong style="color: var(--text-primary); display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+                            <i data-lucide="shield-check" style="width: 16px; height: 16px; color: var(--neon-orange)"></i>
+                            4. Subsystem D: Decoupled SQLite WAL Database
+                        </strong>
+                        <p style="color: var(--text-secondary); font-size: 12px;">
+                            A central SQLite database configured in Write-Ahead Logging (WAL) mode enables concurrent, lock-free operations. It segregates trade metrics by execution mode (`live`, `paper`, `simulation`), preventing statistics contamination, and holds active neural configuration files loaded dynamically by runtime threads.
+                        </p>
+                    </div>
+
+                    <div style="grid-column: span 2; background: rgba(255,255,255,0.01); padding: 18px; border-radius: 10px; border: 1px solid var(--border-color);">
+                        <strong style="color: var(--neon-red); display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+                            <i data-lucide="refresh-cw" style="width: 16px; height: 16px;"></i>
+                            5. In-Memory Reinforcement Feedback & Decoupled Cron Optimizations
+                        </strong>
+                        <p style="color: var(--text-secondary); font-size: 12px;">
+                            When a trade closes, the PnL percentage acts as a reward signal, triggering backpropagation. The network updates strategy allocation weights in-memory (and saves to the database settings during live trades). Decoupled cron daemons run out-of-process to perform parameter optimizations, news correlations, risk auditing, and weekly HTML blog publishing.
+                        </p>
+                    </div>
                 </div>
             </article>
         </div>
