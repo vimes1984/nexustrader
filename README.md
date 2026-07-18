@@ -7,6 +7,43 @@
   <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License" />
 </p>
 
+---
+
+## 📸 System Previews
+
+<p align="center">
+  <kbd>
+    <img src="assets/dashboard_mockup.jpg" width="800" alt="NexusTrader Live Dashboard"/>
+  </kbd>
+</p>
+<p align="center">
+  <em>Figure 1: Live Algorithmic Dashboard displaying real-time candle ticks, win probability speedometer, and dynamic strategy weights allocations.</em>
+</p>
+
+<br/>
+
+<p align="center">
+  <kbd>
+    <img src="assets/neural_core_mockup.jpg" width="800" alt="Neural Core Settings"/>
+  </kbd>
+</p>
+<p align="center">
+  <em>Figure 2: Neural Core Workspace detailing the synapse grid connections matrix and active policy brain selector.</em>
+</p>
+
+<br/>
+
+<p align="center">
+  <kbd>
+    <img src="assets/simulator_mockup.jpg" width="800" alt="Training Simulator Page"/>
+  </kbd>
+</p>
+<p align="center">
+  <em>Figure 3: Training Simulator interface displaying sandboxed backtest curves, trade execution logs, and saved neural brains.</em>
+</p>
+
+---
+
 NexusTrader is a production-grade, self-learning quantitative trading system that utilizes a **Policy Gradient Neural Network** to dynamically allocate weights across an ensemble of quantitative strategies in real-time. By combining online reinforcement learning, real-time regime estimation, volatility-adjusted stop placements, and a robust risk gatekeeper, the system continuously adapts to shifting market structures (trend-following vs. mean-reverting) without human intervention.
 
 It is designed as a **modular autonomous quant ecosystem**, orchestrating multiple dedicated AI Agents (PhD Quant, Dev Architect, Sentiment Sentinel, Risk Auditor, NeuralCore, and Reporter) to continuously tune hyperparameters, iterate UI improvements, audit portfolio risks, and publish performance commentary.
