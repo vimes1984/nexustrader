@@ -1003,6 +1003,91 @@ def get_neural_brains(ticker: str):
         "active_brain": active_name
     }
 
+@app.get("/api/neural/brain/specs")
+def get_brain_specs(name: str, ticker: str):
+    brain = database.load_policy_brain(name, ticker)
+    if not brain:
+        return {"status": "error", "message": f"Brain '{name}' not found."}
+    
+    # 1. Structural specs
+    weights_str = brain["weights"]
+    size_bytes = len(weights_str.encode("utf-8"))
+    
+    # Parse weights dimensions
+    import json
+    try:
+        w_data = json.loads(weights_str)
+        w1_shape = f"{len(w_data['W1'])}x{len(w_data['W1'][0])}" if "W1" in w_data else "8x12"
+        b1_shape = f"1x{len(w_data['b1'][0])}" if "b1" in w_data and isinstance(w_data['b1'][0], list) else f"1x{len(w_data['b1'])}"
+        w2_shape = f"{len(w_data['W2'])}x{len(w_data['W2'][0])}" if "W2" in w_data else "12x7"
+        b2_shape = f"1x{len(w_data['b2'][0])}" if "b2" in w_data and isinstance(w_data['b2'][0], list) else f"1x{len(w_data['b2'])}"
+        
+        # calculate total parameters
+        p1 = len(w_data['W1']) * len(w_data['W1'][0]) if "W1" in w_data else 96
+        p2 = len(w_data['b1'][0]) if "b1" in w_data and isinstance(w_data['b1'][0], list) else len(w_data.get('b1', []))
+        p3 = len(w_data['W2']) * len(w_data['W2'][0]) if "W2" in w_data else 84
+        p4 = len(w_data['b2'][0]) if "b2" in w_data and isinstance(w_data['b2'][0], list) else len(w_data.get('b2', []))
+        total_params = p1 + p2 + p3 + p4
+    except Exception:
+        w1_shape = "8x12"
+        b1_shape = "1x12"
+        w2_shape = "12x7"
+        b2_shape = "1x7"
+        total_params = 199
+
+    # 2. Hyperparameters
+    nn_lr = database.load_setting("nn_learning_rate", "0.05")
+    nn_floor = database.load_setting("nn_weight_floor", "0.05")
+    
+    # 3. Attribution performance stats (from database trades table)
+    try:
+        conn = database.get_db_connection()
+        cursor = conn.cursor()
+        # Query total trades & stats for this ticker and brain
+        cursor.execute(
+            "SELECT COUNT(*), SUM(pnl), AVG(pnl_percent) FROM trades WHERE symbol = ? AND policy_brain = ?",
+            (ticker, name)
+        )
+        trade_count, total_pnl, avg_pnl_percent = cursor.fetchone()
+        
+        # Query win count
+        cursor.execute(
+            "SELECT COUNT(*) FROM trades WHERE symbol = ? AND policy_brain = ? AND pnl > 0",
+            (ticker, name)
+        )
+        wins = cursor.fetchone()[0]
+        
+        conn.close()
+        
+        win_rate = (wins / trade_count * 100) if trade_count and trade_count > 0 else 0.0
+        total_pnl = float(total_pnl or 0.0)
+        avg_pnl_percent = float(avg_pnl_percent or 0.0) * 100.0
+    except Exception as e:
+        trade_count = 0
+        total_pnl = 0.0
+        avg_pnl_percent = 0.0
+        win_rate = 0.0
+        
+    return {
+        "status": "success",
+        "name": name,
+        "ticker": ticker,
+        "size_bytes": size_bytes,
+        "dna": brain.get("model_dna", "NN-ARCH-UNKNOWN"),
+        "created_at": brain.get("created_at", time.time()),
+        "w1_shape": w1_shape,
+        "b1_shape": b1_shape,
+        "w2_shape": w2_shape,
+        "b2_shape": b2_shape,
+        "total_params": total_params,
+        "learning_rate": nn_lr,
+        "weight_floor": nn_floor,
+        "trade_count": trade_count,
+        "total_pnl": total_pnl,
+        "avg_pnl_percent": avg_pnl_percent,
+        "win_rate": win_rate
+    }
+
 @app.post("/api/neural/brain/activate")
 def activate_neural_brain(name: str, ticker: str):
     brain = database.load_policy_brain(name, ticker)

@@ -367,6 +367,32 @@
                                 Train New Brain
                             </button>
                         </div>
+                        
+                        <!-- Brain Detailed Specs & Analysis Panel -->
+                        <div id="brain-details-panel" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--border-color); display: none; text-align: left;">
+                            <h4 style="font-size: 12px; font-weight: 700; color: var(--neon-blue); margin: 0 0 8px 0; display: flex; align-items: center; gap: 4px;">
+                                <i data-lucide="info" style="width: 12px; height: 12px;"></i>
+                                <span id="details-brain-name">Brain Specs</span>
+                            </h4>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px 15px; font-size: 10px; color: var(--text-secondary); margin-bottom: 10px; font-family: monospace;">
+                                <div>DNA: <span id="details-brain-dna" style="color: var(--text-primary); font-weight: bold;">NN-ARCH-UNKNOWN</span></div>
+                                <div>Disk Size: <span id="details-brain-size" style="color: var(--text-primary);">0 B</span></div>
+                                <div>W1 Layer: <span id="details-brain-w1" style="color: var(--text-primary);">8x12</span></div>
+                                <div>W2 Layer: <span id="details-brain-w2" style="color: var(--text-primary);">12x7</span></div>
+                                <div>Params: <span id="details-brain-params" style="color: var(--text-primary);">199</span></div>
+                                <div>LR / Floor: <span id="details-brain-lr" style="color: var(--text-primary);">0.05 / 0.05</span></div>
+                            </div>
+                            
+                            <!-- Attribution Analysis -->
+                            <div style="background: rgba(255,255,255,0.02); padding: 8px; border-radius: 6px; border: 1px solid var(--border-color); font-size: 10px; margin-bottom: 4px;">
+                                <strong style="color: var(--text-primary); display: block; margin-bottom: 6px; font-size: 11px;">Attributed Trade Efficacy:</strong>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+                                    <div>Total Trades: <span id="stats-brain-trades" style="font-weight: bold; color: var(--text-primary);">0</span></div>
+                                    <div>Win Rate: <span id="stats-brain-winrate" style="font-weight: bold; color: var(--text-primary);">0%</span></div>
+                                    <div style="grid-column: span 2;">Net PnL: <span id="stats-brain-pnl" style="font-weight: bold; color: var(--text-primary);">$0.00</span></div>
+                                </div>
+                            </div>
+                        </div>
                     </article>
  
                     <!-- Brain Profiles Reference -->

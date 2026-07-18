@@ -400,6 +400,14 @@ class ExecutionEngine:
             
             pnl_percent = (pnl_after_fee) / (original_value + 1e-9)
 
+            # Get active brain for symbol from DB settings
+            active_brains_json = database.load_setting("active_brains", "{}")
+            active_brain_name = "Default Brain"
+            try:
+                active_brain_name = json.loads(active_brains_json).get(symbol, "Default Brain")
+            except Exception:
+                pass
+
             closed_trade_record = {
                 "symbol": symbol,
                 "direction": direction,
@@ -412,7 +420,8 @@ class ExecutionEngine:
                 "entry_time": pos["entry_time"],
                 "exit_time": time.time(),
                 "strategy_signals": pos["strategy_signals"],
-                "sentiment_sources": pos.get("sentiment_sources", {})
+                "sentiment_sources": pos.get("sentiment_sources", {}),
+                "policy_brain": active_brain_name
             }
 
             # Save trade to DB

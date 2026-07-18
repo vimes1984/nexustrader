@@ -2267,6 +2267,7 @@ function loadNeuralBrains(ticker) {
                 item.style.fontSize = "11px";
                 item.style.gap = "8px";
                 item.style.marginBottom = "6px";
+                item.style.cursor = "pointer";
                 
                 // Format creation date
                 const dateStr = new Date(b.created_at * 1000).toLocaleString([], { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' });
@@ -2283,15 +2284,84 @@ function loadNeuralBrains(ticker) {
                         </div>
                     </div>
                     <div style="display: flex; gap: 6px; align-items: center; flex-shrink: 0;">
-                        ${!isActive ? `<button class="btn" onclick="activateNeuralBrain('${b.name}', '${ticker}')" style="padding: 3px 6px; font-size: 9px; height: auto; border-color: rgba(168,85,247,0.3); color: var(--neon-purple);">Activate</button>` : ''}
-                        ${(!isDefault) ? `<button class="btn" onclick="deleteNeuralBrain('${b.name}', '${ticker}')" style="padding: 3px 6px; font-size: 9px; height: auto; border-color: rgba(244,63,94,0.3); color: var(--neon-red);"><i data-lucide="trash-2" style="width: 10px; height: 10px;"></i></button>` : ''}
+                        ${!isActive ? `<button class="btn btn-activate-brain" style="padding: 3px 6px; font-size: 9px; height: auto; border-color: rgba(168,85,247,0.3); color: var(--neon-purple);">Activate</button>` : ''}
+                        ${(!isDefault) ? `<button class="btn btn-delete-brain" style="padding: 3px 6px; font-size: 9px; height: auto; border-color: rgba(244,63,94,0.3); color: var(--neon-red);"><i data-lucide="trash-2" style="width: 10px; height: 10px;"></i></button>` : ''}
                     </div>
                 `;
+                
+                // Add event listeners
+                item.addEventListener("click", () => {
+                    selectBrainForSpecs(b.name, ticker);
+                });
+                
+                const actBtn = item.querySelector(".btn-activate-brain");
+                if (actBtn) {
+                    actBtn.addEventListener("click", (e) => {
+                        e.stopPropagation();
+                        activateNeuralBrain(b.name, ticker);
+                    });
+                }
+                
+                const delBtn = item.querySelector(".btn-delete-brain");
+                if (delBtn) {
+                    delBtn.addEventListener("click", (e) => {
+                        e.stopPropagation();
+                        deleteNeuralBrain(b.name, ticker);
+                    });
+                }
+                
                 listContainer.appendChild(item);
             });
+            
+            // Render active brain specs on load if available
+            if (activeBrain) {
+                selectBrainForSpecs(activeBrain, ticker);
+            }
+            
             lucide.createIcons();
         })
         .catch(err => console.error("Error loading neural brains:", err));
+}
+
+function selectBrainForSpecs(name, ticker) {
+    const detailsPanel = document.getElementById("brain-details-panel");
+    if (!detailsPanel) return;
+    
+    fetch(`/api/neural/brain/specs?name=${encodeURIComponent(name)}&ticker=${encodeURIComponent(ticker)}&t=${Date.now()}`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === "success") {
+                // Populate structural specs
+                document.getElementById("details-brain-name").textContent = data.name + " Specs";
+                document.getElementById("details-brain-dna").textContent = data.dna;
+                
+                // Format size
+                const kbSize = (data.size_bytes / 1024).toFixed(2);
+                document.getElementById("details-brain-size").textContent = `${kbSize} KB`;
+                
+                document.getElementById("details-brain-w1").textContent = data.w1_shape;
+                document.getElementById("details-brain-w2").textContent = data.w2_shape;
+                document.getElementById("details-brain-params").textContent = data.total_params;
+                document.getElementById("details-brain-lr").textContent = `${data.learning_rate} / ${data.weight_floor}`;
+                
+                // Populate trade attribution stats
+                document.getElementById("stats-brain-trades").textContent = data.trade_count;
+                document.getElementById("stats-brain-winrate").textContent = `${data.win_rate.toFixed(1)}%`;
+                
+                const pnlEl = document.getElementById("stats-brain-pnl");
+                pnlEl.textContent = `${data.total_pnl >= 0 ? '+' : ''}$${data.total_pnl.toFixed(2)} (${data.avg_pnl_percent.toFixed(2)}%)`;
+                pnlEl.style.color = data.total_pnl >= 0 ? "var(--neon-green)" : "var(--neon-red)";
+                
+                // Display the panel
+                detailsPanel.style.display = "block";
+                
+                // Refresh indicators inside details
+                if (window.lucide) {
+                    lucide.createIcons();
+                }
+            }
+        })
+        .catch(err => console.error("Error fetching brain specs:", err));
 }
 
 // Global scope functions for the button onclick triggers

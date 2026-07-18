@@ -82,6 +82,9 @@ def init_db():
         if "sentiment_sources" not in columns:
             logging.info("Migrating trades table: adding sentiment_sources column...")
             cursor.execute("ALTER TABLE trades ADD COLUMN sentiment_sources TEXT")
+        if "policy_brain" not in columns:
+            logging.info("Migrating trades table: adding policy_brain column...")
+            cursor.execute("ALTER TABLE trades ADD COLUMN policy_brain TEXT")
     except Exception as e:
         logging.error(f"Error migrating trades table: {e}")
         
@@ -195,8 +198,8 @@ def save_trade(trade):
         signals_str = json.dumps(trade.get('strategy_signals', []))
         sources_str = json.dumps(trade.get('sentiment_sources', {}))
         cursor.execute("""
-        INSERT INTO trades (symbol, direction, quantity, entry_price, exit_price, pnl, pnl_percent, exit_reason, entry_time, exit_time, strategy_signals, sentiment_sources)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO trades (symbol, direction, quantity, entry_price, exit_price, pnl, pnl_percent, exit_reason, entry_time, exit_time, strategy_signals, sentiment_sources, policy_brain)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             trade['symbol'],
             trade['direction'],
@@ -209,7 +212,8 @@ def save_trade(trade):
             float(trade['entry_time']),
             float(trade['exit_time']),
             signals_str,
-            sources_str
+            sources_str,
+            trade.get('policy_brain', 'Default Brain')
         ))
         conn.commit()
     except Exception as e:
