@@ -49,13 +49,13 @@
                     Reset Sim
                 </button>
                 <!-- Notification Bell Dropdown -->
-                <div class="notification-dropdown-container" style="position: relative; display: inline-block; z-index: 10001;">
+                <div class="notification-dropdown-container" style="position: relative; display: inline-block; z-index: 999999;">
                     <button class="btn" id="notification-bell-btn" style="padding: 6px 10px; font-size: 12px; display: flex; align-items: center; justify-content: center; gap: 4px; position: relative;">
                         <i data-lucide="bell" style="width: 14px; height: 14px;"></i>
                         <span id="notification-badge" style="display: none; position: absolute; top: -6px; right: -6px; background: var(--neon-red); color: white; border-radius: 50%; font-size: 8px; padding: 2px 5px; font-weight: 800; border: 1px solid rgba(255,255,255,0.2);">0</span>
                     </button>
                     <!-- Dropdown Content -->
-                    <div id="notification-dropdown" class="glass-panel" style="display: none; position: absolute; right: 0; top: 120%; width: 320px; max-height: 400px; overflow-y: auto; padding: 12px; border-radius: 12px; font-family: inherit; font-size: 12px; box-shadow: 0 12px 40px 0 rgba(0,0,0,0.6); backdrop-filter: blur(16px); border: 1px solid var(--border-color); background: rgba(15, 23, 42, 0.95);">
+                    <div id="notification-dropdown" class="glass-panel" style="display: none; position: absolute; right: 0; top: 120%; width: 320px; max-height: 400px; overflow-y: auto; padding: 12px; border-radius: 12px; font-family: inherit; font-size: 12px; box-shadow: 0 12px 40px 0 rgba(0,0,0,0.6); backdrop-filter: blur(16px); border: 1px solid var(--border-color); background: rgba(15, 23, 42, 0.95); z-index: 1000000;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 8px;">
                             <span style="font-weight: 600; color: var(--text-primary);">System Alerts</span>
                             <button id="clear-notifications-btn" style="background: transparent; border: none; color: var(--neon-red); cursor: pointer; font-size: 10px; font-weight: 600; font-family: inherit;">Clear All</button>
@@ -942,7 +942,7 @@
     </div>
     
     <!-- Floating Cybernetic Toast Notifications -->
-    <div id="toast-container" style="position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 9999; pointer-events: none;"></div>
+    <div id="toast-container" style="position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 1000000; pointer-events: none;"></div>
 
     <!-- App Logic -->
     <script src="/dashboard/app_v2.js?v=2.7"></script>

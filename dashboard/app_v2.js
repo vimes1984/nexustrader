@@ -197,11 +197,17 @@ function updateNotificationsUI() {
         item.style.gap = "2px";
         
         item.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
                 <span style="font-weight: 600; color: ${n.read ? 'var(--text-secondary)' : 'var(--text-primary)'};">${n.icon} Alert</span>
-                <span style="font-size: 9px; opacity: 0.5;">${n.time}</span>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <button class="copy-alert-btn" style="background: transparent; border: none; color: var(--neon-blue); cursor: pointer; font-size: 10px; padding: 2px 4px; border-radius: 4px; display: flex; align-items: center; gap: 2px; transition: var(--transition); opacity: 0.8;" title="Copy to clipboard">
+                        <i data-lucide="copy" style="width: 10px; height: 10px;"></i>
+                        Copy
+                    </button>
+                    <span style="font-size: 9px; opacity: 0.5;">${n.time}</span>
+                </div>
             </div>
-            <div style="color: ${n.read ? 'var(--text-muted)' : 'var(--text-secondary)'}; font-size: 11px;">${n.message}</div>
+            <div style="color: ${n.read ? 'var(--text-muted)' : 'var(--text-secondary)'}; font-size: 11px; white-space: normal; word-break: break-word;">${n.message}</div>
         `;
         
         item.addEventListener("mouseenter", () => {
@@ -216,8 +222,39 @@ function updateNotificationsUI() {
             handleNotificationClick(n);
         });
         
+        // Copy alert handler
+        const copyBtn = item.querySelector(".copy-alert-btn");
+        if (copyBtn) {
+            copyBtn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                navigator.clipboard.writeText(`[${n.time}] ${n.message}`)
+                    .then(() => {
+                        showToast("Alert copied to clipboard!", "success");
+                    })
+                    .catch(err => {
+                        console.error("Copy failed: ", err);
+                    });
+            });
+            copyBtn.addEventListener("mouseenter", () => {
+                copyBtn.style.background = "rgba(0, 240, 255, 0.1)";
+            });
+            copyBtn.addEventListener("mouseleave", () => {
+                copyBtn.style.background = "transparent";
+            });
+        }
+        
         list.appendChild(item);
     });
+    
+    // Refresh lucide icons inside dropdown list
+    if (window.lucide) {
+        lucide.createIcons({
+            attrs: {
+                class: 'lucide'
+            },
+            nameAttr: 'data-lucide'
+        });
+    }
 }
 
 // Notification Bell Dropdown Toggle Listeners
