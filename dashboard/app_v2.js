@@ -1181,6 +1181,7 @@ function renderTradeLog(trades) {
         // (Visual reference to show which strategies contributed to trade success)
         
         const row = document.createElement("tr");
+        row.style.cursor = "pointer";
         row.innerHTML = `
             <td>${timeStr}</td>
             <td>${t.symbol}</td>
@@ -1192,6 +1193,9 @@ function renderTradeLog(trades) {
             <td class="${pnlColor}" style="font-weight:600;">${sign}$${t.pnl.toFixed(2)} (${(t.pnl_percent*100).toFixed(2)}%)</td>
             <td><span style="background: ${outcomeColor}; color: ${t.pnl >= 0 ? 'var(--neon-green)' : 'var(--neon-red)'}; padding: 4px 8px; border-radius: 4px; font-size:11px; font-weight:600;">${t.exit_reason.toUpperCase()}</span></td>
         `;
+        row.addEventListener("click", () => {
+            openTradeDetailsModal(t);
+        });
         elTradeLogBody.appendChild(row);
     });
 }
@@ -2518,3 +2522,101 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }, 5000);
 });
+
+// -------------------------------------------------------------
+// Closed Trade Details Modal Toggle Actions
+// -------------------------------------------------------------
+window.openTradeDetailsModal = function(t) {
+    const modal = document.getElementById("trade-details-modal");
+    if (!modal) return;
+    
+    document.getElementById("modal-trade-symbol").textContent = t.symbol;
+    const sideEl = document.getElementById("modal-trade-side");
+    sideEl.textContent = t.direction;
+    sideEl.style.color = t.direction === "BUY" ? "var(--neon-green)" : "var(--neon-red)";
+    
+    document.getElementById("modal-trade-qty").textContent = t.quantity.toFixed(4);
+    
+    const pnlEl = document.getElementById("modal-trade-pnl");
+    const sign = t.pnl >= 0 ? "+" : "";
+    pnlEl.textContent = `${sign}$${t.pnl.toFixed(2)} (${(t.pnl_percent * 100).toFixed(2)}%)`;
+    pnlEl.style.color = t.pnl >= 0 ? "var(--neon-green)" : "var(--neon-red)";
+    
+    document.getElementById("modal-trade-entry").textContent = `$${t.entry_price.toFixed(2)}`;
+    document.getElementById("modal-trade-exit").textContent = `$${t.exit_price.toFixed(2)}`;
+    
+    const entryDate = new Date(t.entry_time * 1000);
+    const exitDate = new Date(t.exit_time * 1000);
+    document.getElementById("modal-trade-entry-time").textContent = entryDate.toLocaleString();
+    document.getElementById("modal-trade-exit-time").textContent = exitDate.toLocaleString();
+    
+    document.getElementById("modal-trade-brain").textContent = t.policy_brain || "Default Brain";
+    document.getElementById("modal-trade-reason").textContent = t.exit_reason.toUpperCase();
+    
+    // Parse and list strategy votes
+    const signalsContainer = document.getElementById("modal-trade-signals");
+    signalsContainer.innerHTML = "";
+    let signals = [];
+    try {
+        signals = typeof t.strategy_signals === "string" ? JSON.parse(t.strategy_signals) : t.strategy_signals;
+    } catch (e) {
+        signals = [];
+    }
+    
+    const strategies = ["EMA Crossover", "RSI Reversion", "Bollinger Bands Reversion", "Kalman Trend Filter", "Psychological Sweep", "ML Random Forest"];
+    if (!signals || signals.length === 0) {
+        signalsContainer.innerHTML = "<div>No strategy votes recorded.</div>";
+    } else {
+        strategies.forEach((strat, i) => {
+            const vote = signals[i] || "NONE";
+            let color = "var(--text-secondary)";
+            if (vote === "BUY") color = "var(--neon-green)";
+            if (vote === "SELL") color = "var(--neon-red)";
+            
+            const item = document.createElement("div");
+            item.style.display = "flex";
+            item.style.justifyContent = "space-between";
+            item.innerHTML = `<span>${strat}:</span><span style="color: ${color}; font-weight: bold;">${vote}</span>`;
+            signalsContainer.appendChild(item);
+        });
+    }
+    
+    // Parse and list sentiment details
+    const sentimentContainer = document.getElementById("modal-trade-sentiment");
+    sentimentContainer.innerHTML = "";
+    let sentiment = {};
+    try {
+        sentiment = typeof t.sentiment_sources === "string" ? JSON.parse(t.sentiment_sources) : t.sentiment_sources;
+    } catch (e) {
+        sentiment = {};
+    }
+    
+    if (!sentiment || Object.keys(sentiment).length === 0) {
+        sentimentContainer.innerHTML = "<div>No macro sentiment data recorded at entry.</div>";
+    } else {
+        Object.keys(sentiment).forEach(source => {
+            const score = sentiment[source];
+            let color = "var(--text-secondary)";
+            if (score > 0.1) color = "var(--neon-green)";
+            if (score < -0.1) color = "var(--neon-red)";
+            
+            const item = document.createElement("div");
+            item.style.display = "flex";
+            item.style.justifyContent = "space-between";
+            item.innerHTML = `<span>${source}:</span><span style="color: ${color};">${score >= 0 ? '+' : ''}${score.toFixed(2)}</span>`;
+            sentimentContainer.appendChild(item);
+        });
+    }
+    
+    modal.style.display = "flex";
+    
+    // Refresh Lucide icons inside modal
+    if (window.lucide) {
+        lucide.createIcons();
+    }
+};
+
+window.closeTradeDetailsModal = function() {
+    const modal = document.getElementById("trade-details-modal");
+    if (modal) modal.style.display = "none";
+};

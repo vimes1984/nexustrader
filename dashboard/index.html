@@ -1022,6 +1022,50 @@
     
     <!-- Floating Cybernetic Toast Notifications -->
     <div id="toast-container" style="position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 1000000; pointer-events: none;"></div>
+    
+    <!-- Closed Trade Details Modal -->
+    <div id="trade-details-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(5,8,20,0.85); backdrop-filter: blur(10px); z-index: 2000000; align-items: center; justify-content: center;">
+        <div class="glass-panel" style="width: 480px; padding: 24px; border-radius: 12px; border: 1px solid var(--border-color); text-align: left; background: rgba(15,23,42,0.95); box-shadow: 0 10px 40px rgba(0,0,0,0.6); display: flex; flex-direction: column; gap: 15px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
+                <h3 style="font-size: 15px; font-weight: 700; color: var(--neon-blue); display: flex; align-items: center; gap: 8px; margin: 0;">
+                    <i data-lucide="info" style="width: 16px; height: 16px;"></i>
+                    Attributed Trade Diagnostics
+                </h3>
+                <button onclick="closeTradeDetailsModal()" style="background: transparent; border: none; color: var(--text-secondary); cursor: pointer; font-size: 20px; line-height: 1; padding: 0;">&times;</button>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px 15px; font-size: 11px;">
+                <div>Asset: <strong id="modal-trade-symbol" style="color: var(--text-primary);">BTC-USD</strong></div>
+                <div>Side: <strong id="modal-trade-side" style="color: var(--text-primary);">BUY</strong></div>
+                <div>Quantity: <span id="modal-trade-qty" style="color: var(--text-primary); font-family: monospace;">0.0000</span></div>
+                <div>PnL: <span id="modal-trade-pnl" style="font-weight: bold;">$0.00</span></div>
+                <div>Entry Price: <span id="modal-trade-entry" style="color: var(--text-primary); font-family: monospace;">$0.00</span></div>
+                <div>Exit Price: <span id="modal-trade-exit" style="color: var(--text-primary); font-family: monospace;">$0.00</span></div>
+                <div>Entry Time: <span id="modal-trade-entry-time" style="color: var(--text-primary);">00:00:00</span></div>
+                <div>Exit Time: <span id="modal-trade-exit-time" style="color: var(--text-primary);">00:00:00</span></div>
+                <div>Attributed Brain: <span id="modal-trade-brain" style="color: var(--neon-purple); font-weight: bold;">Default Brain</span></div>
+                <div>Exit Reason: <span id="modal-trade-reason" style="color: var(--text-primary); font-weight: bold;">Take Profit</span></div>
+            </div>
+            
+            <!-- Signals at Entry -->
+            <div style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); font-size: 11px;">
+                <strong style="color: var(--text-primary); display: block; margin-bottom: 6px;">Strategy Votes at Entry:</strong>
+                <div id="modal-trade-signals" style="display: flex; flex-direction: column; gap: 4px; font-family: monospace; color: var(--text-secondary);">
+                    <!-- Signals generated here dynamically -->
+                </div>
+            </div>
+            
+            <!-- Sentiment Sources -->
+            <div style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); font-size: 11px;">
+                <strong style="color: var(--text-primary); display: block; margin-bottom: 6px;">News & Sentiment Context:</strong>
+                <div id="modal-trade-sentiment" style="display: flex; flex-direction: column; gap: 4px; font-family: monospace; color: var(--text-secondary);">
+                    <!-- Sentiment details generated here dynamically -->
+                </div>
+            </div>
+            
+            <button class="btn btn-primary" onclick="closeTradeDetailsModal()" style="width: 100%; justify-content: center; font-size: 11px; padding: 8px 16px;">Close Diagnostics</button>
+        </div>
+    </div>
 
     <!-- App Logic -->
     <script src="/dashboard/app_v2.js?v=2.7"></script>
