@@ -2313,6 +2313,9 @@ function loadNeuralBrains(ticker) {
                                 Epochs: <span style="color: var(--neon-purple); font-weight: bold;">${b.training_steps || 0}</span>
                                 <span class="nt-tooltiptext">Number of training updates this brain has had.</span>
                             </span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 9px; color: var(--text-muted); margin-top: 1px;">
+                            <span>Efficacy: <span style="color: var(--neon-green); font-weight: bold;">${b.accumulated_trades ? ((b.accumulated_wins / b.accumulated_trades) * 100).toFixed(0) : 0}% WR</span> (${b.accumulated_trades || 0} trades)</span>
                             <span>${dateStr}</span>
                         </div>
                     </div>

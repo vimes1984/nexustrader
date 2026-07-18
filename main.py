@@ -1064,34 +1064,45 @@ def get_brain_specs(name: str, ticker: str):
     nn_lr = database.load_setting("nn_learning_rate", "0.05")
     nn_floor = database.load_setting("nn_weight_floor", "0.05")
     
-    # 3. Attribution performance stats (from database trades table)
-    try:
-        conn = database.get_db_connection()
-        cursor = conn.cursor()
-        # Query total trades & stats for this ticker and brain
-        cursor.execute(
-            "SELECT COUNT(*), SUM(pnl), AVG(pnl_percent) FROM trades WHERE symbol = ? AND policy_brain = ?",
-            (ticker, name)
-        )
-        trade_count, total_pnl, avg_pnl_percent = cursor.fetchone()
-        
-        # Query win count
-        cursor.execute(
-            "SELECT COUNT(*) FROM trades WHERE symbol = ? AND policy_brain = ? AND pnl > 0",
-            (ticker, name)
-        )
-        wins = cursor.fetchone()[0]
-        
-        conn.close()
-        
-        win_rate = (wins / trade_count * 100) if trade_count and trade_count > 0 else 0.0
-        total_pnl = float(total_pnl or 0.0)
-        avg_pnl_percent = float(avg_pnl_percent or 0.0) * 100.0
-    except Exception as e:
-        trade_count = 0
-        total_pnl = 0.0
-        avg_pnl_percent = 0.0
-        win_rate = 0.0
+    # 3. Attribution performance stats (from accumulated columns or trades table)
+    acc_trades = brain.get("accumulated_trades", 0)
+    acc_pnl = brain.get("accumulated_pnl", 0.0)
+    acc_pnl_percent = brain.get("accumulated_pnl_percent", 0.0)
+    acc_wins = brain.get("accumulated_wins", 0)
+
+    if acc_trades > 0:
+        trade_count = acc_trades
+        total_pnl = float(acc_pnl)
+        win_rate = (acc_wins / acc_trades * 100.0)
+        avg_pnl_percent = (acc_pnl_percent / acc_trades * 100.0)
+    else:
+        try:
+            conn = database.get_db_connection()
+            cursor = conn.cursor()
+            # Query total trades & stats for this ticker and brain
+            cursor.execute(
+                "SELECT COUNT(*), SUM(pnl), AVG(pnl_percent) FROM trades WHERE symbol = ? AND policy_brain = ?",
+                (ticker, name)
+            )
+            trade_count, total_pnl, avg_pnl_percent = cursor.fetchone()
+            
+            # Query win count
+            cursor.execute(
+                "SELECT COUNT(*) FROM trades WHERE symbol = ? AND policy_brain = ? AND pnl > 0",
+                (ticker, name)
+            )
+            wins = cursor.fetchone()[0]
+            
+            conn.close()
+            
+            win_rate = (wins / trade_count * 100.0) if trade_count and trade_count > 0 else 0.0
+            total_pnl = float(total_pnl or 0.0)
+            avg_pnl_percent = float(avg_pnl_percent or 0.0) * 100.0
+        except Exception as e:
+            trade_count = 0
+            total_pnl = 0.0
+            avg_pnl_percent = 0.0
+            win_rate = 0.0
         
     return {
         "status": "success",
@@ -1180,7 +1191,23 @@ def save_neural_brain(name: str, ticker: str):
     steps_key = f"lifetime_training_steps_{ticker}"
     lifetime_steps = int(database.load_setting(steps_key, "0"))
     
-    success = database.save_policy_brain(name, ticker, model_dna, current_weights_json, lifetime_steps)
+    # Load parent brain's current accumulated stats to propagate them
+    active_brain_name = database.load_setting(f"active_policy_brain_{ticker}", "Default Brain")
+    active_brain = database.load_policy_brain(active_brain_name, ticker)
+    acc_trades = 0
+    acc_pnl = 0.0
+    acc_pnl_percent = 0.0
+    acc_wins = 0
+    if active_brain:
+        acc_trades = active_brain.get("accumulated_trades", 0)
+        acc_pnl = active_brain.get("accumulated_pnl", 0.0)
+        acc_pnl_percent = active_brain.get("accumulated_pnl_percent", 0.0)
+        acc_wins = active_brain.get("accumulated_wins", 0)
+
+    success = database.save_policy_brain(
+        name, ticker, model_dna, current_weights_json, lifetime_steps,
+        acc_trades, acc_pnl, acc_pnl_percent, acc_wins
+    )
     if success:
         return {"status": "success", "message": f"Saved brain snapshot '{name}'."}
     return {"status": "error", "message": "Failed to save brain."}

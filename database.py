@@ -92,9 +92,16 @@ def init_db():
     try:
         cursor.execute("PRAGMA table_info(policy_brains)")
         pb_cols = [row[1] for row in cursor.fetchall()]
-        if len(pb_cols) > 0 and "training_steps" not in pb_cols:
-            logging.info("Migrating policy_brains table: adding training_steps column...")
-            cursor.execute("ALTER TABLE policy_brains ADD COLUMN training_steps INTEGER DEFAULT 0")
+        if len(pb_cols) > 0:
+            if "training_steps" not in pb_cols:
+                logging.info("Migrating policy_brains table: adding training_steps column...")
+                cursor.execute("ALTER TABLE policy_brains ADD COLUMN training_steps INTEGER DEFAULT 0")
+            if "accumulated_trades" not in pb_cols:
+                logging.info("Migrating policy_brains table: adding accumulated columns...")
+                cursor.execute("ALTER TABLE policy_brains ADD COLUMN accumulated_trades INTEGER DEFAULT 0")
+                cursor.execute("ALTER TABLE policy_brains ADD COLUMN accumulated_pnl REAL DEFAULT 0.0")
+                cursor.execute("ALTER TABLE policy_brains ADD COLUMN accumulated_pnl_percent REAL DEFAULT 0.0")
+                cursor.execute("ALTER TABLE policy_brains ADD COLUMN accumulated_wins INTEGER DEFAULT 0")
     except Exception as e:
         logging.error(f"Error migrating policy_brains table: {e}")
         
@@ -134,6 +141,10 @@ def init_db():
         weights TEXT,
         created_at REAL,
         training_steps INTEGER DEFAULT 0,
+        accumulated_trades INTEGER DEFAULT 0,
+        accumulated_pnl REAL DEFAULT 0.0,
+        accumulated_pnl_percent REAL DEFAULT 0.0,
+        accumulated_wins INTEGER DEFAULT 0,
         PRIMARY KEY (name, ticker)
     )
     """)
@@ -226,6 +237,23 @@ def save_trade(trade):
             sources_str,
             trade.get('policy_brain', 'Default Brain')
         ))
+        
+        # Update policy_brain's accumulated efficacy metrics
+        brain_name = trade.get('policy_brain', 'Default Brain')
+        pnl = float(trade['pnl'])
+        pnl_percent = float(trade['pnl_percent'])
+        is_win = 1 if pnl > 0 else 0
+        cursor.execute(
+            """
+            UPDATE policy_brains 
+            SET accumulated_trades = accumulated_trades + 1,
+                accumulated_pnl = accumulated_pnl + ?,
+                accumulated_pnl_percent = accumulated_pnl_percent + ?,
+                accumulated_wins = accumulated_wins + ?
+            WHERE name = ? AND ticker = ?
+            """,
+            (pnl, pnl_percent, is_win, brain_name, trade['symbol'])
+        )
         conn.commit()
     except Exception as e:
         logging.error(f"Error saving trade to db: {e}")
@@ -296,13 +324,30 @@ def load_setting(key, default=None):
 # -------------------------------------------------------------
 # Neural Policy Brains Table Operations
 # -------------------------------------------------------------
-def save_policy_brain(name: str, ticker: str, model_dna: str, weights: str, training_steps: int = 0):
+def save_policy_brain(name: str, ticker: str, model_dna: str, weights: str, training_steps: int = 0,
+                      accumulated_trades: int = 0, accumulated_pnl: float = 0.0,
+                      accumulated_pnl_percent: float = 0.0, accumulated_wins: int = 0):
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
         cursor.execute(
-            "INSERT OR REPLACE INTO policy_brains (name, ticker, model_dna, weights, created_at, training_steps) VALUES (?, ?, ?, ?, ?, ?)",
-            (name, ticker, model_dna, weights, time.time(), training_steps)
+            """
+            INSERT INTO policy_brains (
+                name, ticker, model_dna, weights, created_at, training_steps,
+                accumulated_trades, accumulated_pnl, accumulated_pnl_percent, accumulated_wins
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(name, ticker) DO UPDATE SET
+                weights = excluded.weights,
+                model_dna = excluded.model_dna,
+                training_steps = excluded.training_steps,
+                accumulated_trades = excluded.accumulated_trades,
+                accumulated_pnl = excluded.accumulated_pnl,
+                accumulated_pnl_percent = excluded.accumulated_pnl_percent,
+                accumulated_wins = excluded.accumulated_wins
+            """,
+            (name, ticker, model_dna, weights, time.time(), training_steps,
+             accumulated_trades, accumulated_pnl, accumulated_pnl_percent, accumulated_wins)
         )
         conn.commit()
         return True
@@ -316,10 +361,18 @@ def load_policy_brain(name: str, ticker: str):
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute("SELECT weights, model_dna, training_steps FROM policy_brains WHERE name = ? AND ticker = ?", (name, ticker))
+        cursor.execute("SELECT weights, model_dna, training_steps, accumulated_trades, accumulated_pnl, accumulated_pnl_percent, accumulated_wins FROM policy_brains WHERE name = ? AND ticker = ?", (name, ticker))
         row = cursor.fetchone()
         if row:
-            return {"weights": row[0], "model_dna": row[1], "training_steps": row[2] if row[2] is not None else 0}
+            return {
+                "weights": row[0], 
+                "model_dna": row[1], 
+                "training_steps": row[2] if row[2] is not None else 0,
+                "accumulated_trades": row[3] if row[3] is not None else 0,
+                "accumulated_pnl": row[4] if row[4] is not None else 0.0,
+                "accumulated_pnl_percent": row[5] if row[5] is not None else 0.0,
+                "accumulated_wins": row[6] if row[6] is not None else 0
+            }
         return None
     except Exception as e:
         logging.error(f"Error loading policy brain {name}: {e}")
@@ -331,9 +384,18 @@ def list_policy_brains(ticker: str):
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute("SELECT name, model_dna, created_at, training_steps FROM policy_brains WHERE ticker = ? ORDER BY created_at DESC", (ticker,))
+        cursor.execute("SELECT name, model_dna, created_at, training_steps, accumulated_trades, accumulated_pnl, accumulated_pnl_percent, accumulated_wins FROM policy_brains WHERE ticker = ? ORDER BY created_at DESC", (ticker,))
         rows = cursor.fetchall()
-        return [{"name": r[0], "model_dna": r[1], "created_at": r[2], "training_steps": r[3] if r[3] is not None else 0} for r in rows]
+        return [{
+            "name": r[0], 
+            "model_dna": r[1], 
+            "created_at": r[2], 
+            "training_steps": r[3] if r[3] is not None else 0,
+            "accumulated_trades": r[4] if r[4] is not None else 0,
+            "accumulated_pnl": r[5] if r[5] is not None else 0.0,
+            "accumulated_pnl_percent": r[6] if r[6] is not None else 0.0,
+            "accumulated_wins": r[7] if r[7] is not None else 0
+        } for r in rows]
     except Exception as e:
         logging.error(f"Error listing policy brains: {e}")
         return []
