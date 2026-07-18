@@ -401,12 +401,7 @@ class ExecutionEngine:
             pnl_percent = (pnl_after_fee) / (original_value + 1e-9)
 
             # Get active brain for symbol from DB settings
-            active_brains_json = database.load_setting("active_brains", "{}")
-            active_brain_name = "Default Brain"
-            try:
-                active_brain_name = json.loads(active_brains_json).get(symbol, "Default Brain")
-            except Exception:
-                pass
+            active_brain_name = database.load_setting(f"active_policy_brain_{symbol}", "Default Brain")
 
             closed_trade_record = {
                 "symbol": symbol,
