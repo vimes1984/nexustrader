@@ -903,11 +903,42 @@ function updateKpiBrainBadges() {
     });
 }
 
+function refreshNeuralCoreBrainSelector(ticker) {
+    const dropdown = document.getElementById("select-active-brain-neural");
+    const activeLabel = document.getElementById("kpi-neural-active-brain");
+    const tickerDisplay = document.querySelector(".active-ticker-display-neural");
+    
+    if (tickerDisplay) tickerDisplay.textContent = ticker;
+    if (!dropdown || !activeLabel) return;
+    
+    fetch(`/api/neural/brains?ticker=${ticker}&t=${Date.now()}`)
+        .then(res => res.json())
+        .then(data => {
+            dropdown.innerHTML = "";
+            const brains = data.brains || [];
+            const activeBrain = data.active_brain || "Default Brain";
+            
+            activeLabel.textContent = activeBrain;
+            
+            brains.forEach(b => {
+                const opt = document.createElement("option");
+                opt.value = b.name;
+                opt.textContent = `${b.name} (${b.training_steps || 0} epochs)`;
+                if (b.name === activeBrain) {
+                    opt.selected = true;
+                }
+                dropdown.appendChild(opt);
+            });
+        })
+        .catch(err => console.error("Error populating neural core brain selector:", err));
+}
+
 // Switch Active Ticker Handler
 function switchTicker(ticker) {
     isPortfolioMode = false;
     activeTicker = ticker;
     updateKpiBrainBadges();
+    refreshNeuralCoreBrainSelector(ticker);
     
     // Toggle UI visibility
     const elTf = document.getElementById("portfolio-timeframes");
@@ -2398,6 +2429,7 @@ elNavTabs.forEach(tab => {
         if (targetTabId === "tab-neural") {
             loadWeightsHistory(activeTicker);
             loadNeuralBrains(activeTicker);
+            refreshNeuralCoreBrainSelector(activeTicker);
         } else if (targetTabId === "tab-simulator") {
             loadNeuralBrains(activeTicker);
             if (!simChart) {
@@ -2468,6 +2500,23 @@ if (elSaveNnParamsBtn) {
             showToast("Error saving neural settings.", "error");
             console.error("Error saving neural core settings:", err);
         });
+    });
+}
+
+// Active Policy Brain Switcher on Neural Core tab
+const elApplyActiveBrainNeuralBtn = document.getElementById("btn-apply-active-brain-neural");
+if (elApplyActiveBrainNeuralBtn) {
+    elApplyActiveBrainNeuralBtn.addEventListener("click", () => {
+        const dropdown = document.getElementById("select-active-brain-neural");
+        if (!dropdown) return;
+        const name = dropdown.value;
+        if (!name) return;
+        
+        activateNeuralBrain(name, activeTicker);
+        
+        setTimeout(() => {
+            refreshNeuralCoreBrainSelector(activeTicker);
+        }, 500);
     });
 }
 

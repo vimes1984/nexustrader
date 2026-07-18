@@ -366,6 +366,36 @@
                 </div>
 
                 <div class="main-right-column">
+                    <!-- Active Policy Brain Selector -->
+                    <article class="glass-panel" style="padding: 24px; margin-bottom: 20px; position: relative;">
+                        <h3 style="font-size: 15px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="brain" style="width: 16px; height: 16px; color: var(--neon-purple);"></i>
+                            Active Policy Brain Selector
+                        </h3>
+                        <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.4; margin-bottom: 15px;">
+                            Select which neural model controls allocation weights for <strong class="active-ticker-display-neural" style="color: var(--neon-purple);">ETH-USD</strong> on live/paper trades.
+                        </p>
+                        
+                        <div style="background: rgba(255,255,255,0.01); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                            <div>
+                                <span style="display: block; color: var(--text-muted); font-size: 9px; text-transform: uppercase;">Current Live Brain</span>
+                                <strong id="kpi-neural-active-brain" style="color: var(--neon-green); font-size: 13px;">Default Brain</strong>
+                            </div>
+                            <span class="status-badge live" style="font-size: 9px;">ACTIVE</span>
+                        </div>
+
+                        <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px;">
+                            <label style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Choose Policy Brain:</label>
+                            <select id="select-active-brain-neural" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 12px; border-radius: 6px; font-family: inherit; font-size: 12px; width: 100%; cursor: pointer;">
+                                <!-- Dynamically populated -->
+                            </select>
+                        </div>
+
+                        <button class="btn btn-primary" id="btn-apply-active-brain-neural" style="width: 100%; justify-content: center; font-size: 12px; padding: 8px; cursor: pointer; transition: var(--transition);">
+                            Switch Live Brain Model
+                        </button>
+                    </article>
+
                     <!-- Policy Net Persona / Profile Card -->
                     <article class="glass-panel persona-card persona-bot" style="padding: 24px; flex-direction: column; text-align: center; gap: 12px; margin-bottom: 20px;">
                         <div class="persona-avatar" style="width: 64px; height: 64px; font-size: 24px;">🧠</div>
