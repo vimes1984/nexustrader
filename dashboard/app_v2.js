@@ -2362,6 +2362,13 @@ function selectBrainForSpecs(name, ticker) {
                 pnlEl.textContent = `${data.total_pnl >= 0 ? '+' : ''}$${data.total_pnl.toFixed(2)} (${data.avg_pnl_percent.toFixed(2)}%)`;
                 pnlEl.style.color = data.total_pnl >= 0 ? "var(--neon-green)" : "var(--neon-red)";
                 
+                // Set metadata attributes on the Run Simulation button
+                const runSimBtn = document.getElementById("btn-run-brain-sim");
+                if (runSimBtn) {
+                    runSimBtn.setAttribute("data-brain-name", data.name);
+                    runSimBtn.setAttribute("data-brain-ticker", data.ticker);
+                }
+
                 // Display the panel
                 detailsPanel.style.display = "block";
                 
@@ -2527,6 +2534,57 @@ document.addEventListener("DOMContentLoaded", () => {
             fetchSystemLogs();
         }
     }, 5000);
+
+    // Wire Run Simulation shortcut button
+    const runSimBtn = document.getElementById("btn-run-brain-sim");
+    if (runSimBtn) {
+        runSimBtn.addEventListener("click", () => {
+            const name = runSimBtn.getAttribute("data-brain-name");
+            const ticker = runSimBtn.getAttribute("data-brain-ticker");
+            if (!name || !ticker) return;
+            
+            showToast(`Initializing simulation loop on '${name}'...`, "info");
+            
+            // 1. Activate the brain
+            fetch(`/api/neural/brain/activate?name=${encodeURIComponent(name)}&ticker=${encodeURIComponent(ticker)}`, { method: 'POST' })
+                .then(res => res.json())
+                .then(actData => {
+                    if (actData.status !== "success") {
+                        showToast(`Activation failed: ${actData.message}`, "error");
+                        return;
+                    }
+                    
+                    // 2. Reset the simulation
+                    fetch("/api/control?action=reset", { method: 'POST' })
+                        .then(res => res.json())
+                        .then(() => {
+                            // 3. Start simulation playback at speed=0.05
+                            fetch("/api/control?action=start&mode=simulation&speed=0.05", { method: 'POST' })
+                                .then(res => res.json())
+                                .then(startData => {
+                                    if (startData.status === "started") {
+                                        showToast(`Simulation started on brain '${name}'!`, "success");
+                                        loadNeuralBrains(ticker);
+                                        
+                                        // Update status badge UI
+                                        isStopped = false;
+                                        elPlayPauseText.textContent = "Pause";
+                                        elPlayPauseBtn.querySelector("i").setAttribute("data-lucide", "pause");
+                                        document.getElementById("status-text").textContent = "Simulating";
+                                        document.getElementById("bot-status").classList.remove("stopped");
+                                        lucide.createIcons();
+                                    } else {
+                                        showToast("Failed to start simulation.", "error");
+                                    }
+                                });
+                        });
+                })
+                .catch(err => {
+                    showToast("Error triggering simulation loop.", "error");
+                    console.error(err);
+                });
+        });
+    }
 });
 
 // -------------------------------------------------------------
