@@ -361,18 +361,18 @@ Return ONLY a JSON block containing the key "revised_prompt_self_improvement" wi
 """
         from quant_utils import query_gemini_robust
         raw_text = query_gemini_robust(gemini_api_key, prompt)
-            if raw_text.startswith("```json"):
-                raw_text = raw_text[7:]
-            if raw_text.endswith("```"):
-                raw_text = raw_text[:-3]
-            raw_text = raw_text.strip()
-            
-            res_data = json.loads(raw_text)
-            revised = res_data.get("revised_prompt_self_improvement")
-            if revised:
-                save_setting("prompt_self_improvement", revised)
-                logging.info("Meta-optimization: Successfully updated prompt_self_improvement in database settings.")
-                return revised
+        if raw_text.startswith("```json"):
+            raw_text = raw_text[7:]
+        if raw_text.endswith("```"):
+            raw_text = raw_text[:-3]
+        raw_text = raw_text.strip()
+        
+        res_data = json.loads(raw_text)
+        revised = res_data.get("revised_prompt_self_improvement")
+        if revised:
+            save_setting("prompt_self_improvement", revised)
+            logging.info("Meta-optimization: Successfully updated prompt_self_improvement in database settings.")
+            return revised
     except Exception as e:
         logging.error(f"Failed to meta-optimize prompt_self_improvement: {e}")
     return None
