@@ -607,13 +607,14 @@ def reconstruct_trades_from_exchange(exchange):
 
 @app.get("/api/trades")
 def get_trades():
-    local_trades = database.load_trades()
     config_path = os.path.expanduser("~/.nexustrader/config.json")
+    is_live = False
     if os.path.exists(config_path):
         try:
             with open(config_path, "r") as f:
                 cfg = json.load(f)
             if cfg.get("trading_mode") == "live":
+                is_live = True
                 creds = cfg.get("api_credentials", {})
                 api_key = creds.get("api_key")
                 api_secret = creds.get("api_secret")
@@ -628,22 +629,14 @@ def get_trades():
                         'enableRateLimit': True,
                     })
                     exchange_trades = reconstruct_trades_from_exchange(exchange)
-                    if exchange_trades:
-                        merged = list(local_trades)
-                        for et in exchange_trades:
-                            matched = False
-                            et_time = int(et["exit_time"])
-                            for lt in merged:
-                                if abs(int(lt["exit_time"]) - et_time) < 15:
-                                    matched = True
-                                    break
-                            if not matched:
-                                merged.append(et)
-                        merged.sort(key=lambda x: x["exit_time"], reverse=True)
-                        return merged
+                    return exchange_trades
         except Exception as e:
-            logging.error(f"Error merging exchange trades: {e}")
+            logging.error(f"Error fetching live exchange trades: {e}")
+            if is_live:
+                return []
             
+    # For paper trading or simulation mode, return database-stored trades
+    local_trades = database.load_trades()
     return local_trades
 
 @app.get("/api/portfolio/history")
