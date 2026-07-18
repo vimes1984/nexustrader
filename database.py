@@ -102,8 +102,84 @@ def init_db():
                 cursor.execute("ALTER TABLE policy_brains ADD COLUMN accumulated_pnl REAL DEFAULT 0.0")
                 cursor.execute("ALTER TABLE policy_brains ADD COLUMN accumulated_pnl_percent REAL DEFAULT 0.0")
                 cursor.execute("ALTER TABLE policy_brains ADD COLUMN accumulated_wins INTEGER DEFAULT 0")
+                
+                # Backfill stats from trades table for existing brains
+                try:
+                    logging.info("Backfilling accumulated stats from trades table for existing brains...")
+                    cursor.execute("SELECT DISTINCT policy_brain FROM trades WHERE policy_brain IS NOT NULL")
+                    brains = [row[0] for row in cursor.fetchall()]
+                    for brain_name in brains:
+                        cursor.execute(
+                            """
+                            SELECT COUNT(*), SUM(pnl), SUM(pnl_percent), COUNT(case when pnl > 0 then 1 end) 
+                            FROM trades 
+                            WHERE policy_brain = ?
+                            """,
+                            (brain_name,)
+                        )
+                        cnt, total_pnl, total_pnl_percent, wins = cursor.fetchone()
+                        cnt = cnt or 0
+                        total_pnl = total_pnl or 0.0
+                        total_pnl_percent = total_pnl_percent or 0.0
+                        wins = wins or 0
+                        
+                        cursor.execute(
+                            """
+                            UPDATE policy_brains 
+                            SET accumulated_trades = ?,
+                                accumulated_pnl = ?,
+                                accumulated_pnl_percent = ?,
+                                accumulated_wins = ?
+                            WHERE name = ?
+                            """,
+                            (cnt, total_pnl, total_pnl_percent, wins, brain_name)
+                        )
+                    logging.info("Backfilled stats successfully.")
+                except Exception as ex:
+                    logging.error(f"Error backfilling stats: {ex}")
     except Exception as e:
         logging.error(f"Error migrating policy_brains table: {e}")
+        
+    # Standalone check to backfill if the migration was already run but columns are still zero
+    try:
+        cursor.execute("SELECT SUM(accumulated_trades) FROM policy_brains")
+        sum_acc = cursor.fetchone()[0] or 0
+        if sum_acc == 0:
+            cursor.execute("SELECT COUNT(*) FROM trades")
+            trades_count = cursor.fetchone()[0] or 0
+            if trades_count > 0:
+                logging.info("Standalone check: Backfilling accumulated stats from trades table...")
+                cursor.execute("SELECT DISTINCT policy_brain FROM trades WHERE policy_brain IS NOT NULL")
+                brains = [row[0] for row in cursor.fetchall()]
+                for brain_name in brains:
+                    cursor.execute(
+                        """
+                        SELECT COUNT(*), SUM(pnl), SUM(pnl_percent), COUNT(case when pnl > 0 then 1 end) 
+                        FROM trades 
+                        WHERE policy_brain = ?
+                        """,
+                        (brain_name,)
+                    )
+                    cnt, total_pnl, total_pnl_percent, wins = cursor.fetchone()
+                    cnt = cnt or 0
+                    total_pnl = total_pnl or 0.0
+                    total_pnl_percent = total_pnl_percent or 0.0
+                    wins = wins or 0
+                    
+                    cursor.execute(
+                        """
+                        UPDATE policy_brains 
+                        SET accumulated_trades = ?,
+                            accumulated_pnl = ?,
+                            accumulated_pnl_percent = ?,
+                            accumulated_wins = ?
+                        WHERE name = ?
+                        """,
+                        (cnt, total_pnl, total_pnl_percent, wins, brain_name)
+                    )
+                logging.info("Standalone backfill completed successfully.")
+    except Exception as ex:
+        logging.error(f"Error checking/running standalone backfill: {ex}")
         
     # Create settings table (balance, weights)
     cursor.execute("""
