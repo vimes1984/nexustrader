@@ -1000,8 +1000,8 @@ def activate_neural_brain(name: str, ticker: str):
             
             ensemble = orchestrator.strategy_ensembles.get(ticker)
             ingest = orchestrator.data_ingestions.get(ticker)
-            if ensemble and ingest and ingest.history_df is not None:
-                df = ingest.history_df
+            if ensemble and ingest and ingest.data is not None:
+                df = ingest.data
                 state = learner.get_state_vector(
                     df.iloc[-1].to_dict(),
                     list(df['close'].values[-60:]),
