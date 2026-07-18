@@ -121,8 +121,11 @@ class DataIngestion:
 
     def _run_simulation(self, speed, start_index):
         idx = start_index
-        while self.streaming and idx < len(self.data):
+        total_len = len(self.data)
+        while self.streaming and idx < total_len:
             row = self.data.iloc[idx].to_dict()
+            row['_sim_index'] = idx
+            row['_sim_total'] = total_len
             self.live_price = float(row['close'])
             
             # Notify subscribers

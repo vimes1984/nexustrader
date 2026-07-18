@@ -690,6 +690,19 @@ function updateStatusBadge() {
 
 // Process Tick Message
 function handleTick(data) {
+    // Update simulation progress bar if active
+    const simProgressContainer = document.getElementById("sim-progress-container");
+    if (simProgressContainer) {
+        if (data.sim_index !== undefined && data.sim_index !== null && data.sim_total) {
+            simProgressContainer.style.display = "flex";
+            const percent = (data.sim_index / data.sim_total) * 100;
+            document.getElementById("sim-progress-bar").style.width = `${percent}%`;
+            document.getElementById("sim-progress-label").textContent = `${data.sim_index} / ${data.sim_total} (${percent.toFixed(1)}%)`;
+        } else {
+            simProgressContainer.style.display = "none";
+        }
+    }
+
     // Store latest tick for this symbol
     tickerLatest[data.ticker] = data;
     
@@ -1035,6 +1048,17 @@ function handleTradeClosed(data) {
     
     // Add trade to execution log and update stats
     renderTradeClosedState(data.trade);
+
+    // Refresh brain list items & active specs indicators in real-time
+    loadNeuralBrains(activeTicker);
+    const runSimBtn = document.getElementById("btn-run-brain-sim");
+    if (runSimBtn) {
+        const selectedName = runSimBtn.getAttribute("data-brain-name");
+        const selectedTicker = runSimBtn.getAttribute("data-brain-ticker");
+        if (selectedName && selectedTicker) {
+            selectBrainForSpecs(selectedName, selectedTicker);
+        }
+    }
 }
 
 function handleLearningUpdate(data) {

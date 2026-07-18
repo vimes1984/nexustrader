@@ -412,6 +412,8 @@ class NexusTraderOrchestrator:
             "broker": self.execution_engine.config.get("broker", "kraken"),
             "lifetime_steps": steps,
             "model_dna": model_dna,
+            "sim_index": row.get('_sim_index', None),
+            "sim_total": row.get('_sim_total', None),
             "indicators": {
                 "rsi": float(row.get('rsi', 50)),
                 "macd": float(row.get('macd', 0)),
