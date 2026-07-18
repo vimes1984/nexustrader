@@ -13,6 +13,44 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- Lucide Icons for beautiful iconography -->
     <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* Custom Hover Tooltips */
+        .nt-tooltip {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            cursor: help;
+        }
+        .nt-tooltip .nt-tooltiptext {
+            visibility: hidden;
+            width: 220px;
+            background: rgba(15, 23, 42, 0.98);
+            color: var(--text-primary);
+            text-align: left;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 8px 12px;
+            position: absolute;
+            z-index: 10000000;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            opacity: 0;
+            transition: opacity 0.15s ease-in-out, transform 0.15s ease-in-out;
+            font-size: 10px;
+            line-height: 1.4;
+            pointer-events: none;
+            font-family: inherit;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.8);
+            font-weight: normal;
+            white-space: normal;
+        }
+        .nt-tooltip:hover .nt-tooltiptext {
+            visibility: visible;
+            opacity: 1;
+            transform: translateX(-50%) translateY(-2px);
+        }
+    </style>
 </head>
 <body>
     <div class="dashboard-container">
@@ -28,7 +66,10 @@
 
             <div class="controls-bar">
                 <div class="slider-container">
-                    <span>Risk Profile:</span>
+                    <span class="nt-tooltip">
+                        Risk Profile:
+                        <span class="nt-tooltiptext">Switches target capital allocations: Conservative (Kelly Fraction = 0.1), Aggressive (0.2), or Hyper-Growth (0.4).</span>
+                    </span>
                     <select id="risk-mode-select" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); color: var(--text-primary); padding: 6px 12px; border-radius: 8px; cursor: pointer; outline: none; font-size:12px; font-family:inherit;">
                         <option value="conservative" style="background:#0f172a;">Conservative (Safe)</option>
                         <option value="aggressive" style="background:#0f172a;">Aggressive (Fast)</option>
@@ -182,7 +223,10 @@
                     <article class="glass-panel" style="margin-top: 20px; padding: 24px;">
                         <h2 class="panel-title" style="margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
                             <i data-lucide="list-checks" style="color: var(--neon-green)"></i>
-                            Recent Closed Trades Log
+                            <span class="nt-tooltip">
+                                Recent Closed Trades Log
+                                <span class="nt-tooltiptext">Historical list of completed trades. Click any row to view deep strategy signals and sentiment attribution details.</span>
+                            </span>
                         </h2>
                         <div style="overflow-x: auto;">
                             <table style="width: 100%; border-collapse: collapse; font-size: 13px; text-align: left;">
@@ -212,7 +256,10 @@
                     <article class="glass-panel" style="padding: 24px; margin-bottom: 20px;">
                         <h2 class="panel-title" style="margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
                             <i data-lucide="shield-alert" style="color: var(--neon-orange);"></i>
-                            Active Tactical Position
+                            <span class="nt-tooltip">
+                                Active Tactical Position
+                                <span class="nt-tooltiptext">Displays the current live or simulated position status, entry price, and real-time unrealized PnL.</span>
+                            </span>
                         </h2>
                         <div id="position-details-container" class="active-pos-details">
                             <p style="font-size: 13px; color: var(--text-muted); text-align: center; padding: 20px;">No Active Position Open</p>
@@ -375,18 +422,36 @@
                                 <span id="details-brain-name">Brain Specs</span>
                             </h4>
                             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px 15px; font-size: 10px; color: var(--text-secondary); margin-bottom: 10px; font-family: monospace;">
-                                <div>DNA: <span id="details-brain-dna" style="color: var(--text-primary); font-weight: bold;">NN-ARCH-UNKNOWN</span></div>
-                                <div>Disk Size: <span id="details-brain-size" style="color: var(--text-primary);">0 B</span></div>
+                                <div class="nt-tooltip">
+                                    DNA: <span id="details-brain-dna" style="color: var(--text-primary); font-weight: bold; margin-left: 4px;">NN-ARCH-UNKNOWN</span>
+                                    <span class="nt-tooltiptext">A unique 6-character hexadecimal signature representing the policy network's layer structure and topology configuration.</span>
+                                </div>
+                                <div class="nt-tooltip">
+                                    Disk Size: <span id="details-brain-size" style="color: var(--text-primary); margin-left: 4px;">0 B</span>
+                                    <span class="nt-tooltiptext">The serialized byte size of the network's float weight arrays stored in the database.</span>
+                                </div>
                                 <div>W1 Layer: <span id="details-brain-w1" style="color: var(--text-primary);">8x12</span></div>
                                 <div>W2 Layer: <span id="details-brain-w2" style="color: var(--text-primary);">12x7</span></div>
-                                <div>Params: <span id="details-brain-params" style="color: var(--text-primary);">199</span></div>
-                                <div>LR / Floor: <span id="details-brain-lr" style="color: var(--text-primary);">0.05 / 0.05</span></div>
-                                <div style="grid-column: span 2;">Training Steps: <span id="details-brain-steps" style="color: var(--neon-purple); font-weight: bold;">0</span></div>
+                                <div class="nt-tooltip">
+                                    Params: <span id="details-brain-params" style="color: var(--text-primary); margin-left: 4px;">199</span>
+                                    <span class="nt-tooltiptext">The total count of active connections, weights, and biases inside the network.</span>
+                                </div>
+                                <div class="nt-tooltip">
+                                    LR / Floor: <span id="details-brain-lr" style="color: var(--text-primary); margin-left: 4px;">0.05 / 0.05</span>
+                                    <span class="nt-tooltiptext">Learning Rate (backprop multiplier) and Weight Floor (prevents strategy dropouts).</span>
+                                </div>
+                                <div style="grid-column: span 2;" class="nt-tooltip">
+                                    Training Epochs: <span id="details-brain-steps" style="color: var(--neon-purple); font-weight: bold; margin-left: 4px;">0</span>
+                                    <span class="nt-tooltiptext">An epoch represents one complete reinforcement learning backpropagation update cycle triggered when a tactical position closes.</span>
+                                </div>
                             </div>
                             
                             <!-- Attribution Analysis -->
                             <div style="background: rgba(255,255,255,0.02); padding: 8px; border-radius: 6px; border: 1px solid var(--border-color); font-size: 10px; margin-bottom: 4px;">
-                                <strong style="color: var(--text-primary); display: block; margin-bottom: 6px; font-size: 11px;">Attributed Trade Efficacy:</strong>
+                                <strong style="color: var(--text-primary); display: block; margin-bottom: 6px; font-size: 11px;" class="nt-tooltip">
+                                    Attributed Trade Efficacy:
+                                    <span class="nt-tooltiptext">Historical performance statistics recorded in the database specifically under this active configuration.</span>
+                                </strong>
                                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
                                     <div>Total Trades: <span id="stats-brain-trades" style="font-weight: bold; color: var(--text-primary);">0</span></div>
                                     <div>Win Rate: <span id="stats-brain-winrate" style="font-weight: bold; color: var(--text-primary);">0%</span></div>

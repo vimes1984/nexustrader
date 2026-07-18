@@ -2285,7 +2285,10 @@ function loadNeuralBrains(ticker) {
                         </div>
                         <div style="display: flex; justify-content: space-between; align-items: center; font-size: 9px; color: var(--text-muted); gap: 4px;">
                             <span>DNA: <span style="font-family: monospace; color: var(--neon-blue); font-weight: bold;">${b.model_dna}</span></span>
-                            <span>Steps: <span style="color: var(--neon-purple); font-weight: bold;">${b.training_steps || 0}</span></span>
+                            <span class="nt-tooltip">
+                                Epochs: <span style="color: var(--neon-purple); font-weight: bold;">${b.training_steps || 0}</span>
+                                <span class="nt-tooltiptext">Number of training updates this brain has had.</span>
+                            </span>
                             <span>${dateStr}</span>
                         </div>
                     </div>
