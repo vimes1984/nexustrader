@@ -111,7 +111,23 @@ def query_gemini_robust(api_key: str, prompt, model: str = "gemini-2.0-flash", m
     import time
     import logging
     
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+    # Check if the Antigravity local proxy is online on port 8001
+    use_proxy = False
+    try:
+        req_health = urllib.request.Request("http://127.0.0.1:8001/health")
+        with urllib.request.urlopen(req_health, timeout=1.0) as resp:
+            data_health = json.loads(resp.read().decode("utf-8"))
+            if data_health.get("status") == "ok":
+                use_proxy = True
+    except Exception:
+        pass
+
+    if use_proxy:
+        url = f"http://127.0.0.1:8001/v1beta/models/{model}:generateContent"
+        logging.info("[PROXY ROUTE] Routing request through local Antigravity proxy on 127.0.0.1:8001")
+    else:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+
     if isinstance(prompt, dict):
         payload = prompt
     else:
