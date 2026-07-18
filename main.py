@@ -464,7 +464,7 @@ async def startup_event():
         learner = orchestrator.learning_engines.get(ticker)
         if not learner:
             continue
-        ensemble = orchestrator.ensembles.get(ticker)
+        ensemble = orchestrator.strategy_ensembles.get(ticker)
         num_strats = len(ensemble.strategies) if ensemble else 6
         
         current_weights_json = learner.policy_net.to_json()
@@ -965,7 +965,7 @@ def activate_neural_brain(name: str, ticker: str):
             learner.policy_net.from_json(brain["weights"])
             logging.info(f"Hot-loaded active policy brain '{name}' for {ticker}.")
             
-            ensemble = orchestrator.ensembles.get(ticker)
+            ensemble = orchestrator.strategy_ensembles.get(ticker)
             ingest = orchestrator.data_ingestions.get(ticker)
             if ensemble and ingest and ingest.history_df is not None:
                 df = ingest.history_df
@@ -1005,7 +1005,7 @@ def save_neural_brain(name: str, ticker: str):
         return {"status": "error", "message": "Learning engine not initialized."}
         
     current_weights_json = learner.policy_net.to_json()
-    ensemble = orchestrator.ensembles.get(ticker)
+    ensemble = orchestrator.strategy_ensembles.get(ticker)
     num_strats = len(ensemble.strategies) if ensemble else 6
     import hashlib
     topo_str = f"PolicyNet-8x12x{num_strats}"
@@ -1028,7 +1028,7 @@ def delete_neural_brain(name: str, ticker: str):
 
 @app.post("/api/neural/brain/train")
 def train_new_brain(name: str, ticker: str):
-    ensemble = orchestrator.ensembles.get(ticker)
+    ensemble = orchestrator.strategy_ensembles.get(ticker)
     num_strats = len(ensemble.strategies) if ensemble else 6
     
     from learning_engine import LearningEngine
