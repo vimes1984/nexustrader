@@ -144,8 +144,8 @@ def query_gemini_robust(api_key: str, prompt, model: str = "gemini-2.0-flash", m
                 res_json = json.loads(resp.read().decode("utf-8"))
                 return res_json["candidates"][0]["content"]["parts"][0]["text"].strip()
         except urllib.error.HTTPError as e:
-            if e.code == 429 and retries < max_retries:
-                logging.warning(f"[GEMINI API] Rate limit (429) hit. Retrying in {delay:.1f}s... (Attempt {retries+1}/{max_retries})")
+            if e.code in [429, 500, 502, 503, 504] and retries < max_retries:
+                logging.warning(f"[GEMINI API] Transient error ({e.code}) hit. Retrying in {delay:.1f}s... (Attempt {retries+1}/{max_retries})")
                 time.sleep(delay)
                 retries += 1
                 delay *= backoff_factor
