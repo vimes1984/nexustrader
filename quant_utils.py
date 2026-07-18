@@ -139,7 +139,10 @@ def query_gemini_robust(api_key: str, prompt, model: str = "gemini-2.0-flash", m
     
     while True:
         try:
-            req = urllib.request.Request(url, data=encoded_data, headers={"Content-Type": "application/json"})
+            headers = {"Content-Type": "application/json"}
+            if api_key:
+                headers["x-goog-api-key"] = api_key
+            req = urllib.request.Request(url, data=encoded_data, headers=headers)
             with urllib.request.urlopen(req, timeout=30) as resp:
                 res_json = json.loads(resp.read().decode("utf-8"))
                 return res_json["candidates"][0]["content"]["parts"][0]["text"].strip()
