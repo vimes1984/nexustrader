@@ -1786,6 +1786,166 @@ document.querySelectorAll(".trigger-risk-audit-btn").forEach(btn => {
     });
 });
 
+// Run All Agents shortcut button
+const elRunAllBtn = document.getElementById("btn-run-all-agents");
+if (elRunAllBtn) {
+    elRunAllBtn.addEventListener("click", () => {
+        const overlay = document.createElement("div");
+        overlay.id = "agents-run-overlay";
+        overlay.style.position = "fixed";
+        overlay.style.top = "0";
+        overlay.style.left = "0";
+        overlay.style.width = "100%";
+        overlay.style.height = "100%";
+        overlay.style.background = "rgba(10, 15, 30, 0.85)";
+        overlay.style.backdropFilter = "blur(20px)";
+        overlay.style.zIndex = "1000000";
+        overlay.style.display = "flex";
+        overlay.style.justifyContent = "center";
+        overlay.style.alignItems = "center";
+        
+        overlay.innerHTML = `
+            <div class="glass-panel" style="width: 500px; padding: 30px; border-color: var(--neon-purple); text-align: left; box-shadow: 0 0 40px rgba(168,85,247,0.2); background: rgba(15,23,42,0.95);">
+                <h3 style="font-size: 16px; font-weight: 700; color: var(--text-primary); margin-top: 0; margin-bottom: 5px; display: flex; align-items: center; gap: 8px;">
+                    <i data-lucide="zap" style="color: var(--neon-purple); width: 18px; height: 18px;"></i>
+                    Executing Autonomous Quant Team...
+                </h3>
+                <p style="font-size: 11px; color: var(--text-secondary); margin-bottom: 20px;">
+                    Launching full team analysis pipeline concurrently. This takes up to 30 seconds.
+                </p>
+                
+                <div style="display: flex; flex-direction: column; gap: 15px; margin-bottom: 25px;">
+                    <div id="status-agent-quant" style="display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--text-primary);">
+                        <span style="display: flex; align-items: center; gap: 10px;">📊 <strong>PhD Quant Agent:</strong> <span style="font-size: 11px; color: var(--text-secondary);">Tuning bounds...</span></span>
+                        <span class="agent-spinner animate-pulse" style="color: var(--neon-purple); font-size: 11px; font-weight: bold; font-family: monospace;">RUNNING</span>
+                    </div>
+                    <div id="status-agent-nn" style="display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--text-primary);">
+                        <span style="display: flex; align-items: center; gap: 10px;">🎓 <strong>NeuralCore Optimizer:</strong> <span style="font-size: 11px; color: var(--text-secondary);">Calibrating LR...</span></span>
+                        <span class="agent-spinner animate-pulse" style="color: var(--neon-orange); font-size: 11px; font-weight: bold; font-family: monospace;">RUNNING</span>
+                    </div>
+                    <div id="status-agent-sent" style="display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--text-primary);">
+                        <span style="display: flex; align-items: center; gap: 10px;">📡 <strong>NexusSentinel:</strong> <span style="font-size: 11px; color: var(--text-secondary);">Filtering news...</span></span>
+                        <span class="agent-spinner animate-pulse" style="color: var(--neon-purple); font-size: 11px; font-weight: bold; font-family: monospace;">RUNNING</span>
+                    </div>
+                    <div id="status-agent-dev" style="display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--text-primary);">
+                        <span style="display: flex; align-items: center; gap: 10px;">⚙️ <strong>Dev Architect:</strong> <span style="font-size: 11px; color: var(--text-secondary);">Running build test...</span></span>
+                        <span class="agent-spinner animate-pulse" style="color: var(--neon-blue); font-size: 11px; font-weight: bold; font-family: monospace;">RUNNING</span>
+                    </div>
+                    <div id="status-agent-blog" style="display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--text-primary);">
+                        <span style="display: flex; align-items: center; gap: 10px;">📝 <strong>NexusReporter AI:</strong> <span style="font-size: 11px; color: var(--text-secondary);">Writing blog...</span></span>
+                        <span class="agent-spinner animate-pulse" style="color: var(--neon-green); font-size: 11px; font-weight: bold; font-family: monospace;">RUNNING</span>
+                    </div>
+                </div>
+                
+                <button class="btn" id="btn-close-agents-overlay" disabled style="width: 100%; justify-content: center; font-size: 12px;">Close Console</button>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+        if (window.lucide) lucide.createIcons();
+        
+        const closeBtn = document.getElementById("btn-close-agents-overlay");
+        
+        const markSuccess = (id, msg) => {
+            const row = document.getElementById(id);
+            if (row) {
+                row.querySelector("span span").textContent = msg;
+                row.querySelector("span span").style.color = "var(--neon-green)";
+                const spinner = row.querySelector(".agent-spinner");
+                spinner.textContent = "COMPLETED";
+                spinner.style.color = "var(--neon-green)";
+                spinner.classList.remove("animate-pulse");
+            }
+        };
+        
+        const markFailed = (id, error) => {
+            const row = document.getElementById(id);
+            if (row) {
+                row.querySelector("span span").textContent = error;
+                row.querySelector("span span").style.color = "var(--neon-red)";
+                const spinner = row.querySelector(".agent-spinner");
+                spinner.textContent = "FAILED";
+                spinner.style.color = "var(--neon-red)";
+                spinner.classList.remove("animate-pulse");
+            }
+        };
+
+        // 1. PhD Quant
+        const p1 = fetch("/api/system/optimize/parameters", { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === "success") {
+                    markSuccess("status-agent-quant", "Parameters optimized!");
+                } else {
+                    markFailed("status-agent-quant", data.error || "Failed");
+                }
+            })
+            .catch(err => markFailed("status-agent-quant", "Connection error"));
+
+        // 2. NN Optimizer
+        const p2 = fetch("/api/system/optimize/nn", { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === "success") {
+                    markSuccess("status-agent-nn", "Learning rate tuned!");
+                } else {
+                    markFailed("status-agent-nn", data.error || "Failed");
+                }
+            })
+            .catch(err => markFailed("status-agent-nn", "Connection error"));
+
+        // 3. Sentiment Optimizer
+        const p3 = fetch("/api/system/optimize/sentiment", { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === "success") {
+                    markSuccess("status-agent-sent", "Sentiment weights synced!");
+                } else {
+                    markFailed("status-agent-sent", data.error || "Failed");
+                }
+            })
+            .catch(err => markFailed("status-agent-sent", "Connection error"));
+
+        // 4. Dev Architect
+        const p4 = fetch("/api/system/optimize/self_dev", { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === "success") {
+                    markSuccess("status-agent-dev", "Codebase diagnostics updated!");
+                } else {
+                    markFailed("status-agent-dev", data.error || "Failed");
+                }
+            })
+            .catch(err => markFailed("status-agent-dev", "Connection error"));
+
+        // 5. NexusReporter AI (Blogger)
+        const p5 = fetch("/api/blog/generate?use_mock=false", { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === "success") {
+                    markSuccess("status-agent-blog", "Blog report published!");
+                } else {
+                    markFailed("status-agent-blog", data.error || "Failed");
+                }
+            })
+            .catch(err => markFailed("status-agent-blog", "Connection error"));
+
+        // Wait for all to finish
+        Promise.all([p1, p2, p3, p4, p5]).finally(() => {
+            closeBtn.disabled = false;
+            closeBtn.classList.add("btn-primary");
+            closeBtn.addEventListener("click", () => {
+                overlay.remove();
+                fetch(`/api/trades?t=${Date.now()}`)
+                    .then(res => res.json())
+                    .then(trades => {
+                        renderTradeLog(trades);
+                        updatePerformanceKPIs(trades, equity);
+                    });
+            });
+        });
+    });
+}
+
 const elResetCooldownsBtn = document.getElementById("trigger-reset-cooldowns-btn-tab");
 if (elResetCooldownsBtn) {
     elResetCooldownsBtn.addEventListener("click", () => {
