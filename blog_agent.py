@@ -498,26 +498,10 @@ To optimize execution safety and target higher capital return frequencies, we ar
 
 def query_gemini_api(api_key, context_prompt):
     """Queries Gemini 2.0 Flash API to write a witty, professional blog post."""
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
-    headers = {"Content-Type": "application/json"}
-    payload = {
-        "contents": [
-            {
-                "parts": [
-                    {"text": context_prompt}
-                ]
-            }
-        ]
-    }
-    
     try:
         logging.info("Sending request to Gemini API...")
-        response = requests.post(url, headers=headers, json=payload, timeout=30)
-        if response.status_code == 200:
-            data = response.json()
-            return data["candidates"][0]["content"]["parts"][0]["text"]
-        else:
-            logging.error(f"Gemini API returned error code {response.status_code}: {response.text}")
+        from quant_utils import query_gemini_robust
+        return query_gemini_robust(api_key, context_prompt)
     except Exception as e:
         logging.error(f"Error querying Gemini API: {e}")
     return None
@@ -733,12 +717,8 @@ Recent Quant & Developer Logs:
 Critically analyze this context. Redesign your own prompt template to focus it even more tightly on achieving $1,000 USD/day, ensuring it asks for engaging market commentary and keeps all tables intact.
 Return ONLY a JSON block containing the key "revised_prompt_blog_agent" with your improved prompt template as the value (do not include markdown wrappers like ```json).
 """
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
-        data = json.dumps({"contents": [{"parts": [{"text": prompt}]}]}).encode("utf-8")
-        req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=20) as resp:
-            res_json = json.loads(resp.read().decode("utf-8"))
-            raw_text = res_json["candidates"][0]["content"]["parts"][0]["text"].strip()
+        from quant_utils import query_gemini_robust
+        raw_text = query_gemini_robust(api_key, prompt)
             if raw_text.startswith("```json"):
                 raw_text = raw_text[7:]
             if raw_text.endswith("```"):

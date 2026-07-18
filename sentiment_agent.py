@@ -54,14 +54,9 @@ Current news sentiment weight factor in Strategy Ensemble: {settings.get("recomm
     report_lines = ["\n## 📡 News Sentiment Feeds Sentinel report"]
     
     try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={gemini_api_key}"
-        data = json.dumps({"contents": [{"parts": [{"text": prompt}]}]}).encode("utf-8")
-        req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
-        
         logging.info("Requesting Sentiment evaluation from Gemini...")
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            res_json = json.loads(resp.read().decode("utf-8"))
-            advice_text = res_json["candidates"][0]["content"]["parts"][0]["text"].strip()
+        from quant_utils import query_gemini_robust
+        advice_text = query_gemini_robust(gemini_api_key, prompt)
             
             advice_clean = advice_text
             json_block = ""
@@ -108,12 +103,8 @@ Recent Developer/Quant logs:
 Critically analyze this context. Redesign your own prompt template to focus it even more tightly on achieving $1,000 USD/day, ensuring it asks for correct sentiment check structures and keeps its final settings JSON format.
 Return ONLY a JSON block containing the key "revised_prompt_sentiment_agent" with your improved prompt template as the value (do not include markdown wrappers like ```json).
 """
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={gemini_api_key}"
-        data = json.dumps({"contents": [{"parts": [{"text": meta_prompt}]}]}).encode("utf-8")
-        req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=20) as resp:
-            res_json = json.loads(resp.read().decode("utf-8"))
-            raw_text = res_json["candidates"][0]["content"]["parts"][0]["text"].strip()
+        from quant_utils import query_gemini_robust
+        raw_text = query_gemini_robust(gemini_api_key, meta_prompt)
             if raw_text.startswith("```json"):
                 raw_text = raw_text[7:]
             if raw_text.endswith("```"):

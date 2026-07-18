@@ -102,3 +102,40 @@ def detect_psychological_sweep(df, lookback=24, round_number_base=5.0):
         return -1.5 if is_near_round_support else -1.0
 
     return 0.0
+
+def query_gemini_robust(api_key: str, prompt, model: str = "gemini-2.0-flash", max_retries: int = 5, backoff_factor: float = 2.0) -> str:
+    """Queries Google Gemini API with exponential backoff on HTTP 429 rate limit errors."""
+    import urllib.request
+    import urllib.error
+    import json
+    import time
+    import logging
+    
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+    if isinstance(prompt, dict):
+        payload = prompt
+    else:
+        payload = {"contents": [{"parts": [{"text": prompt}]}]}
+    encoded_data = json.dumps(payload).encode("utf-8")
+    
+    retries = 0
+    delay = 2.0 # Start with 2 seconds delay
+    
+    while True:
+        try:
+            req = urllib.request.Request(url, data=encoded_data, headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                res_json = json.loads(resp.read().decode("utf-8"))
+                return res_json["candidates"][0]["content"]["parts"][0]["text"].strip()
+        except urllib.error.HTTPError as e:
+            if e.code == 429 and retries < max_retries:
+                logging.warning(f"[GEMINI API] Rate limit (429) hit. Retrying in {delay:.1f}s... (Attempt {retries+1}/{max_retries})")
+                time.sleep(delay)
+                retries += 1
+                delay *= backoff_factor
+            else:
+                logging.error(f"[GEMINI API] HTTP Error {e.code}: {e.reason}")
+                raise e
+        except Exception as e:
+            logging.error(f"[GEMINI API] Unexpected error: {e}")
+            raise e
