@@ -17,7 +17,7 @@
 <body>
     <div class="dashboard-container">
         <!-- App Header -->
-        <header class="glass-panel" style="margin-bottom: 12px; padding: 15px 25px;">
+        <header class="glass-panel" style="margin-bottom: 12px; padding: 15px 25px; position: relative; z-index: 999999;">
             <div class="brand">
                 <i data-lucide="cpu" style="color: var(--neon-blue); width: 32px; height: 32px;"></i>
                 <div>
@@ -366,6 +366,34 @@
                                 <i data-lucide="plus" style="width: 12px; height: 12px;"></i>
                                 Train New Brain
                             </button>
+                        </div>
+                    </article>
+ 
+                    <!-- Brain Profiles Reference -->
+                    <article class="glass-panel" style="padding: 24px; margin-top: 20px;">
+                        <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="info" style="width: 15px; height: 15px; color: var(--neon-blue);"></i>
+                            Brain Profiles Reference
+                        </h3>
+                        <div style="display: flex; flex-direction: column; gap: 10px; font-size: 11px; line-height: 1.4;">
+                            <div style="border-left: 2px solid var(--neon-blue); padding-left: 8px;">
+                                <strong style="color: var(--neon-blue);">🧠 Default Brain (Multi-Regime)</strong>
+                                <p style="color: var(--text-secondary); font-size: 10px; margin-top: 2px;">
+                                    Balanced allocator. Adapts weights dynamically using continuous Policy Gradient adjustments across all inputs (O-U process regime shifts, RSI momentum, news sentiment).
+                                </p>
+                            </div>
+                            <div style="border-left: 2px solid var(--neon-green); padding-left: 8px;">
+                                <strong style="color: var(--neon-green);">⚡ High-Freq Scalper (Volatile range)</strong>
+                                <p style="color: var(--text-secondary); font-size: 10px; margin-top: 2px;">
+                                    Optimized for ranges and high-noise volatility. Focuses allocations on fast Bollinger sweep reversions under high ATR, tight stops (lower profit targets) and fast entry cooldowns.
+                                </p>
+                            </div>
+                            <div style="border-left: 2px solid var(--neon-purple); padding-left: 8px;">
+                                <strong style="color: var(--neon-purple);">📈 Trend Follower (Structural drift)</strong>
+                                <p style="color: var(--text-secondary); font-size: 10px; margin-top: 2px;">
+                                    Regime bias for low reversion speed ($\theta < 0.05$). Routes resources to Bollinger/Kalman-filter trend riders. Uses wider ATR limits to capture major breakouts.
+                                </p>
+                            </div>
                         </div>
                     </article>
  
@@ -914,7 +942,7 @@
         <!-- TAB CONTENT 6: SYSTEM LOGS TERMINAL -->
         <div id="tab-logs" class="tab-content">
             <main class="main-content" style="grid-template-columns: 1fr;">
-                <article class="glass-panel" style="padding: 24px; display: flex; flex-direction: column; gap: 15px; height: 75vh;">
+                <article class="glass-panel" style="padding: 24px; display: flex; flex-direction: column; gap: 15px; min-height: 75vh; height: auto;">
                     <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
                         <h2 class="panel-title" style="display: flex; align-items: center; gap: 8px; margin: 0;">
                             <i data-lucide="terminal" style="color: var(--neon-blue)"></i>
@@ -933,8 +961,33 @@
                     </div>
                     
                     <!-- Code Terminal Output screen -->
-                    <div id="system-terminal-output" style="flex: 1; background: #070b15; border: 1px solid var(--border-color); border-radius: 8px; padding: 15px; overflow-y: auto; font-family: 'Courier New', Courier, monospace; font-size: 11px; color: #10b981; text-align: left; line-height: 1.5; white-space: pre-wrap; word-break: break-all;">
+                    <div id="system-terminal-output" style="height: 350px; background: #070b15; border: 1px solid var(--border-color); border-radius: 8px; padding: 15px; overflow-y: auto; font-family: 'Courier New', Courier, monospace; font-size: 11px; color: #10b981; text-align: left; line-height: 1.5; white-space: pre-wrap; word-break: break-all; margin-bottom: 10px;">
                         Loading diagnostic logs...
+                    </div>
+                    
+                    <!-- Structured UI Alerts Log -->
+                    <div style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 15px; text-align: left;">
+                        <h3 class="panel-title" style="display: flex; align-items: center; gap: 6px; font-size: 13px; margin: 0 0 10px 0;">
+                            <i data-lucide="bell" style="width: 14px; height: 14px; color: var(--neon-purple);"></i>
+                            Structured Alert History Log
+                        </h3>
+                        <div style="max-height: 200px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px; background: rgba(10,15,30,0.4);">
+                            <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 11px;">
+                                <thead>
+                                    <tr style="background: rgba(255,255,255,0.02); border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">
+                                        <th style="padding: 8px 12px; width: 80px;">Type</th>
+                                        <th style="padding: 8px 12px; width: 90px;">Time</th>
+                                        <th style="padding: 8px 12px;">Message</th>
+                                        <th style="padding: 8px 12px; width: 80px; text-align: center;">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="logs-tab-alerts-tbody">
+                                    <tr>
+                                        <td colspan="4" style="color: var(--text-secondary); text-align: center; padding: 20px;">No alerts logged in current session.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </article>
             </main>

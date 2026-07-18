@@ -253,6 +253,53 @@ function updateNotificationsUI() {
         list.appendChild(item);
     });
     
+    // Render in System Logs tab list/table if present
+    const logsTbody = document.getElementById("logs-tab-alerts-tbody");
+    if (logsTbody) {
+        if (notificationsList.length === 0) {
+            logsTbody.innerHTML = `<tr><td colspan="4" style="color: var(--text-secondary); text-align: center; padding: 20px;">No alerts logged in current session.</td></tr>`;
+        } else {
+            logsTbody.innerHTML = "";
+            notificationsList.forEach(n => {
+                const tr = document.createElement("tr");
+                tr.style.borderBottom = "1px solid rgba(255,255,255,0.04)";
+                tr.style.background = n.read ? "transparent" : "rgba(255,255,255,0.02)";
+                
+                let typeBadge = `<span style="color: var(--neon-blue); font-weight: bold;">INFO</span>`;
+                if (n.type === "success") {
+                    typeBadge = `<span style="color: var(--neon-green); font-weight: bold;">SUCCESS</span>`;
+                } else if (n.type === "error") {
+                    typeBadge = `<span style="color: var(--neon-red); font-weight: bold;">ERROR</span>`;
+                }
+                
+                tr.innerHTML = `
+                    <td style="padding: 8px 12px; font-weight: 600;">${typeBadge}</td>
+                    <td style="padding: 8px 12px; color: var(--text-secondary); font-family: monospace;">${n.time}</td>
+                    <td style="padding: 8px 12px; color: var(--text-primary); text-align: left;">${n.message}</td>
+                    <td style="padding: 8px 12px; text-align: center;">
+                        <button class="copy-alert-btn-table" style="background: transparent; border: none; color: var(--neon-blue); cursor: pointer; font-size: 10px; display: inline-flex; align-items: center; gap: 2px;" title="Copy to Clipboard">
+                            <i data-lucide="copy" style="width: 10px; height: 10px;"></i>
+                            Copy
+                        </button>
+                    </td>
+                `;
+                
+                // Copy click handler
+                const copyBtn = tr.querySelector(".copy-alert-btn-table");
+                if (copyBtn) {
+                    copyBtn.addEventListener("click", (e) => {
+                        e.stopPropagation();
+                        navigator.clipboard.writeText(`[${n.time}] ${n.message}`)
+                            .then(() => showToast("Alert copied!", "success"))
+                            .catch(err => console.error(err));
+                    });
+                }
+                
+                logsTbody.appendChild(tr);
+            });
+        }
+    }
+    
     // Refresh lucide icons inside dropdown list
     if (window.lucide) {
         lucide.createIcons({
