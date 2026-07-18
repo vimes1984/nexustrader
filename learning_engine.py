@@ -5,28 +5,51 @@ import logging
 class PolicyNetwork:
     """NumPy-based Policy Gradient Neural Network for dynamic strategy weight allocation.
     
-    Inputs (State Dim = 6):
+    Inputs (State Dim = 8):
     - Market Regime (1.0 if Mean Reverting, 0.0 if Trending)
     - Mean Reversion Speed (theta)
     - Normalized RSI (-1.0 to 1.0)
     - Normalized MACD Histogram
     - Bollinger Band Position (-0.5 to 0.5)
-    - Current Portfolio PnL Trend
+    - ATR Volatility Ratio
+    - Recent 10-trade Win Trend
+    - News Sentiment Weight Factor
     
-    Outputs (Action Dim = 6):
-    - Softmax probability distribution over the 6 strategy weights.
+    Outputs (Action Dim = num_strategies):
+    - Softmax probability distribution over the strategies.
     """
-    def __init__(self, state_dim=6, hidden_dim=12, action_dim=6, learning_rate=0.05):
+    def __init__(self, state_dim=8, hidden_dim=12, action_dim=6, learning_rate=0.05, hidden_layers=1, dropout=0.0, optimizer="Adam"):
         self.state_dim = state_dim
         self.hidden_dim = hidden_dim
         self.action_dim = action_dim
         self.lr = learning_rate
+        self.hidden_layers = hidden_layers
+        self.dropout = dropout
+        self.optimizer = optimizer
         
-        # Xavier Initialization
-        self.W1 = np.random.randn(state_dim, hidden_dim) * np.sqrt(2.0 / state_dim)
-        self.b1 = np.zeros((1, hidden_dim))
-        self.W2 = np.random.randn(hidden_dim, action_dim) * np.sqrt(2.0 / hidden_dim)
-        self.b2 = np.zeros((1, action_dim))
+        # Initialize layers lists
+        self.W = []
+        self.b = []
+        
+        # Input to first hidden layer
+        self.W.append(np.random.randn(state_dim, hidden_dim) * np.sqrt(2.0 / state_dim))
+        self.b.append(np.zeros((1, hidden_dim)))
+        
+        # Intermediate hidden layers
+        for _ in range(hidden_layers - 1):
+            self.W.append(np.random.randn(hidden_dim, hidden_dim) * np.sqrt(2.0 / hidden_dim))
+            self.b.append(np.zeros((1, hidden_dim)))
+            
+        # Hidden layer to output layer
+        self.W.append(np.random.randn(hidden_dim, action_dim) * np.sqrt(2.0 / hidden_dim))
+        self.b.append(np.zeros((1, action_dim)))
+        
+        # Optimizer states for Adam / RMSprop
+        self.m_W = [np.zeros_like(w) for w in self.W]
+        self.m_b = [np.zeros_like(b) for b in self.b]
+        self.v_W = [np.zeros_like(w) for w in self.W]
+        self.v_b = [np.zeros_like(b) for b in self.b]
+        self.t = 0
 
     def softmax(self, x):
         e_x = np.exp(x - np.max(x, axis=-1, keepdims=True))
@@ -35,72 +58,159 @@ class PolicyNetwork:
     def forward(self, state):
         """Runs forward pass to allocate strategy weights based on market state."""
         self.state = np.array(state).reshape(1, -1)
-        self.z1 = np.dot(self.state, self.W1) + self.b1
-        self.h1 = np.maximum(0, self.z1)  # ReLU activation
-        self.z2 = np.dot(self.h1, self.W2) + self.b2
-        self.probs = self.softmax(self.z2)
+        self.a = [self.state]
+        self.z = []
+        
+        # Forward pass through hidden layers
+        for i in range(len(self.W) - 1):
+            z_curr = np.dot(self.a[-1], self.W[i]) + self.b[i]
+            self.z.append(z_curr)
+            a_curr = np.maximum(0, z_curr)  # ReLU
+            # Apply dropout in training if active
+            if self.dropout > 0:
+                mask = (np.random.rand(*a_curr.shape) >= self.dropout) / (1.0 - self.dropout)
+                a_curr = a_curr * mask
+            self.a.append(a_curr)
+            
+        # Final output layer (Softmax)
+        z_out = np.dot(self.a[-1], self.W[-1]) + self.b[-1]
+        self.z.append(z_out)
+        self.probs = self.softmax(z_out)
         return self.probs[0]
 
     def backward(self, state, strategy_signals, trade_direction, reward):
-        """Policy Gradient backward pass.
-        
-        If reward > 0 (profit), we perform gradient ascent to increase the probability
-        of the strategies that aligned with the entry direction.
-        If reward < 0 (loss), we perform gradient descent to penalize them.
-        """
-        self.state = np.array(state).reshape(1, -1)
+        """Policy Gradient backward pass with optimizer choices."""
         dir_val = 1.0 if trade_direction == "BUY" else -1.0
         
         # Calculate strategy alignment: signals are in [-1, 0, 1]
         alignment = np.array(strategy_signals) * dir_val
         
-        # Policy gradient target: d_z2 = -reward * alignment (scaled)
-        # Cap reward scale to prevent extreme weights blowing up
+        # Scale reward
         scaled_reward = np.clip(reward * 100.0, -5.0, 5.0)
-        d_z2 = -scaled_reward * alignment.reshape(1, -1)
+        d_z = -scaled_reward * alignment.reshape(1, -1)
         
-        # Gradients for layer 2
-        dW2 = np.dot(self.h1.T, d_z2)
-        db2 = d_z2
+        dW = [None] * len(self.W)
+        db = [None] * len(self.b)
         
-        # Backprop to layer 1
-        dh1 = np.dot(d_z2, self.W2.T)
-        dz1 = dh1 * (self.z1 > 0)  # ReLU gradient
-        
-        dW1 = np.dot(self.state.T, dz1)
-        db1 = dz1
-        
+        # Backpropagate gradients
+        for i in reversed(range(len(self.W))):
+            dW[i] = np.dot(self.a[i].T, d_z)
+            db[i] = d_z
+            
+            if i > 0:
+                d_a = np.dot(d_z, self.W[i].T)
+                d_z = d_a * (self.z[i-1] > 0)  # ReLU gradient
+                
         # Parameter updates
-        self.W1 -= self.lr * dW1
-        self.b1 -= self.lr * db1
-        self.W2 -= self.lr * dW2
-        self.b2 -= self.lr * db2
+        self.t += 1
+        for i in range(len(self.W)):
+            if self.optimizer == "Adam":
+                beta1 = 0.9
+                beta2 = 0.999
+                eps = 1e-8
+                
+                self.m_W[i] = beta1 * self.m_W[i] + (1 - beta1) * dW[i]
+                self.m_b[i] = beta1 * self.m_b[i] + (1 - beta1) * db[i]
+                self.v_W[i] = beta2 * self.v_W[i] + (1 - beta2) * (dW[i] ** 2)
+                self.v_b[i] = beta2 * self.v_b[i] + (1 - beta2) * (db[i] ** 2)
+                
+                m_W_hat = self.m_W[i] / (1 - beta1 ** self.t)
+                m_b_hat = self.m_b[i] / (1 - beta1 ** self.t)
+                v_W_hat = self.v_W[i] / (1 - beta2 ** self.t)
+                v_b_hat = self.v_b[i] / (1 - beta2 ** self.t)
+                
+                self.W[i] -= self.lr * m_W_hat / (np.sqrt(v_W_hat) + eps)
+                self.b[i] -= self.lr * m_b_hat / (np.sqrt(v_b_hat) + eps)
+                
+            elif self.optimizer == "RMSprop":
+                decay = 0.9
+                eps = 1e-8
+                self.v_W[i] = decay * self.v_W[i] + (1 - decay) * (dW[i] ** 2)
+                self.v_b[i] = decay * self.v_b[i] + (1 - decay) * (db[i] ** 2)
+                
+                self.W[i] -= self.lr * dW[i] / (np.sqrt(self.v_W[i]) + eps)
+                self.b[i] -= self.lr * db[i] / (np.sqrt(self.v_b[i]) + eps)
+                
+            else:  # SGD
+                self.W[i] -= self.lr * dW[i]
+                self.b[i] -= self.lr * db[i]
 
     def to_json(self):
         return json.dumps({
-            "W1": self.W1.tolist(),
-            "b1": self.b1.tolist(),
-            "W2": self.W2.tolist(),
-            "b2": self.b2.tolist()
+            "W": [w.tolist() for w in self.W],
+            "b": [b.tolist() for b in self.b],
+            "hidden_layers": self.hidden_layers,
+            "dropout": self.dropout,
+            "optimizer": self.optimizer
         })
 
     def from_json(self, json_str):
         data = json.loads(json_str)
-        self.W1 = np.array(data["W1"])
-        self.b1 = np.array(data["b1"])
-        self.W2 = np.array(data["W2"])
-        self.b2 = np.array(data["b2"])
+        if "W" in data:
+            self.W = [np.array(w) for w in data["W"]]
+            self.b = [np.array(b) for b in data["b"]]
+            self.hidden_layers = data.get("hidden_layers", 1)
+            self.dropout = data.get("dropout", 0.0)
+            self.optimizer = data.get("optimizer", "Adam")
+        else:
+            # Backward compatibility
+            self.W = [np.array(data["W1"]), np.array(data["W2"])]
+            self.b = [np.array(data["b1"]), np.array(data["b2"])]
+            self.hidden_layers = 1
+            self.dropout = 0.0
+            self.optimizer = "Adam"
+            
+        self.m_W = [np.zeros_like(w) for w in self.W]
+        self.m_b = [np.zeros_like(b) for b in self.b]
+        self.v_W = [np.zeros_like(w) for w in self.W]
+        self.v_b = [np.zeros_like(b) for b in self.b]
+        self.t = 0
+
+    @property
+    def W1(self):
+        return self.W[0]
+        
+    @W1.setter
+    def W1(self, value):
+        self.W[0] = value
+
+    @property
+    def b1(self):
+        return self.b[0]
+        
+    @b1.setter
+    def b1(self, value):
+        self.b[0] = value
+
+    @property
+    def W2(self):
+        return self.W[-1]
+        
+    @W2.setter
+    def W2(self, value):
+        self.W[-1] = value
+
+    @property
+    def b2(self):
+        return self.b[-1]
+        
+    @b2.setter
+    def b2(self, value):
+        self.b[-1] = value
 
 
 class LearningEngine:
-    def __init__(self, num_strategies=7, learning_rate=0.05, weight_floor=0.05):
+    def __init__(self, num_strategies=7, learning_rate=0.05, weight_floor=0.05, hidden_dim=12, hidden_layers=1, dropout=0.0, optimizer="Adam"):
         self.num_strategies = num_strategies
         self.weight_floor = weight_floor
         self.policy_net = PolicyNetwork(
             state_dim=8, 
-            hidden_dim=12, 
+            hidden_dim=hidden_dim, 
             action_dim=num_strategies, 
-            learning_rate=learning_rate
+            learning_rate=learning_rate,
+            hidden_layers=hidden_layers,
+            dropout=dropout,
+            optimizer=optimizer
         )
         
     def get_state_vector(self, row, price_history, closed_trades):

@@ -42,6 +42,24 @@ async def add_no_cache_headers(request: Request, call_next):
         response.headers["Expires"] = "0"
     return response
 
+def create_learning_engine(num_strategies):
+    nn_lr = float(database.load_setting("nn_learning_rate", "0.15"))
+    nn_floor = float(database.load_setting("nn_weight_floor", "0.05"))
+    nn_hidden_dim = int(database.load_setting("nn_hidden_dim", "12"))
+    nn_hidden_layers = int(database.load_setting("nn_hidden_layers", "1"))
+    nn_dropout = float(database.load_setting("nn_dropout", "0.0"))
+    nn_optimizer = database.load_setting("nn_optimizer", "Adam")
+    
+    return LearningEngine(
+        num_strategies=num_strategies,
+        learning_rate=nn_lr,
+        weight_floor=nn_floor,
+        hidden_dim=nn_hidden_dim,
+        hidden_layers=nn_hidden_layers,
+        dropout=nn_dropout,
+        optimizer=nn_optimizer
+    )
+
 # Central orchestrator state supporting multi-asset portfolio operations
 class NexusTraderOrchestrator:
     def __init__(self):
@@ -98,7 +116,7 @@ class NexusTraderOrchestrator:
                 
             ensemble = StrategyEnsemble(history_df=df)
             num_strats = len(ensemble.strategies)
-            learner = LearningEngine(num_strategies=num_strats, learning_rate=0.15)
+            learner = create_learning_engine(num_strats)
             
             # Load saved Policy Gradient Neural Network weights if they exist
             db_net_str = database.load_setting(f"policy_net_weights_{ticker}")
@@ -179,8 +197,10 @@ class NexusTraderOrchestrator:
             database.save_setting(f"policy_net_weights_{ticker}", weights_json)
         
         # Model DNA signature is a stable representation of the Policy Network's architecture topology
+        hidden_layers = int(database.load_setting("nn_hidden_layers", "1"))
+        hidden_dim = int(database.load_setting("nn_hidden_dim", "12"))
         import hashlib
-        topo_str = f"PolicyNet-8x12x{len(ensemble.strategies)}"
+        topo_str = f"PolicyNet-{hidden_layers}x{hidden_dim}x{len(ensemble.strategies)}"
         dna_hash = hashlib.md5(topo_str.encode('utf-8')).hexdigest()[:6].upper()
         model_dna = f"NN-ARCH-{dna_hash}"
         
@@ -445,7 +465,7 @@ class NexusTraderOrchestrator:
             if ws in self.connected_websockets:
                 self.connected_websockets.remove(ws)
 
-    def start_stream(self, mode="live", speed=0.2, poll_interval=5, brain=None):
+    def start_stream(self, mode="live", speed=0.2, poll_interval=5, brain=None, start_date=None, end_date=None):
         """Starts real-time live trading feed or simulation playback for all tickers."""
         if self.is_simulating:
             self.stop_stream()
@@ -483,9 +503,11 @@ class NexusTraderOrchestrator:
                                 logging.error(f"Error loading simulation brain weights: {e}")
                     self.data_ingestions[ticker].start_simulation_stream(
                         speed_seconds=speed,
-                        start_index=150
+                        start_index=150,
+                        start_date=start_date,
+                        end_date=end_date
                     )
-        logging.info(f"Multi-asset streaming started in {mode} mode. Brain: {brain}")
+        logging.info(f"Multi-asset streaming started in {mode} mode. Brain: {brain}, range: {start_date} to {end_date}")
 
     def stop_stream(self):
         self.is_simulating = False
@@ -848,8 +870,10 @@ def get_weights(ticker: str = "ETH-USD"):
     steps_key = f"lifetime_training_steps_{ticker}"
     steps = int(database.load_setting(steps_key, "0"))
     
+    hidden_layers = int(database.load_setting("nn_hidden_layers", "1"))
+    hidden_dim = int(database.load_setting("nn_hidden_dim", "12"))
     import hashlib
-    topo_str = f"PolicyNet-8x12x{len(ensemble.strategies)}"
+    topo_str = f"PolicyNet-{hidden_layers}x{hidden_dim}x{len(ensemble.strategies)}"
     dna_hash = hashlib.md5(topo_str.encode('utf-8')).hexdigest()[:6].upper()
     model_dna = f"NN-ARCH-{dna_hash}"
         
@@ -871,10 +895,10 @@ def get_weights_history(ticker: str = "ETH-USD"):
         return []
 
 @app.post("/api/control")
-def control_simulation(action: str, speed: float = 0.2, mode: str = "live", brain: str = None):
+def control_simulation(action: str, speed: float = 0.2, mode: str = "live", brain: str = None, start_date: str = None, end_date: str = None):
     if action == "start":
-        orchestrator.start_stream(mode=mode, speed=speed, poll_interval=5, brain=brain)
-        return {"status": "started", "mode": mode, "speed": speed, "brain": brain}
+        orchestrator.start_stream(mode=mode, speed=speed, poll_interval=5, brain=brain, start_date=start_date, end_date=end_date)
+        return {"status": "started", "mode": mode, "speed": speed, "brain": brain, "start_date": start_date, "end_date": end_date}
     elif action == "stop":
         orchestrator.stop_stream()
         return {"status": "stopped"}
@@ -913,7 +937,7 @@ def control_simulation(action: str, speed: float = 0.2, mode: str = "live", brai
                 ensemble = orchestrator.strategy_ensembles[ticker]
                 num_strats = len(ensemble.strategies)
                 ensemble.weights = [1.0/num_strats] * num_strats
-                orchestrator.learning_engines[ticker] = LearningEngine(num_strategies=num_strats, learning_rate=0.15)
+                orchestrator.learning_engines[ticker] = create_learning_engine(num_strats)
                 # Delete saved weight states from database
                 database.save_setting(f"policy_net_weights_{ticker}", "")
                 
@@ -956,11 +980,16 @@ def get_system_config():
         "nn_floor": float(database.load_setting("nn_weight_floor", "0.05")),
         "nn_discount": float(database.load_setting("nn_discount_factor", "0.95")),
         "nn_exploration": float(database.load_setting("nn_exploration_rate", "0.10")),
-        "initial_balance": float(database.load_setting("initial_portfolio_balance", "100.0"))
+        "initial_balance": float(database.load_setting("initial_portfolio_balance", "100.0")),
+        "nn_hidden_layers": int(database.load_setting("nn_hidden_layers", "1")),
+        "nn_hidden_dim": int(database.load_setting("nn_hidden_dim", "12")),
+        "nn_dropout": float(database.load_setting("nn_dropout", "0.0")),
+        "nn_optimizer": database.load_setting("nn_optimizer", "Adam"),
+        "nn_epochs": int(database.load_setting("nn_epochs", "250"))
     }
 
 @app.post("/api/system/config")
-def update_system_config(trading_mode: str, risk_mode: str, max_drawdown: float, broker: str = "kraken", api_key: str = "", api_secret: str = "", trailing_stop: bool = False, cooldown: float = 4.0, tp_multiplier: float = 2.5, sl_multiplier: float = 1.5, nn_lr: float = 0.15, nn_floor: float = 0.05, nn_discount: float = 0.95, nn_exploration: float = 0.10, initial_balance: float = None):
+def update_system_config(trading_mode: str, risk_mode: str, max_drawdown: float, broker: str = "kraken", api_key: str = "", api_secret: str = "", trailing_stop: bool = False, cooldown: float = 4.0, tp_multiplier: float = 2.5, sl_multiplier: float = 1.5, nn_lr: float = 0.15, nn_floor: float = 0.05, nn_discount: float = 0.95, nn_exploration: float = 0.10, initial_balance: float = None, nn_hidden_layers: int = 1, nn_hidden_dim: int = 12, nn_dropout: float = 0.0, nn_optimizer: str = "Adam", nn_epochs: int = 250):
     # 1. Update config.json
     config_path = os.path.expanduser("~/.nexustrader/config.json")
     cfg = {}
@@ -1013,13 +1042,20 @@ def update_system_config(trading_mode: str, risk_mode: str, max_drawdown: float,
     database.save_setting("nn_discount_factor", str(nn_discount))
     database.save_setting("nn_exploration_rate", str(nn_exploration))
     
+    # Save extra neural network architecture configs
+    database.save_setting("nn_hidden_layers", str(nn_hidden_layers))
+    database.save_setting("nn_hidden_dim", str(nn_hidden_dim))
+    database.save_setting("nn_dropout", str(nn_dropout))
+    database.save_setting("nn_optimizer", str(nn_optimizer))
+    database.save_setting("nn_epochs", str(nn_epochs))
+    
     if initial_balance is not None:
         database.save_setting("initial_portfolio_balance", str(initial_balance))
         database.save_setting("initial_balance_is_custom", "true")
         orchestrator.execution_engine.initial_balance = float(initial_balance)
         logging.info(f"Initial portfolio balance baseline updated to: ${initial_balance:.2f}")
 
-    logging.info(f"Trailing Stop: {trailing_stop}, Cooldown: {cooldown}h, TP mult: {tp_multiplier}x, SL mult: {sl_multiplier}x, NN lr: {nn_lr}, NN floor: {nn_floor}, NN discount: {nn_discount}, NN exploration: {nn_exploration} updated.")
+    logging.info(f"System configuration updated. Layers: {nn_hidden_layers}, Neurons: {nn_hidden_dim}, Dropout: {nn_dropout}, Optimizer: {nn_optimizer}, Epochs: {nn_epochs}")
     
     return {"status": "success"}
 
@@ -1203,8 +1239,10 @@ def activate_neural_brain(name: str, ticker: str):
                 )
                 ensemble.weights = learner.select_weights(state)
                 
+                hidden_layers = int(database.load_setting("nn_hidden_layers", "1"))
+                hidden_dim = int(database.load_setting("nn_hidden_dim", "12"))
                 import hashlib
-                topo_str = f"PolicyNet-8x12x{len(ensemble.strategies)}"
+                topo_str = f"PolicyNet-{hidden_layers}x{hidden_dim}x{len(ensemble.strategies)}"
                 dna_hash = hashlib.md5(topo_str.encode('utf-8')).hexdigest()[:6].upper()
                 model_dna = f"NN-{dna_hash}"
                 
@@ -1278,12 +1316,14 @@ def train_new_brain(name: str, ticker: str):
     ensemble = orchestrator.strategy_ensembles.get(ticker)
     num_strats = len(ensemble.strategies) if ensemble else 6
     
-    from learning_engine import LearningEngine
-    fresh_learner = LearningEngine(num_strategies=num_strats, learning_rate=0.15)
+    fresh_learner = create_learning_engine(num_strats)
     fresh_weights_json = fresh_learner.policy_net.to_json()
     
+    hidden_layers = int(database.load_setting("nn_hidden_layers", "1"))
+    hidden_dim = int(database.load_setting("nn_hidden_dim", "12"))
+    
     import hashlib
-    topo_str = f"PolicyNet-8x12x{num_strats}"
+    topo_str = f"PolicyNet-{hidden_layers}x{hidden_dim}x{num_strats}"
     dna_hash = hashlib.md5(topo_str.encode('utf-8')).hexdigest()[:6].upper()
     model_dna = f"NN-{dna_hash}"
     

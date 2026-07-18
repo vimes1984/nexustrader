@@ -1316,6 +1316,26 @@ function updatePerformanceKPIs(trades, currentEquity) {
     elWinrate.textContent = `${wr.toFixed(1)}%`;
     elTradeCount.textContent = `${trades.length} trades completed`;
     
+    // Calculate Max Drawdown
+    let peak = initialBalance;
+    let maxDD = 0.0;
+    let runningEquity = initialBalance;
+    const chronologicalTrades = [...trades].sort((a, b) => a.exit_time - b.exit_time);
+    for (const t of chronologicalTrades) {
+        runningEquity += t.pnl;
+        if (runningEquity > peak) {
+            peak = runningEquity;
+        }
+        const dd = peak > 0 ? ((peak - runningEquity) / peak) * 100 : 0.0;
+        if (dd > maxDD) {
+            maxDD = dd;
+        }
+    }
+    const elMaxDrawdown = document.getElementById("val-max-drawdown");
+    if (elMaxDrawdown) {
+        elMaxDrawdown.textContent = `${maxDD.toFixed(1)}%`;
+    }
+    
     let netPnL = 0.0;
     
     if (globalTradingMode === "live") {
@@ -1485,12 +1505,30 @@ function loadBlogConfig() {
             if (elTrailingStopCheck) elTrailingStopCheck.checked = data.trailing_stop || false;
             if (elCooldownInput) elCooldownInput.value = data.cooldown || 4;
             if (elMaxDrawdownInput) elMaxDrawdownInput.value = data.max_drawdown || 5;
+            const elMaxDrawdownLimit = document.getElementById("val-max-drawdown-limit");
+            if (elMaxDrawdownLimit) elMaxDrawdownLimit.textContent = `Limit: ${data.max_drawdown || 5.0}%`;
             if (elTpMultiplierInput) elTpMultiplierInput.value = data.tp_multiplier || 2.5;
             if (elSlMultiplierInput) elSlMultiplierInput.value = data.sl_multiplier || 1.5;
             const elNnLr = document.getElementById("setting-nn-lr");
             const elNnFloor = document.getElementById("setting-nn-floor");
             if (elNnLr) elNnLr.value = data.nn_lr || 0.15;
             if (elNnFloor) elNnFloor.value = data.nn_floor || 0.05;
+            
+            const elNnLrTab = document.getElementById("setting-nn-lr-tab");
+            const elNnFloorTab = document.getElementById("setting-nn-floor-tab");
+            if (elNnLrTab) elNnLrTab.value = data.nn_lr || 0.15;
+            if (elNnFloorTab) elNnFloorTab.value = data.nn_floor || 0.05;
+            
+            const elNnLayersTab = document.getElementById("setting-nn-layers-tab");
+            const elNnDimTab = document.getElementById("setting-nn-dim-tab");
+            const elNnDropoutTab = document.getElementById("setting-nn-dropout-tab");
+            const elNnOptimizerTab = document.getElementById("setting-nn-optimizer-tab");
+            const elNnEpochsTab = document.getElementById("setting-nn-epochs-tab");
+            if (elNnLayersTab) elNnLayersTab.value = data.nn_hidden_layers !== undefined ? data.nn_hidden_layers : 1;
+            if (elNnDimTab) elNnDimTab.value = data.nn_hidden_dim !== undefined ? data.nn_hidden_dim : 12;
+            if (elNnDropoutTab) elNnDropoutTab.value = data.nn_dropout !== undefined ? data.nn_dropout : 0.0;
+            if (elNnOptimizerTab) elNnOptimizerTab.value = data.nn_optimizer || "Adam";
+            if (elNnEpochsTab) elNnEpochsTab.value = data.nn_epochs !== undefined ? data.nn_epochs : 250;
             
             const elNnDiscountTab = document.getElementById("setting-nn-discount-tab");
             const elNnExplorationTab = document.getElementById("setting-nn-exploration-tab");
@@ -1590,6 +1628,22 @@ if (elSaveSystemConfigBtn) {
         const nnLr = elNnLr ? parseFloat(elNnLr.value) : 0.15;
         const nnFloor = elNnFloor ? parseFloat(elNnFloor.value) : 0.05;
 
+        const elNnDiscountTab = document.getElementById("setting-nn-discount-tab");
+        const elNnExplorationTab = document.getElementById("setting-nn-exploration-tab");
+        const discountVal = elNnDiscountTab ? parseFloat(elNnDiscountTab.value) : 0.95;
+        const explorationVal = elNnExplorationTab ? parseFloat(elNnExplorationTab.value) : 0.10;
+
+        const elNnLayersTab = document.getElementById("setting-nn-layers-tab");
+        const elNnDimTab = document.getElementById("setting-nn-dim-tab");
+        const elNnDropoutTab = document.getElementById("setting-nn-dropout-tab");
+        const elNnOptimizerTab = document.getElementById("setting-nn-optimizer-tab");
+        const elNnEpochsTab = document.getElementById("setting-nn-epochs-tab");
+        const hiddenLayers = elNnLayersTab ? parseInt(elNnLayersTab.value) : 1;
+        const hiddenDim = elNnDimTab ? parseInt(elNnDimTab.value) : 12;
+        const dropoutVal = elNnDropoutTab ? parseFloat(elNnDropoutTab.value) : 0.0;
+        const optimizerVal = elNnOptimizerTab ? elNnOptimizerTab.value : "Adam";
+        const epochsVal = elNnEpochsTab ? parseInt(elNnEpochsTab.value) : 250;
+
         const riskMode = elRiskSelect ? elRiskSelect.value : "conservative";
         const maxDrawdown = elMaxDrawdownInput ? parseFloat(elMaxDrawdownInput.value) : 5.0;
         
@@ -1599,7 +1653,7 @@ if (elSaveSystemConfigBtn) {
         elSaveSystemConfigBtn.disabled = true;
         showToast("Saving Broker & Risk boundaries...", "info");
         
-        fetch(`/api/system/config?trading_mode=${tradingMode}&risk_mode=${riskMode}&max_drawdown=${maxDrawdown}&broker=${broker}&api_key=${encodeURIComponent(exchangeApiKey)}&api_secret=${encodeURIComponent(exchangeApiSecret)}&trailing_stop=${trailingStop}&cooldown=${cooldown}&tp_multiplier=${tpMultiplier}&sl_multiplier=${slMultiplier}&nn_lr=${nnLr}&nn_floor=${nnFloor}&initial_balance=${startingCapital}`, {
+        fetch(`/api/system/config?trading_mode=${tradingMode}&risk_mode=${riskMode}&max_drawdown=${maxDrawdown}&broker=${broker}&api_key=${encodeURIComponent(exchangeApiKey)}&api_secret=${encodeURIComponent(exchangeApiSecret)}&trailing_stop=${trailingStop}&cooldown=${cooldown}&tp_multiplier=${tpMultiplier}&sl_multiplier=${slMultiplier}&nn_lr=${nnLr}&nn_floor=${nnFloor}&nn_discount=${discountVal}&nn_exploration=${explorationVal}&initial_balance=${startingCapital}&nn_hidden_layers=${hiddenLayers}&nn_hidden_dim=${hiddenDim}&nn_dropout=${dropoutVal}&nn_optimizer=${optimizerVal}&nn_epochs=${epochsVal}`, {
             method: 'POST'
         })
         .then(res => res.json())
@@ -2459,6 +2513,17 @@ if (elSaveNnParamsBtn) {
         const discountVal = elDiscountInput ? parseFloat(elDiscountInput.value) : 0.95;
         const explorationVal = elExplorationInput ? parseFloat(elExplorationInput.value) : 0.10;
         
+        const elLayersTab = document.getElementById("setting-nn-layers-tab");
+        const elDimTab = document.getElementById("setting-nn-dim-tab");
+        const elDropoutTab = document.getElementById("setting-nn-dropout-tab");
+        const elOptimizerTab = document.getElementById("setting-nn-optimizer-tab");
+        const elEpochsTab = document.getElementById("setting-nn-epochs-tab");
+        const hiddenLayers = elLayersTab ? parseInt(elLayersTab.value) : 1;
+        const hiddenDim = elDimTab ? parseInt(elDimTab.value) : 12;
+        const dropoutVal = elDropoutTab ? parseFloat(elDropoutTab.value) : 0.0;
+        const optimizerVal = elOptimizerTab ? elOptimizerTab.value : "Adam";
+        const epochsVal = elEpochsTab ? parseInt(elEpochsTab.value) : 250;
+
         // Re-read other settings from dashboard controls or state to avoid overwriting them
         const tradingMode = document.getElementById("setting-trading-mode")?.value || "paper";
         const broker = document.getElementById("setting-broker")?.value || "kraken";
@@ -2483,7 +2548,7 @@ if (elSaveNnParamsBtn) {
         if (elNnLrOrig) elNnLrOrig.value = lrVal;
         if (elNnFloorOrig) elNnFloorOrig.value = floorVal;
 
-        fetch(`/api/system/config?trading_mode=${tradingMode}&risk_mode=${riskMode}&max_drawdown=${maxDrawdown}&broker=${broker}&api_key=${encodeURIComponent(exchangeApiKey)}&api_secret=${encodeURIComponent(exchangeApiSecret)}&trailing_stop=${trailingStop}&cooldown=${cooldown}&tp_multiplier=${tpMultiplier}&sl_multiplier=${slMultiplier}&nn_lr=${lrVal}&nn_floor=${floorVal}&nn_discount=${discountVal}&nn_exploration=${explorationVal}&initial_balance=${startingCapital}`, {
+        fetch(`/api/system/config?trading_mode=${tradingMode}&risk_mode=${riskMode}&max_drawdown=${maxDrawdown}&broker=${broker}&api_key=${encodeURIComponent(exchangeApiKey)}&api_secret=${encodeURIComponent(exchangeApiSecret)}&trailing_stop=${trailingStop}&cooldown=${cooldown}&tp_multiplier=${tpMultiplier}&sl_multiplier=${slMultiplier}&nn_lr=${lrVal}&nn_floor=${floorVal}&nn_discount=${discountVal}&nn_exploration=${explorationVal}&initial_balance=${startingCapital}&nn_hidden_layers=${hiddenLayers}&nn_hidden_dim=${hiddenDim}&nn_dropout=${dropoutVal}&nn_optimizer=${optimizerVal}&nn_epochs=${epochsVal}`, {
             method: 'POST'
         })
         .then(res => res.json())
@@ -2547,6 +2612,7 @@ function loadNeuralBrains(ticker) {
             listContainer.innerHTML = "";
             const brains = data.brains || [];
             const activeBrain = data.active_brain || "Default Brain";
+            window.activeBrainName = activeBrain;
             
             if (brains.length === 0) {
                 listContainer.innerHTML = `<div style="color: var(--text-secondary); text-align: center; padding: 15px 0; font-size: 11px;">No brains initialized.</div>`;
@@ -2781,6 +2847,66 @@ document.addEventListener("DOMContentLoaded", () => {
                     showToast("Error creating fresh training brain.", "error");
                     console.error(err);
                 });
+        });
+    }
+
+    // Replay Simulation controls
+    const speedRange = document.getElementById("sim-speed-range");
+    const speedVal = document.getElementById("sim-speed-val");
+    if (speedRange && speedVal) {
+        speedRange.addEventListener("input", (e) => {
+            speedVal.textContent = parseFloat(e.target.value).toFixed(2);
+        });
+    }
+
+    const btnSimPlay = document.getElementById("btn-sim-play");
+    const btnSimStop = document.getElementById("btn-sim-stop");
+    
+    if (btnSimPlay) {
+        btnSimPlay.addEventListener("click", () => {
+            const startDate = document.getElementById("sim-start-date")?.value || "";
+            const endDate = document.getElementById("sim-end-date")?.value || "";
+            const speed = speedRange ? parseFloat(speedRange.value) : 0.20;
+            const brain = window.activeBrainName || "Default Brain";
+            
+            showToast(`Starting Backtest on ${activeTicker} using ${brain}...`, "info");
+            
+            fetch(`/api/control?action=start&mode=simulation&speed=${speed}&brain=${encodeURIComponent(brain)}&start_date=${startDate}&end_date=${endDate}`, {
+                method: 'POST'
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === "started") {
+                    showToast("Backtest session started!", "success");
+                } else {
+                    showToast("Failed to start backtest.", "error");
+                }
+            })
+            .catch(err => {
+                showToast("Error starting backtest.", "error");
+                console.error(err);
+            });
+        });
+    }
+
+    if (btnSimStop) {
+        btnSimStop.addEventListener("click", () => {
+            showToast("Resetting Backtest session...", "info");
+            fetch(`/api/control?action=reset&speed=0.20`, {
+                method: 'POST'
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === "reset_completed") {
+                    showToast("Backtest session reset successfully!", "success");
+                } else {
+                    showToast("Failed to reset backtest.", "error");
+                }
+            })
+            .catch(err => {
+                showToast("Error resetting backtest.", "error");
+                console.error(err);
+            });
         });
     }
 });

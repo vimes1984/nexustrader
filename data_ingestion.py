@@ -105,25 +105,48 @@ class DataIngestion:
         """Subscribe to live/simulated price ticks."""
         self.subscribers.append(callback)
 
-    def start_simulation_stream(self, speed_seconds=1.0, start_index=100):
+    def start_simulation_stream(self, speed_seconds=1.0, start_index=100, start_date=None, end_date=None):
         """Simulates live streaming by feeding historical data row-by-row in real-time."""
         if self.data.empty:
             self.fetch_historical_data()
 
+        # Apply date filters to target dataset if specified
+        sim_data = self.data
+        start_idx = start_index
+        
+        if not self.data.empty and 'timestamp' in self.data.columns:
+            try:
+                # Convert timestamps to timezone-naive datetimes or timezone-aware matching inputs
+                ts_series = pd.to_datetime(self.data['timestamp'], errors='coerce')
+                # Check if input date is provided and convert
+                mask = pd.Series(True, index=self.data.index)
+                if start_date:
+                    mask = mask & (ts_series >= pd.to_datetime(start_date))
+                if end_date:
+                    mask = mask & (ts_series <= pd.to_datetime(end_date))
+                
+                filtered = self.data[mask]
+                if not filtered.empty:
+                    sim_data = filtered
+                    start_idx = 0
+                    logging.info(f"[SIMULATION FILTER] Sliced dataset to {len(sim_data)} rows between {start_date} and {end_date}.")
+            except Exception as e:
+                logging.error(f"Error filtering simulation dates: {e}")
+
         self.streaming = True
         self.stream_thread = threading.Thread(
             target=self._run_simulation,
-            args=(speed_seconds, start_index),
+            args=(speed_seconds, start_idx, sim_data),
             daemon=True
         )
         self.stream_thread.start()
         logging.info("Simulation stream started.")
 
-    def _run_simulation(self, speed, start_index):
+    def _run_simulation(self, speed, start_index, sim_data):
         idx = start_index
-        total_len = len(self.data)
+        total_len = len(sim_data)
         while self.streaming and idx < total_len:
-            row = self.data.iloc[idx].to_dict()
+            row = sim_data.iloc[idx].to_dict()
             row['_sim_index'] = idx
             row['_sim_total'] = total_len
             self.live_price = float(row['close'])
