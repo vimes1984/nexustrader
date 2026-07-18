@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NexusTrader — Self-Learning Algorithmic Trading Bot</title>
     <meta name="description" content="Open-source algorithmic trading bot with real-time probability odds estimation, risk evaluation, and online reinforcement learning.">
-    <link rel="stylesheet" href="/dashboard/index_v2.css?v=2.6">
+    <link class="cyber-style" rel="stylesheet" href="/dashboard/index_v2.css?v=2.7">
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#0f172a">
     <link rel="apple-touch-icon" href="/dashboard/icon-192.png">
@@ -94,6 +94,10 @@
             <button class="nav-tab" data-tab="tab-architecture" style="flex: 1; min-width: 90px; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 12px; background: transparent; border: 1px solid transparent; color: var(--text-secondary); border-radius: 8px; font-family: inherit; font-size: 12px; font-weight: 500; cursor: pointer; transition: var(--transition);">
                 <i data-lucide="network" style="width: 16px; height: 16px;"></i>
                 Architecture
+            </button>
+            <button class="nav-tab" data-tab="tab-logs" style="flex: 1; min-width: 90px; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 12px; background: transparent; border: 1px solid transparent; color: var(--text-secondary); border-radius: 8px; font-family: inherit; font-size: 12px; font-weight: 500; cursor: pointer; transition: var(--transition);">
+                <i data-lucide="terminal" style="width: 16px; height: 16px;"></i>
+                System Logs
             </button>
         </nav>
 
@@ -906,13 +910,42 @@
                 </div>
             </article>
         </div>
+
+        <!-- TAB CONTENT 6: SYSTEM LOGS TERMINAL -->
+        <div id="tab-logs" class="tab-content">
+            <main class="main-content" style="grid-template-columns: 1fr;">
+                <article class="glass-panel" style="padding: 24px; display: flex; flex-direction: column; gap: 15px; height: 75vh;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
+                        <h2 class="panel-title" style="display: flex; align-items: center; gap: 8px; margin: 0;">
+                            <i data-lucide="terminal" style="color: var(--neon-blue)"></i>
+                            System Diagnostic Terminal
+                        </h2>
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); cursor: pointer;">
+                                <input type="checkbox" id="log-auto-refresh" checked style="accent-color: var(--neon-blue); cursor: pointer;">
+                                Auto-Refresh (5s)
+                            </label>
+                            <button class="btn btn-primary" id="btn-refresh-logs" style="font-size: 11px; padding: 6px 12px; gap: 4px;">
+                                <i data-lucide="refresh-cw" style="width: 12px; height: 12px;"></i>
+                                Refresh Logs
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Code Terminal Output screen -->
+                    <div id="system-terminal-output" style="flex: 1; background: #070b15; border: 1px solid var(--border-color); border-radius: 8px; padding: 15px; overflow-y: auto; font-family: 'Courier New', Courier, monospace; font-size: 11px; color: #10b981; text-align: left; line-height: 1.5; white-space: pre-wrap; word-break: break-all;">
+                        Loading diagnostic logs...
+                    </div>
+                </article>
+            </main>
+        </div>
     </div>
     
     <!-- Floating Cybernetic Toast Notifications -->
     <div id="toast-container" style="position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 9999; pointer-events: none;"></div>
 
     <!-- App Logic -->
-    <script src="/dashboard/app_v2.js?v=2.6"></script>
+    <script src="/dashboard/app_v2.js?v=2.7"></script>
     <script>
         // Init Lucide Icons
         lucide.createIcons();

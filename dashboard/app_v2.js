@@ -2049,6 +2049,8 @@ elNavTabs.forEach(tab => {
         if (targetTabId === "tab-neural") {
             loadWeightsHistory(activeTicker);
             loadNeuralBrains(activeTicker);
+        } else if (targetTabId === "tab-logs") {
+            fetchSystemLogs();
         }
     });
 });
@@ -2291,4 +2293,57 @@ document.addEventListener("DOMContentLoaded", () => {
                 });
         });
     }
+});
+
+// -------------------------------------------------------------
+// System Diagnostic Terminal Log Retriever
+// -------------------------------------------------------------
+let logPollInterval = null;
+
+function fetchSystemLogs() {
+    const term = document.getElementById("system-terminal-output");
+    if (!term) return;
+    
+    fetch(`/api/system/logs?limit=150&t=${Date.now()}`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === "success") {
+                // Store scroll position to keep focus if scrolled up
+                const wasAtBottom = term.scrollHeight - term.clientHeight <= term.scrollTop + 30;
+                term.textContent = data.logs || "No diagnostic log entries recorded.";
+                
+                // Auto scroll to bottom
+                if (wasAtBottom) {
+                    term.scrollTop = term.scrollHeight;
+                }
+            } else {
+                term.textContent = `Diagnostic Terminal Error: ${data.message || "Unknown log source error"}`;
+            }
+        })
+        .catch(err => {
+            term.textContent = `Diagnostic Terminal Offline: Failed to establish link to host logs. ${err}`;
+        });
+}
+
+// Hook up manual refresh button and auto-refresh loop
+document.addEventListener("DOMContentLoaded", () => {
+    const btnRefreshLogs = document.getElementById("btn-refresh-logs");
+    const checkAutoRefresh = document.getElementById("log-auto-refresh");
+    
+    if (btnRefreshLogs) {
+        btnRefreshLogs.addEventListener("click", () => {
+            fetchSystemLogs();
+            showToast("System diagnostic logs refreshed.", "success");
+        });
+    }
+    
+    // Auto-refresh loop
+    logPollInterval = setInterval(() => {
+        const isTabLogsActive = document.getElementById("tab-logs")?.classList.contains("active");
+        const isAutoRefreshEnabled = checkAutoRefresh ? checkAutoRefresh.checked : false;
+        
+        if (isTabLogsActive && isAutoRefreshEnabled) {
+            fetchSystemLogs();
+        }
+    }, 5000);
 });

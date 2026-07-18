@@ -483,6 +483,14 @@ async def startup_event():
         if "Trend Follower" not in brain_names:
             database.save_policy_brain("Trend Follower", ticker, model_dna, current_weights_json)
             
+    # Force seed the new prompts in database settings
+    database.save_setting("prompt_self_improvement", DEFAULT_PROMPT_QUANT)
+    database.save_setting("prompt_self_developer", DEFAULT_PROMPT_DEV)
+    database.save_setting("prompt_blog_agent", DEFAULT_PROMPT_BLOG)
+    database.save_setting("prompt_nn_agent", DEFAULT_PROMPT_NN)
+    database.save_setting("prompt_sentiment_agent", DEFAULT_PROMPT_SENTIMENT)
+    database.save_setting("prompt_risk_auditor", DEFAULT_PROMPT_RISK)
+
     # Auto-start live stream on startup (true live data)
     orchestrator.start_stream(mode="live", poll_interval=5)
     try:
@@ -939,6 +947,31 @@ def update_system_config(trading_mode: str, risk_mode: str, max_drawdown: float,
     return {"status": "success"}
 
 # -------------------------------------------------------------
+# System logs retriever REST API
+# -------------------------------------------------------------
+@app.get("/api/system/logs")
+def get_system_logs(limit: int = 100):
+    import subprocess
+    try:
+        res = subprocess.check_output(["journalctl", "-u", "nexustrader.service", "-n", str(limit), "--no-pager"])
+        return {"status": "success", "logs": res.decode("utf-8")}
+    except Exception as e:
+        # Fallback to local files if journalctl fails
+        log_paths = ["nexustrader_log.txt", "nn_agent.log", "daily_agent.log"]
+        logs = []
+        for path in log_paths:
+            if os.path.exists(path):
+                try:
+                    with open(path, "r") as f:
+                        lines = f.readlines()[-limit:]
+                        logs.append(f"=== {path} ===\n" + "".join(lines))
+                except Exception:
+                    pass
+        if logs:
+            return {"status": "success", "logs": "\n\n".join(logs)}
+        return {"status": "error", "message": f"Could not fetch logs: {e}"}
+
+# -------------------------------------------------------------
 # AI Brain selection, saving & custom training REST API
 # -------------------------------------------------------------
 @app.get("/api/neural/brains")
@@ -1311,15 +1344,16 @@ DEFAULT_PROMPT_QUANT = """You are a world-class Quantitative Researcher, PhD in 
 
 Our core operational mandate is to scale net returns to a stable, risk-adjusted target of $1,000 USD per day while strictly minimizing maximum drawdown (MDD) and tail risk.
 
+Our platform has been upgraded with:
+1. Customizable Starting Portfolio Capital / Deposit Baseline to track true net PnL in live Kraken USD accounts.
+2. 5-minute Asset Cooldown safeguards on failed entry orders (Insufficient Funds, exchange limits, etc.).
+3. Multi-brain repository where we can snapshot current weights, switch active policy brains, or train a fresh brain from scratch.
+
 Analyze the provided dataset using rigorous statistical methods:
 1. Volatility Regime Profiling: Analyze the average true range (ATR), recent volatility shifts, and risk-reward ratios.
 2. Trade Return Skewness: Critique the win/loss distribution. Are the losses fat-tailed? Is the Sharpe/Sortino ratio optimal?
-3. Ensemble Synergy: Evaluate the interaction of the strategy ensemble (RSI Reversion, Kalman filter trends, ML models). Ensure weights do not create unhedged systemic beta exposure.
-4. Optimal Stopping Theory: Review the Take Profit (TP) and Stop Loss (SL) ATR multipliers. Formulate if current boundaries reflect optimal stopping boundaries under a drift-diffusion model.
-
-Provide a high-fidelity quantitative assessment, detailing:
-- A mathematical critique of the current strategy parameters.
-- 2-3 specific equations, models, or quantitative adjustments to enhance the bot's mathematical edge.
+3. Ensemble Synergy: Evaluate the interaction of the strategy ensemble (RSI Reversion, Kalman filter trends, BB, Psychological Sweep, ML models). Ensure weights do not create unhedged systemic beta exposure.
+4. Multi-Brain Allocations: Strategize when to switch, snapshot, or reset/train a fresh brain based on market regimes.
 
 At the very end of your response, output a strict JSON block specifying the exact configuration parameters to save to our execution settings:
 ```json
@@ -1333,7 +1367,14 @@ At the very end of your response, output a strict JSON block specifying the exac
 DEFAULT_PROMPT_DEV = """You are Antigravity, a world-class Principal AI Software Architect.
 Our core mission is to construct software modules, advanced UI visualizations, and diagnostic dashboards that enable the bot to achieve $1,000 USD/day.
 
-Design and implement ONE clean, production-grade, non-breaking feature or UI widget (e.g., real-time expected value gauges, risk-exposure alerts, or performance tables).
+Our platform features:
+1. Custom Starting Portfolio Capital Settings to calculate net PnL accurately against exchange deposits.
+2. Failed Entry protection (5-minute asset cooldown on failures).
+3. Cybernetic Alert system with Clickable Toast notifications and Bell Dropdown.
+4. Multi-Brain repository (Activate, snapshot, delete, or train new brain from scratch).
+5. Real-time System Logs terminal panel to display service output.
+
+Design and implement ONE clean, production-grade, non-breaking feature or UI widget (e.g., system logs refreshers, expected value gauges, or correlation heatmaps).
 Return your response STRICTLY in JSON format containing "explanation" and "modifications" find-and-replace rules."""
 
 DEFAULT_PROMPT_BLOG = """You are a high-caliber Financial Journalist and Senior Quantitative Writer.
@@ -1341,12 +1382,19 @@ Produce an elite, data-driven weekly performance report on the NexusTrader syste
 Frame the narrative around our strategic trajectory toward the $1,000 USD/day capital-scaling goal.
 
 Explain model updates, probability distributions, and policy gradient shifts in an engaging, institutional-grade style.
+Highlight our customizable starting deposit baselines, cybernetic notifications bell, and new multi-brain selection & custom training platform.
 Keep all quantitative tables intact."""
 
 DEFAULT_PROMPT_NN = """You are a world-class Deep Learning Engineer and Neuro-Symbolic Quantitative Researcher.
 Our goal is to optimize the policy gradient neural network of the NexusTrader bot to enable it to safely scale earnings to $1,000 USD a day.
 
-Critique the learning rate, weight floor, and policy network convergence based on the latest training steps.
+Our Policy Gradient network now supports:
+1. DNA Topology Signatures tracking model shape hashes (e.g. NN-ARCH-E5C7D9).
+2. Weights Snapshots to store policy states under custom names (e.g. Snapshot-01:31:18 AM).
+3. Live brain hot-swapping & switching from the Saved Neural Brains list.
+4. Fresh brain initialization and online training from scratch.
+
+Critique the learning rate, weight floor, discount factor, and policy network convergence based on the latest training steps.
 At the very end of your response, output recommended setting adjustments strictly in a JSON block:
 ```json
 {
@@ -1359,6 +1407,7 @@ DEFAULT_PROMPT_SENTIMENT = """You are a high-caliber NLP Sentiment Engineer and 
 Our core goal is to filter noise and optimize sentiment feed weights to scale bot earnings to $1,000 USD/day.
 
 Analyze recent feed weighted scores and sentiment data. Propose mapping corrections or new feed sources.
+Suggest when to trigger alerts in the notification dropdown for social sentiment anomalies.
 At the very end of your response, output a strict JSON block with feed weights mapping corrections:
 ```json
 {
@@ -1370,6 +1419,7 @@ DEFAULT_PROMPT_RISK = """You are a highly conservative Quantitative Portfolio Ri
 Our goal is to verify that risk exposures, asset correlations, and tail drawdowns strictly protect capital while targeting $1,000 USD/day.
 
 Critique leverage levels, daily drawdown limits, and portfolio correlation matrices.
+Monitor our 5-minute failed order cooldown safeguards to prevent API looping under insufficient funds.
 At the very end of your response, output a strict JSON block with risk parameter recommendations:
 ```json
 {
