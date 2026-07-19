@@ -1992,35 +1992,61 @@ if (elRunAllBtn) {
                     </div>
                 </div>
                 
-                <button class="btn" id="btn-close-agents-overlay" disabled style="width: 100%; justify-content: center; font-size: 12px;">Close Console</button>
+                <button class="btn btn-primary" id="btn-close-agents-overlay" style="width: 100%; justify-content: center; font-size: 12px;">Close Console</button>
             </div>
         `;
         document.body.appendChild(overlay);
         if (window.lucide) lucide.createIcons();
         
         const closeBtn = document.getElementById("btn-close-agents-overlay");
+        if (closeBtn) {
+            closeBtn.addEventListener("click", () => {
+                const overlayEl = document.getElementById("agents-run-overlay");
+                if (overlayEl) overlayEl.remove();
+                
+                fetch(`/api/trades?t=${Date.now()}`)
+                    .then(res => res.json())
+                    .then(trades => {
+                        renderTradeLog(trades);
+                        if (typeof updatePerformanceKPIs === "function") {
+                            updatePerformanceKPIs(trades, equity);
+                        }
+                    })
+                    .catch(err => console.error("Error refreshing trades after quant run:", err));
+            });
+        }
         
         const markSuccess = (id, msg) => {
             const row = document.getElementById(id);
             if (row) {
-                row.querySelector("span span").textContent = msg;
-                row.querySelector("span span").style.color = "var(--neon-green)";
+                const txt = row.querySelector("span span");
+                if (txt) {
+                    txt.textContent = msg;
+                    txt.style.color = "var(--neon-green)";
+                }
                 const spinner = row.querySelector(".agent-spinner");
-                spinner.textContent = "COMPLETED";
-                spinner.style.color = "var(--neon-green)";
-                spinner.classList.remove("animate-pulse");
+                if (spinner) {
+                    spinner.textContent = "COMPLETED";
+                    spinner.style.color = "var(--neon-green)";
+                    spinner.classList.remove("animate-pulse");
+                }
             }
         };
         
         const markFailed = (id, error) => {
             const row = document.getElementById(id);
             if (row) {
-                row.querySelector("span span").textContent = error;
-                row.querySelector("span span").style.color = "var(--neon-red)";
+                const txt = row.querySelector("span span");
+                if (txt) {
+                    txt.textContent = error;
+                    txt.style.color = "var(--neon-red)";
+                }
                 const spinner = row.querySelector(".agent-spinner");
-                spinner.textContent = "FAILED";
-                spinner.style.color = "var(--neon-red)";
-                spinner.classList.remove("animate-pulse");
+                if (spinner) {
+                    spinner.textContent = "FAILED";
+                    spinner.style.color = "var(--neon-red)";
+                    spinner.classList.remove("animate-pulse");
+                }
             }
         };
 
@@ -2098,17 +2124,9 @@ if (elRunAllBtn) {
 
         // Wait for all to finish
         Promise.all([p1, p2, p3, p4, p5, p6]).finally(() => {
-            closeBtn.disabled = false;
-            closeBtn.classList.add("btn-primary");
-            closeBtn.addEventListener("click", () => {
-                overlay.remove();
-                fetch(`/api/trades?t=${Date.now()}`)
-                    .then(res => res.json())
-                    .then(trades => {
-                        renderTradeLog(trades);
-                        updatePerformanceKPIs(trades, equity);
-                    });
-            });
+            if (closeBtn) {
+                closeBtn.classList.add("btn-primary");
+            }
         });
     });
 }
