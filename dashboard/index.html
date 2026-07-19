@@ -1019,6 +1019,10 @@
                                 <span style="font-size: 12px; font-weight: 600; color: var(--neon-red);">Risk Auditor Prompt:</span>
                                 <textarea id="prompt-risk-text" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 8px; padding: 10px; font-family: monospace; font-size: 11px; height: 70px; resize: vertical; outline: none;"></textarea>
                             </label>
+                            <label style="display: flex; flex-direction: column; gap: 5px;">
+                                <span style="font-size: 12px; font-weight: 600; color: var(--neon-blue);">Ensemble Asset Allocator Prompt:</span>
+                                <textarea id="prompt-allocator-text" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 8px; padding: 10px; font-family: monospace; font-size: 11px; height: 70px; resize: vertical; outline: none;"></textarea>
+                            </label>
                             <button class="btn btn-primary" id="save-prompts-btn" style="width: 100%; justify-content: center; padding: 10px; font-size: 12px;">
                                 <i data-lucide="save" style="width: 16px; height: 16px; margin-right: 4px;"></i>
                                 Save All Agent Prompts
@@ -1127,6 +1131,7 @@
                                     <option value="nn">NN Optimizer</option>
                                     <option value="risk">Risk Auditor</option>
                                     <option value="reporter">Reporter AI (Weekly Blog)</option>
+                                    <option value="allocator">Ensemble Asset Allocator</option>
                                 </select>
                             </label>
 

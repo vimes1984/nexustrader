@@ -137,6 +137,9 @@ def query_gemini_robust(api_key: str, prompt, model: str = "gemini-flash-latest"
             elif filename in ["blog_agent.py", "daily_reporter.py"]:
                 agent = "reporter"
                 break
+            elif filename == "allocator_agent.py":
+                agent = "allocator"
+                break
     except Exception:
         pass
 

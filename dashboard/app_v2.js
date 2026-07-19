@@ -1574,8 +1574,10 @@ function loadBlogConfig() {
             if (elNnPrompt && data.prompt_nn) elNnPrompt.value = data.prompt_nn;
             const elSentimentPrompt = document.getElementById("prompt-sentiment-text");
             const elRiskPrompt = document.getElementById("prompt-risk-text");
+            const elAllocatorPrompt = document.getElementById("prompt-allocator-text");
             if (elSentimentPrompt && data.prompt_sentiment) elSentimentPrompt.value = data.prompt_sentiment;
             if (elRiskPrompt && data.prompt_risk) elRiskPrompt.value = data.prompt_risk;
+            if (elAllocatorPrompt && data.prompt_allocator) elAllocatorPrompt.value = data.prompt_allocator;
         })
         .catch(err => console.error("Error loading prompt config:", err));
 
@@ -1702,6 +1704,7 @@ if (elSavePromptsBtn) {
         const elNn = document.getElementById("prompt-nn-text");
         const elSent = document.getElementById("prompt-sentiment-text");
         const elRisk = document.getElementById("prompt-risk-text");
+        const elAlloc = document.getElementById("prompt-allocator-text");
         
         elSavePromptsBtn.disabled = true;
         showToast("Saving Agent Prompts...", "info");
@@ -1712,8 +1715,9 @@ if (elSavePromptsBtn) {
         const nVal = encodeURIComponent(elNn ? elNn.value : "");
         const sVal = encodeURIComponent(elSent ? elSent.value : "");
         const rVal = encodeURIComponent(elRisk ? elRisk.value : "");
+        const aVal = encodeURIComponent(elAlloc ? elAlloc.value : "");
         
-        fetch(`/api/system/prompts?prompt_quant=${qVal}&prompt_dev=${dVal}&prompt_blog=${bVal}&prompt_nn=${nVal}&prompt_sentiment=${sVal}&prompt_risk=${rVal}`, { method: 'POST' })
+        fetch(`/api/system/prompts?prompt_quant=${qVal}&prompt_dev=${dVal}&prompt_blog=${bVal}&prompt_nn=${nVal}&prompt_sentiment=${sVal}&prompt_risk=${rVal}&prompt_allocator=${aVal}`, { method: 'POST' })
             .then(res => res.json())
             .then(data => {
                 elSavePromptsBtn.disabled = false;
@@ -1974,6 +1978,10 @@ if (elRunAllBtn) {
                         <span style="display: flex; align-items: center; gap: 10px;">📝 <strong>NexusReporter AI:</strong> <span style="font-size: 11px; color: var(--text-secondary);">Writing blog...</span></span>
                         <span class="agent-spinner animate-pulse" style="color: var(--neon-green); font-size: 11px; font-weight: bold; font-family: monospace;">RUNNING</span>
                     </div>
+                    <div id="status-agent-allocator" style="display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--text-primary);">
+                        <span style="display: flex; align-items: center; gap: 10px;">⚖️ <strong>Asset Allocator:</strong> <span style="font-size: 11px; color: var(--text-secondary);">Balancing portfolio...</span></span>
+                        <span class="agent-spinner animate-pulse" style="color: var(--neon-blue); font-size: 11px; font-weight: bold; font-family: monospace;">RUNNING</span>
+                    </div>
                 </div>
                 
                 <button class="btn" id="btn-close-agents-overlay" disabled style="width: 100%; justify-content: center; font-size: 12px;">Close Console</button>
@@ -2068,8 +2076,20 @@ if (elRunAllBtn) {
             })
             .catch(err => markFailed("status-agent-blog", "Connection error"));
 
+        // 6. Ensemble Asset Allocator
+        const p6 = fetch("/api/system/optimize/allocator", { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === "success") {
+                    markSuccess("status-agent-allocator", "Asset weights rebalanced!");
+                } else {
+                    markFailed("status-agent-allocator", data.error || "Failed");
+                }
+            })
+            .catch(err => markFailed("status-agent-allocator", "Connection error"));
+
         // Wait for all to finish
-        Promise.all([p1, p2, p3, p4, p5]).finally(() => {
+        Promise.all([p1, p2, p3, p4, p5, p6]).finally(() => {
             closeBtn.disabled = false;
             closeBtn.classList.add("btn-primary");
             closeBtn.addEventListener("click", () => {

@@ -665,6 +665,7 @@ async def startup_event():
     database.save_setting("prompt_nn_agent", DEFAULT_PROMPT_NN)
     database.save_setting("prompt_sentiment_agent", DEFAULT_PROMPT_SENTIMENT)
     database.save_setting("prompt_risk_auditor", DEFAULT_PROMPT_RISK)
+    database.save_setting("prompt_allocator_agent", DEFAULT_PROMPT_ALLOCATOR)
 
     # Auto-start live stream on startup (true live data)
     orchestrator.start_stream(mode="live", poll_interval=5)
@@ -1807,6 +1808,19 @@ def trigger_risk_audit():
         logging.error(f"Error in manual Risk Audit: {e}")
         return {"status": "error", "error": str(e)}
 
+@app.post("/api/system/optimize/allocator")
+def trigger_allocator():
+    try:
+        from allocator_agent import run_allocator_self_improvement
+        res = run_allocator_self_improvement()
+        if res.startswith("Success"):
+            return {"status": "success", "log": res}
+        else:
+            return {"status": "error", "error": res}
+    except Exception as e:
+        logging.error(f"Error in manual Allocator optimization: {e}")
+        return {"status": "error", "error": str(e)}
+
 DEFAULT_PROMPT_QUANT = """You are a world-class Quantitative Researcher, PhD in Mathematical Finance, and elite risk manager critically evaluating the performance of the NexusTrader self-learning ensemble bot.
 
 Our core operational mandate is to scale net returns to a stable, risk-adjusted target of $1,000 USD per day while strictly minimizing maximum drawdown (MDD) and tail risk.
@@ -1915,6 +1929,29 @@ At the very end of your response, output a strict JSON block with risk parameter
 }
 ```"""
 
+DEFAULT_PROMPT_ALLOCATOR = """You are a world-class Portfolio Allocation Specialist and Risk Management Engineer.
+Our goal is to dynamically optimize the active asset roster, Kelly allocation ceilings, and risk parameters to safely scale NexusTrader earnings to $1,000 USD/day.
+
+Analyze the recent trading performance, win/loss stats, and PnL distributions per asset.
+Propose adjustments to:
+1. Asset Status: Activate trending/profitable tickers; temporarily deactivate/cooldown underperforming assets with consecutive losses or deep drawdowns.
+2. Kelly Ceiling caps: Limit capital exposure on high-volatility assets while optimizing allocation on stable performers.
+3. Volatility multipliers: Custom ATR TP/SL multipliers tailored to the specific asset's risk regime.
+
+At the very end of your response, output a strict JSON block with your recommended adjustments:
+```json
+{
+  "asset_adjustments": {
+    "TICKER": {
+      "is_active": boolean,
+      "tp_multiplier": float,
+      "sl_multiplier": float,
+      "kelly_ceiling": float
+    }
+  }
+}
+```"""
+
 @app.get("/api/system/agent_llm")
 def get_agent_llm_config(agent: str = "default"):
     suffix = f"_{agent}" if agent != "default" else ""
@@ -1968,11 +2005,12 @@ def get_prompts():
         "prompt_blog": database.load_setting("prompt_blog_agent", DEFAULT_PROMPT_BLOG),
         "prompt_nn": database.load_setting("prompt_nn_agent", DEFAULT_PROMPT_NN),
         "prompt_sentiment": database.load_setting("prompt_sentiment_agent", DEFAULT_PROMPT_SENTIMENT),
-        "prompt_risk": database.load_setting("prompt_risk_auditor", DEFAULT_PROMPT_RISK)
+        "prompt_risk": database.load_setting("prompt_risk_auditor", DEFAULT_PROMPT_RISK),
+        "prompt_allocator": database.load_setting("prompt_allocator_agent", DEFAULT_PROMPT_ALLOCATOR)
     }
 
 @app.post("/api/system/prompts")
-def update_prompts(prompt_quant: str, prompt_dev: str, prompt_blog: str, prompt_nn: str, prompt_sentiment: str, prompt_risk: str):
+def update_prompts(prompt_quant: str, prompt_dev: str, prompt_blog: str, prompt_nn: str, prompt_sentiment: str, prompt_risk: str, prompt_allocator: str = None):
     try:
         database.save_setting("prompt_self_improvement", prompt_quant)
         database.save_setting("prompt_self_developer", prompt_dev)
@@ -1980,6 +2018,8 @@ def update_prompts(prompt_quant: str, prompt_dev: str, prompt_blog: str, prompt_
         database.save_setting("prompt_nn_agent", prompt_nn)
         database.save_setting("prompt_sentiment_agent", prompt_sentiment)
         database.save_setting("prompt_risk_auditor", prompt_risk)
+        if prompt_allocator is not None:
+            database.save_setting("prompt_allocator_agent", prompt_allocator)
         return {"status": "success"}
     except Exception as e:
         return {"status": "error", "error": str(e)}

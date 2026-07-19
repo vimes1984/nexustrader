@@ -82,6 +82,7 @@ class TestMainApi(unittest.TestCase):
         self.assertEqual(res["prompt_nn"], "mocked_prompt_nn_agent")
         self.assertEqual(res["prompt_sentiment"], "mocked_prompt_sentiment_agent")
         self.assertEqual(res["prompt_risk"], "mocked_prompt_risk_auditor")
+        self.assertEqual(res["prompt_allocator"], "mocked_prompt_allocator_agent")
 
     def test_update_prompts_saves_to_db(self):
         res = main.update_prompts(
@@ -90,7 +91,8 @@ class TestMainApi(unittest.TestCase):
             prompt_blog="new_b",
             prompt_nn="new_n",
             prompt_sentiment="new_s",
-            prompt_risk="new_r"
+            prompt_risk="new_r",
+            prompt_allocator="new_a"
         )
         
         self.assertEqual(res["status"], "success")
@@ -101,6 +103,7 @@ class TestMainApi(unittest.TestCase):
         database.save_setting.assert_any_call("prompt_nn_agent", "new_n")
         database.save_setting.assert_any_call("prompt_sentiment_agent", "new_s")
         database.save_setting.assert_any_call("prompt_risk_auditor", "new_r")
+        database.save_setting.assert_any_call("prompt_allocator_agent", "new_a")
 
     def test_get_system_schedule(self):
         database.load_setting.side_effect = lambda key, default=None: int(default)
@@ -146,6 +149,12 @@ class TestMainApi(unittest.TestCase):
         database.save_setting.assert_any_call("agent_llm_base_url", "https://test.com")
         database.save_setting.assert_any_call("agent_llm_model", "gpt-4")
         database.save_setting.assert_any_call("agent_llm_api_key", "sk-newkey")
+
+    @patch('allocator_agent.run_allocator_self_improvement', return_value="Success! Designed rebalance.")
+    def test_trigger_allocator_endpoint(self, mock_run):
+        res = main.trigger_allocator()
+        self.assertEqual(res["status"], "success")
+        self.assertEqual(res["log"], "Success! Designed rebalance.")
 
 if __name__ == "__main__":
     unittest.main()

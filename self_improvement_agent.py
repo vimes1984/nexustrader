@@ -245,9 +245,18 @@ Recommended settings JSON format:
 {
   "recommended_risk_mode": "conservative" | "aggressive" | "hyper_growth",
   "recommended_tp_multiplier": float,
-  "recommended_sl_multiplier": float
+  "recommended_sl_multiplier": float,
+  "asset_adjustments": {
+    "TICKER": {
+      "is_active": boolean,
+      "tp_multiplier": float,
+      "sl_multiplier": float,
+      "kelly_ceiling": float
+    }
+  }
 }
 ```"""
+                    save_setting("prompt_self_improvement", db_prompt)
                 
                 prompt = f"""{db_prompt}
 
@@ -275,6 +284,7 @@ Current Session Data:
                     r_risk = adjustments.get("recommended_risk_mode")
                     r_tp = adjustments.get("recommended_tp_multiplier")
                     r_sl = adjustments.get("recommended_sl_multiplier")
+                    asset_adjusts = adjustments.get("asset_adjustments", {})
                     
                     if r_risk:
                         save_setting("risk_mode", r_risk)
@@ -285,6 +295,22 @@ Current Session Data:
                     if r_sl:
                         save_setting("opt_sl_multiplier", str(r_sl))
                         report_lines.append(f"\n📊 **Auto-Applied Setting**: Stop Loss Multiplier adjusted to `{r_sl}x ATR`")
+                    
+                    for ticker, params in asset_adjusts.items():
+                        is_active = params.get("is_active", True)
+                        tp_mult = params.get("tp_multiplier", 2.5)
+                        sl_mult = params.get("sl_multiplier", 1.5)
+                        kelly = params.get("kelly_ceiling", 0.2)
+                        
+                        conn_asset = sqlite3.connect(DB_PATH)
+                        c_asset = conn_asset.cursor()
+                        c_asset.execute(
+                            "INSERT OR REPLACE INTO active_assets (ticker, is_active, tp_multiplier, sl_multiplier, kelly_ceiling) VALUES (?, ?, ?, ?, ?)",
+                            (ticker, int(is_active), tp_mult, sl_mult, kelly)
+                        )
+                        conn_asset.commit()
+                        conn_asset.close()
+                        report_lines.append(f"\n📊 **Auto-Applied Asset Setting (PhD Quant)**: `{ticker}` -> Active: `{is_active}`, TP: `{tp_mult}x`, SL: `{sl_mult}x`, Kelly Cap: `{kelly}`")
             except Exception as e:
                 report_lines.append(f"Error calling Gemini AI for PhD analysis: {e}")
                 
