@@ -50,6 +50,10 @@ class PolicyNetwork:
         self.v_W = [np.zeros_like(w) for w in self.W]
         self.v_b = [np.zeros_like(b) for b in self.b]
         self.t = 0
+        
+        # Policy Gradient Baseline & Entropy scaling for stable convergence
+        self.reward_baseline = 0.0
+        self.baseline_alpha = 0.05
 
     def softmax(self, x):
         e_x = np.exp(x - np.max(x, axis=-1, keepdims=True))
@@ -79,15 +83,26 @@ class PolicyNetwork:
         return self.probs[0]
 
     def backward(self, state, strategy_signals, trade_direction, reward):
-        """Policy Gradient backward pass with optimizer choices."""
+        """Policy Gradient backward pass with advantage baseline and entropy regularization."""
         dir_val = 1.0 if trade_direction == "BUY" else -1.0
         
         # Calculate strategy alignment: signals are in [-1, 0, 1]
         alignment = np.array(strategy_signals) * dir_val
         
-        # Scale reward
-        scaled_reward = np.clip(reward * 100.0, -5.0, 5.0)
-        d_z = -scaled_reward * alignment.reshape(1, -1)
+        # Calculate policy gradient advantage baseline
+        advantage = reward - self.reward_baseline
+        self.reward_baseline = (1.0 - self.baseline_alpha) * self.reward_baseline + self.baseline_alpha * reward
+        
+        # Scale advantage
+        scaled_reward = np.clip(advantage * 100.0, -5.0, 5.0)
+        
+        # Calculate Entropy Regularization Gradient to prevent weight collapse
+        probs = self.probs
+        entropy = -np.sum(probs * np.log(probs + 1e-9))
+        entropy_grad = -probs * (entropy + np.log(probs + 1e-9))
+        entropy_beta = 0.01
+        
+        d_z = -scaled_reward * alignment.reshape(1, -1) - entropy_beta * entropy_grad
         
         dW = [None] * len(self.W)
         db = [None] * len(self.b)
