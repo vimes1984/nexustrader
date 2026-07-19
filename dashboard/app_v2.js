@@ -3029,15 +3029,54 @@ function fetchSystemLogs() {
         });
 }
 
+function fetchOptimizationsLogs() {
+    const tbody = document.getElementById("logs-tab-optimizations-tbody");
+    if (!tbody) return;
+    
+    fetch(`/api/system/optimizations?limit=50&t=${Date.now()}`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === "success" && data.optimizations) {
+                if (data.optimizations.length === 0) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="5" style="color: var(--text-secondary); text-align: center; padding: 20px;">No parameter adjustments made by AI agents yet.</td>
+                        </tr>
+                    `;
+                    return;
+                }
+                
+                tbody.innerHTML = data.optimizations.map(opt => {
+                    const timeStr = new Date(opt.timestamp * 1000).toLocaleString();
+                    return `
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                            <td style="padding: 10px 12px; color: var(--text-secondary); white-space: nowrap;">${timeStr}</td>
+                            <td style="padding: 10px 12px; font-weight: 600; color: var(--neon-blue);">${opt.agent}</td>
+                            <td style="padding: 10px 12px; font-family: monospace; color: var(--text-primary);">${opt.parameter}</td>
+                            <td style="padding: 10px 12px; color: var(--text-secondary); font-family: monospace;">${opt.old_value || '-'}</td>
+                            <td style="padding: 10px 12px; font-weight: 600; color: var(--neon-green); font-family: monospace;">${opt.new_value}</td>
+                        </tr>
+                    `;
+                }).join("");
+            }
+        })
+        .catch(err => console.error("Error loading optimizations history:", err));
+}
+
 // Hook up manual refresh button and auto-refresh loop
 document.addEventListener("DOMContentLoaded", () => {
     const btnRefreshLogs = document.getElementById("btn-refresh-logs");
     const checkAutoRefresh = document.getElementById("log-auto-refresh");
     const logStreamSelect = document.getElementById("log-stream-select");
     
+    // Initial fetch
+    fetchSystemLogs();
+    fetchOptimizationsLogs();
+    
     if (btnRefreshLogs) {
         btnRefreshLogs.addEventListener("click", () => {
             fetchSystemLogs();
+            fetchOptimizationsLogs();
             showToast("System diagnostic logs refreshed.", "success");
         });
     }
@@ -3055,6 +3094,7 @@ document.addEventListener("DOMContentLoaded", () => {
         
         if (isTabLogsActive && isAutoRefreshEnabled) {
             fetchSystemLogs();
+            fetchOptimizationsLogs();
         }
     }, 5000);
 

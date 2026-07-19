@@ -157,5 +157,14 @@ class TestMainApi(unittest.TestCase):
         self.assertEqual(res["status"], "success")
         self.assertEqual(res["log"], "Success! Designed rebalance.")
 
+    def test_get_agent_optimizations_endpoint(self):
+        database.load_optimizations.return_value = [
+            {"id": 1, "timestamp": 1234567, "agent": "PhD Quant Agent", "parameter": "risk_mode", "old_value": "conservative", "new_value": "aggressive", "rationale": "Testing"}
+        ]
+        res = main.get_agent_optimizations()
+        self.assertEqual(res["status"], "success")
+        self.assertEqual(len(res["optimizations"]), 1)
+        self.assertEqual(res["optimizations"][0]["agent"], "PhD Quant Agent")
+
 if __name__ == "__main__":
     unittest.main()

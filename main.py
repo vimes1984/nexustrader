@@ -1202,6 +1202,13 @@ def get_system_logs(limit: int = 100, log_type: str = "systemd"):
             
     return {"status": "success", "logs": f"Log stream '{log_type}' ({filename}) has no recorded entries yet."}
 
+@app.get("/api/system/optimizations")
+def get_agent_optimizations(limit: int = 100):
+    try:
+        return {"status": "success", "optimizations": database.load_optimizations(limit)}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
 # -------------------------------------------------------------
 # Log UI notification to system logs REST API
 # -------------------------------------------------------------

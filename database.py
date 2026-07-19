@@ -243,6 +243,19 @@ def init_db():
     )
     """)
     
+    # Create agent optimizations log table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS agent_optimizations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp REAL,
+        agent TEXT,
+        parameter TEXT,
+        old_value TEXT,
+        new_value TEXT,
+        rationale TEXT
+    )
+    """)
+    
     # Pre-populate and migrate default tickers
     default_tickers = ['ETH-USD', 'SOL-USD', 'BTC-USD', 'DOGE-USD', 'XRP-USD', 'LINK-USD', 'LTC-USD', 'AVAX-USD', 'ADA-USD', 'DOT-USD']
     for t in default_tickers:
@@ -399,8 +412,45 @@ def load_trades(trading_mode=None):
         conn.close()
     return trades
 
+def log_optimization(agent: str, parameter: str, old_value: str, new_value: str, rationale: str = ""):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "INSERT INTO agent_optimizations (timestamp, agent, parameter, old_value, new_value, rationale) VALUES (?, ?, ?, ?, ?, ?)",
+            (time.time(), agent, parameter, str(old_value), str(new_value), rationale)
+        )
+        conn.commit()
+    except Exception as e:
+        logging.error(f"Error logging agent optimization: {e}")
+    finally:
+        conn.close()
+
+def load_optimizations(limit: int = 100):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT id, timestamp, agent, parameter, old_value, new_value, rationale FROM agent_optimizations ORDER BY timestamp DESC LIMIT ?", (limit,))
+        rows = cursor.fetchall()
+        return [{
+            "id": r[0],
+            "timestamp": r[1],
+            "agent": r[2],
+            "parameter": r[3],
+            "old_value": r[4],
+            "new_value": r[5],
+            "rationale": r[6]
+        } for r in rows]
+    except Exception as e:
+        logging.error(f"Error loading optimizations: {e}")
+        return []
+    finally:
+        conn.close()
+
 def save_setting(key, value):
     """Saves system setting (json string or float/int)."""
+    old_value = load_setting(key, "")
+    
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
@@ -410,6 +460,31 @@ def save_setting(key, value):
         logging.error(f"Error saving setting {key}: {e}")
     finally:
         conn.close()
+        
+    # Log optimization if changed by an agent
+    if str(old_value) != str(value) and not key.startswith("prompt_"):
+        import inspect
+        import os
+        agent_name = None
+        for frame_info in inspect.stack():
+            filename = os.path.basename(frame_info.filename)
+            if filename == "self_improvement_agent.py":
+                agent_name = "PhD Quant Agent"
+                break
+            elif filename == "nn_agent.py":
+                agent_name = "NeuralCore Optimizer"
+                break
+            elif filename == "sentiment_agent.py":
+                agent_name = "Sentiment Sentinel"
+                break
+            elif filename == "risk_auditor.py":
+                agent_name = "Risk Auditor"
+                break
+            elif filename == "allocator_agent.py":
+                agent_name = "Ensemble Asset Allocator"
+                break
+        if agent_name:
+            log_optimization(agent_name, key, old_value, value)
 
 def load_setting(key, default=None):
     """Loads system setting."""
@@ -541,6 +616,19 @@ def load_active_assets():
         conn.close()
 
 def save_active_asset(ticker: str, is_active: bool, tp_multiplier: float, sl_multiplier: float, kelly_ceiling: float):
+    old_active, old_tp, old_sl, old_kelly = True, 2.5, 1.5, 0.2
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT is_active, tp_multiplier, sl_multiplier, kelly_ceiling FROM active_assets WHERE ticker = ?", (ticker,))
+        row = cursor.fetchone()
+        if row:
+            old_active, old_tp, old_sl, old_kelly = bool(row[0]), float(row[1]), float(row[2]), float(row[3])
+    except Exception:
+        pass
+    finally:
+        conn.close()
+
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
@@ -549,6 +637,38 @@ def save_active_asset(ticker: str, is_active: bool, tp_multiplier: float, sl_mul
             (ticker, int(is_active), tp_multiplier, sl_multiplier, kelly_ceiling)
         )
         conn.commit()
+        
+        # Log parameter changes dynamically
+        import inspect
+        import os
+        agent_name = None
+        for frame_info in inspect.stack():
+            filename = os.path.basename(frame_info.filename)
+            if filename == "self_improvement_agent.py":
+                agent_name = "PhD Quant Agent"
+                break
+            elif filename == "nn_agent.py":
+                agent_name = "NeuralCore Optimizer"
+                break
+            elif filename == "sentiment_agent.py":
+                agent_name = "Sentiment Sentinel"
+                break
+            elif filename == "risk_auditor.py":
+                agent_name = "Risk Auditor"
+                break
+            elif filename == "allocator_agent.py":
+                agent_name = "Ensemble Asset Allocator"
+                break
+                
+        if agent_name:
+            if old_active != is_active:
+                log_optimization(agent_name, f"{ticker} Status", "Active" if old_active else "Inactive", "Active" if is_active else "Inactive")
+            if old_tp != tp_multiplier:
+                log_optimization(agent_name, f"{ticker} TP Mult", f"{old_tp}x", f"{tp_multiplier}x")
+            if old_sl != sl_multiplier:
+                log_optimization(agent_name, f"{ticker} SL Mult", f"{old_sl}x", f"{sl_multiplier}x")
+            if old_kelly != kelly_ceiling:
+                log_optimization(agent_name, f"{ticker} Kelly Cap", f"{old_kelly}", f"{kelly_ceiling}")
         return True
     except Exception as e:
         logging.error(f"Error saving active asset {ticker}: {e}")
