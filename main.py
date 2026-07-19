@@ -372,6 +372,30 @@ class NexusTraderOrchestrator:
         ensemble = self.strategy_ensembles[ticker]
         ingestor = self.data_ingestions[ticker]
         
+        # Check and apply dynamic auto-switch brain
+        auto_switch = database.load_setting(f"auto_switch_brains_{ticker}", "true") == "true"
+        if auto_switch:
+            try:
+                conn = database.get_db_connection()
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT name, weights FROM policy_brains WHERE ticker = ? ORDER BY accumulated_pnl_percent DESC, training_steps DESC LIMIT 1",
+                    (ticker,)
+                )
+                row_pb = cursor.fetchone()
+                conn.close()
+                if row_pb:
+                    best_brain_name = row_pb[0]
+                    best_brain_weights = row_pb[1]
+                    active_brain_name = database.load_setting(f"active_policy_brain_{ticker}", "Default Brain")
+                    if best_brain_name != active_brain_name:
+                        logging.info(f"[AUTO-BRAIN-SWITCH] Dynamically hot-swapping {ticker} active brain to best model '{best_brain_name}' (PnL-driven)")
+                        database.save_setting(f"policy_net_weights_{ticker}", best_brain_weights)
+                        database.save_setting(f"active_policy_brain_{ticker}", best_brain_name)
+                        learner.policy_net.from_json(best_brain_weights)
+            except Exception as e:
+                logging.error(f"[AUTO-BRAIN-SWITCH ERROR] Failed to dynamically auto-switch brain for {ticker}: {e}")
+        
         # 1. Query the Policy Gradient Neural Network to allocate base strategy weights
         state = learner.get_state_vector(
             row,
@@ -1791,19 +1815,23 @@ Our platform has been upgraded with:
 1. Customizable Starting Portfolio Capital / Deposit Baseline to track true net PnL in live Kraken USD accounts.
 2. 5-minute Asset Cooldown safeguards on failed entry orders (Insufficient Funds, exchange limits, etc.).
 3. Multi-brain repository where we can snapshot current weights, switch active policy brains, or train a fresh brain from scratch.
+4. Per-Asset Manager: Custom volatility multipliers, per-asset Kelly ceilings, dynamic auto-switching toggle, and locked manual overrides.
+5. Per-Agent LLM Gateway Routers: Map specific agents to Google Gemini, OpenAI, Anthropic, or local OpenClaw proxy configs.
 
 Analyze the provided dataset using rigorous statistical methods:
-1. Volatility Regime Profiling: Analyze the average true range (ATR), recent volatility shifts, and risk-reward ratios.
+1. Volatility Regime Profiling: Analyze the average true range (ATR), recent volatility shifts, and risk-reward ratios. Recommend custom Take Profit (TP) and Stop Loss (SL) volatility multipliers.
 2. Trade Return Skewness: Critique the win/loss distribution. Are the losses fat-tailed? Is the Sharpe/Sortino ratio optimal?
 3. Ensemble Synergy: Evaluate the interaction of the strategy ensemble (RSI Reversion, Kalman filter trends, BB, Psychological Sweep, ML models). Ensure weights do not create unhedged systemic beta exposure.
-4. Multi-Brain Allocations: Strategize when to switch, snapshot, or reset/train a fresh brain based on market regimes.
+4. Multi-Brain Allocations & Overrides: Strategize when to activate the auto-switching brain mechanism vs. enforcing manual locked brain overrides on specific assets.
+5. Kelly Criterion Ceiling: Calculate optimal Kelly sizing percentages. Specify the Kelly ceiling threshold to limit maximum capital drawdown per asset.
 
 At the very end of your response, output a strict JSON block specifying the exact configuration parameters to save to our execution settings:
 ```json
 {
   "recommended_risk_mode": "conservative" | "aggressive" | "hyper_growth",
   "recommended_tp_multiplier": float,
-  "recommended_sl_multiplier": float
+  "recommended_sl_multiplier": float,
+  "recommended_kelly_ceiling": float
 }
 ```"""
 
@@ -1816,6 +1844,8 @@ Our platform features:
 3. Cybernetic Alert system with Clickable Toast notifications and Bell Dropdown.
 4. Multi-Brain repository (Activate, snapshot, delete, or train new brain from scratch).
 5. Real-time System Logs terminal panel to display service output.
+6. Dynamic per-agent LLM Router (routing to OpenAI, Gemini, Anthropic, or OpenClaw).
+7. Asset Manager dashboard tab supporting custom Kelly ceilings, dynamic auto-switching, and locked brain overrides.
 
 Your current priorities:
 - Keep the repository documentation (README.md) and module comments spruced up, visually engaging (using shields/badges), and maintained to top-tier open-source standards.
@@ -1830,7 +1860,7 @@ Produce an elite, data-driven weekly performance report on the NexusTrader syste
 Frame the narrative around our strategic trajectory toward the $1,000 USD/day capital-scaling goal.
 
 Explain model updates, probability distributions, and policy gradient shifts in an engaging, institutional-grade style.
-Highlight our customizable starting deposit baselines, cybernetic notifications bell, and new multi-brain selection & custom training platform.
+Highlight our customizable starting deposit baselines, cybernetic notifications bell, new multi-brain selection & custom training platform, dynamic auto-switching, and per-asset Kelly ceilings.
 Keep all quantitative tables intact."""
 
 DEFAULT_PROMPT_NN = """You are a world-class Deep Learning Engineer and Neuro-Symbolic Quantitative Researcher.
@@ -1841,6 +1871,7 @@ Our Policy Gradient network now supports:
 2. Weights Snapshots to store policy states under custom names (e.g. Snapshot-01:31:18 AM).
 3. Live brain hot-swapping & switching from the Saved Neural Brains list.
 4. Fresh brain initialization and online training from scratch.
+5. Dynamic real-time auto-switching of brains based on PnL performance rankings.
 
 Critique the learning rate, weight floor, discount factor, and policy network convergence based on the latest training steps.
 At the very end of your response, output recommended setting adjustments strictly in a JSON block:
@@ -1866,13 +1897,21 @@ At the very end of your response, output a strict JSON block with feed weights m
 DEFAULT_PROMPT_RISK = """You are a highly conservative Quantitative Portfolio Risk Auditor.
 Our goal is to verify that risk exposures, asset correlations, and tail drawdowns strictly protect capital while targeting $1,000 USD/day.
 
-Critique leverage levels, daily drawdown limits, and portfolio correlation matrices.
+Our portfolio supports:
+1. Per-asset Kelly ceiling caps to limit maximum asset allocation and avoid over-leveraged drawdowns.
+2. Custom volatility TP/SL multipliers to exit trades dynamically during volatile regime shifts.
+3. Automated brain switching vs. locked strategy brain overrides for targeted asset classes.
+4. Per-agent LLM routers mapped to Gemini, OpenAI, Anthropic, or OpenClaw endpoints.
+
+Critique leverage levels, daily drawdown limits, asset-specific Kelly ceilings, and portfolio correlation matrices.
 Monitor our 5-minute failed order cooldown safeguards to prevent API looping under insufficient funds.
+
 At the very end of your response, output a strict JSON block with risk parameter recommendations:
 ```json
 {
   "recommended_max_daily_loss": float,
-  "recommended_loss_cooldown_hours": float
+  "recommended_loss_cooldown_hours": float,
+  "recommended_global_kelly_ceiling": float
 }
 ```"""
 
