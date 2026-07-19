@@ -232,6 +232,24 @@ def init_db():
     )
     """)
     
+    # Create active assets table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS active_assets (
+        ticker TEXT PRIMARY KEY,
+        is_active INTEGER DEFAULT 1,
+        tp_multiplier REAL DEFAULT 2.5,
+        sl_multiplier REAL DEFAULT 1.5,
+        kelly_ceiling REAL DEFAULT 0.2
+    )
+    """)
+    
+    # Pre-populate default tickers
+    cursor.execute("SELECT COUNT(*) FROM active_assets")
+    if cursor.fetchone()[0] == 0:
+        default_tickers = ['ETH-USD', 'SOL-USD', 'BTC-USD', 'DOGE-USD', 'XRP-USD']
+        for t in default_tickers:
+            cursor.execute("INSERT INTO active_assets (ticker, is_active) VALUES (?, 1)", (t,))
+            
     # Commit and close
     conn.commit()
     conn.close()
@@ -498,6 +516,54 @@ def delete_policy_brain(name: str, ticker: str):
         return True
     except Exception as e:
         logging.error(f"Error deleting policy brain {name}: {e}")
+        return False
+    finally:
+        conn.close()
+
+def load_active_assets():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT ticker, is_active, tp_multiplier, sl_multiplier, kelly_ceiling FROM active_assets ORDER BY ticker ASC")
+        rows = cursor.fetchall()
+        return [{
+            "ticker": r[0],
+            "is_active": bool(r[1]),
+            "tp_multiplier": float(r[2]),
+            "sl_multiplier": float(r[3]),
+            "kelly_ceiling": float(r[4])
+        } for r in rows]
+    except Exception as e:
+        logging.error(f"Error loading active assets: {e}")
+        return []
+    finally:
+        conn.close()
+
+def save_active_asset(ticker: str, is_active: bool, tp_multiplier: float, sl_multiplier: float, kelly_ceiling: float):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "INSERT OR REPLACE INTO active_assets (ticker, is_active, tp_multiplier, sl_multiplier, kelly_ceiling) VALUES (?, ?, ?, ?, ?)",
+            (ticker, int(is_active), tp_multiplier, sl_multiplier, kelly_ceiling)
+        )
+        conn.commit()
+        return True
+    except Exception as e:
+        logging.error(f"Error saving active asset {ticker}: {e}")
+        return False
+    finally:
+        conn.close()
+
+def delete_active_asset(ticker: str):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM active_assets WHERE ticker = ?", (ticker,))
+        conn.commit()
+        return True
+    except Exception as e:
+        logging.error(f"Error deleting active asset {ticker}: {e}")
         return False
     finally:
         conn.close()

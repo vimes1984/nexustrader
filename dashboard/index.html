@@ -1141,6 +1141,57 @@
                             </label>
                         </div>
                     </article>
+                    
+                    <!-- Active Asset Manager -->
+                    <article class="glass-panel" style="padding: 24px; margin-top: 20px; display: flex; flex-direction: column; gap: 15px;">
+                        <h2 class="panel-title" style="display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="coins" style="color: var(--neon-blue)"></i>
+                            Active Asset Manager & Risk Overrides
+                        </h2>
+                        <span style="font-size: 11px; color: var(--text-muted); text-align: left;">
+                            Manage which crypto assets are active in trading and define per-asset overrides for Take Profit (TP), Stop Loss (SL), and Kelly Ceiling.
+                        </span>
+                        
+                        <div style="overflow-x: auto; border: 1px solid var(--border-color); border-radius: 8px; background: rgba(0,0,0,0.2);">
+                            <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 12px; color: var(--text-primary);">
+                                <thead>
+                                    <tr style="border-bottom: 1px solid var(--border-color); background: rgba(255,255,255,0.02);">
+                                        <th style="padding: 10px;">Ticker</th>
+                                        <th style="padding: 10px; text-align: center;">Active?</th>
+                                        <th style="padding: 10px; text-align: center;">TP Mult.</th>
+                                        <th style="padding: 10px; text-align: center;">SL Mult.</th>
+                                        <th style="padding: 10px; text-align: center;">Kelly Cap</th>
+                                        <th style="padding: 10px; text-align: center;">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="asset-manager-tbody">
+                                    <!-- Dynamic rows -->
+                                </tbody>
+                                <tfoot>
+                                    <tr style="border-top: 1px dashed var(--border-color); background: rgba(0,240,255,0.01);">
+                                        <td style="padding: 10px;">
+                                            <input type="text" id="add-asset-ticker" placeholder="e.g. ADA-USD" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 5px 8px; border-radius: 4px; font-family: inherit; font-size: 11px; width: 85px;">
+                                        </td>
+                                        <td style="padding: 10px; text-align: center;">
+                                            <input type="checkbox" id="add-asset-active" checked style="accent-color: var(--neon-blue); cursor: pointer;">
+                                        </td>
+                                        <td style="padding: 10px; text-align: center;">
+                                            <input type="number" id="add-asset-tp" step="0.1" value="2.5" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 5px; border-radius: 4px; width: 50px; text-align: center;">
+                                        </td>
+                                        <td style="padding: 10px; text-align: center;">
+                                            <input type="number" id="add-asset-sl" step="0.1" value="1.5" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 5px; border-radius: 4px; width: 50px; text-align: center;">
+                                        </td>
+                                        <td style="padding: 10px; text-align: center;">
+                                            <input type="number" id="add-asset-kelly" step="0.05" value="0.20" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 5px; border-radius: 4px; width: 50px; text-align: center;">
+                                        </td>
+                                        <td style="padding: 10px; text-align: center;">
+                                            <button class="btn btn-primary" id="btn-add-asset" style="padding: 4px 8px; font-size: 10px; cursor: pointer;">Add</button>
+                                        </td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </article>
                 </div>
 
                 <div class="main-right-column" style="display: flex; flex-direction: column; gap: 20px;">

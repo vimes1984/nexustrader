@@ -2494,6 +2494,8 @@ elNavTabs.forEach(tab => {
             loadWeightsHistory(activeTicker);
             loadNeuralBrains(activeTicker);
             refreshNeuralCoreBrainSelector(activeTicker);
+        } else if (targetTabId === "tab-settings") {
+            loadAssetManager();
         } else if (targetTabId === "tab-simulator") {
             loadNeuralBrains(activeTicker);
             if (!simChart) {
@@ -3313,3 +3315,128 @@ function updateSimPerformanceKPIs(trades, currentEquity) {
     document.getElementById("val-sim-total-pnl").textContent = `${realizedPnL >= 0 ? '+' : ''}$${realizedPnL.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
     document.getElementById("val-sim-total-pnl-percent").textContent = `${realizedPnL >= 0 ? '+' : ''}${netPct.toFixed(2)}% growth`;
 }
+
+// -------------------------------------------------------------
+// Active Asset Manager Implementations
+// -------------------------------------------------------------
+function loadAssetManager() {
+    const tbody = document.getElementById("asset-manager-tbody");
+    if (!tbody) return;
+    
+    fetch(`/api/assets?t=${Date.now()}`)
+        .then(res => res.json())
+        .then(assets => {
+            tbody.innerHTML = "";
+            assets.forEach(asset => {
+                const tr = document.createElement("tr");
+                tr.style.borderBottom = "1px solid rgba(255,255,255,0.05)";
+                tr.innerHTML = `
+                    <td style="padding: 10px; font-weight: 600; text-align: left;">${asset.ticker}</td>
+                    <td style="padding: 10px; text-align: center;">
+                        <input type="checkbox" class="asset-active-check" data-ticker="${asset.ticker}" ${asset.is_active ? 'checked' : ''} style="accent-color: var(--neon-blue); cursor: pointer; width: 15px; height: 15px;">
+                    </td>
+                    <td style="padding: 10px; text-align: center;">
+                        <input type="number" class="asset-tp-input" data-ticker="${asset.ticker}" step="0.1" value="${asset.tp_multiplier}" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px; border-radius: 4px; width: 50px; text-align: center;">
+                    </td>
+                    <td style="padding: 10px; text-align: center;">
+                        <input type="number" class="asset-sl-input" data-ticker="${asset.ticker}" step="0.1" value="${asset.sl_multiplier}" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px; border-radius: 4px; width: 50px; text-align: center;">
+                    </td>
+                    <td style="padding: 10px; text-align: center;">
+                        <input type="number" class="asset-kelly-input" data-ticker="${asset.ticker}" step="0.05" value="${asset.kelly_ceiling}" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px; border-radius: 4px; width: 50px; text-align: center;">
+                    </td>
+                    <td style="padding: 10px; text-align: center; display: flex; gap: 6px; justify-content: center; align-items: center;">
+                        <button class="btn btn-save-asset" data-ticker="${asset.ticker}" style="padding: 4px 8px; font-size: 10px; border-color: var(--neon-green); color: var(--neon-green); background: rgba(0,255,100,0.05); cursor: pointer; border-radius: 4px;">Save</button>
+                        <button class="btn btn-delete-asset" data-ticker="${asset.ticker}" style="padding: 4px 8px; font-size: 10px; border-color: var(--neon-red); color: var(--neon-red); background: rgba(255,0,0,0.05); cursor: pointer; border-radius: 4px;">Delete</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+            
+            // Wire save buttons
+            tbody.querySelectorAll(".btn-save-asset").forEach(btn => {
+                btn.addEventListener("click", () => {
+                    const ticker = btn.getAttribute("data-ticker");
+                    const is_active = tbody.querySelector(`.asset-active-check[data-ticker="${ticker}"]`).checked;
+                    const tp_multiplier = parseFloat(tbody.querySelector(`.asset-tp-input[data-ticker="${ticker}"]`).value);
+                    const sl_multiplier = parseFloat(tbody.querySelector(`.asset-sl-input[data-ticker="${ticker}"]`).value);
+                    const kelly_ceiling = parseFloat(tbody.querySelector(`.asset-kelly-input[data-ticker="${ticker}"]`).value);
+                    
+                    saveAssetConfig(ticker, is_active, tp_multiplier, sl_multiplier, kelly_ceiling);
+                });
+            });
+            
+            // Wire delete buttons
+            tbody.querySelectorAll(".btn-delete-asset").forEach(btn => {
+                btn.addEventListener("click", () => {
+                    const ticker = btn.getAttribute("data-ticker");
+                    if (confirm(`Are you sure you want to stop trading and delete asset '${ticker}'?`)) {
+                        deleteAssetConfig(ticker);
+                    }
+                });
+            });
+        })
+        .catch(err => console.error("Error loading asset manager:", err));
+}
+
+function saveAssetConfig(ticker, is_active, tp_multiplier, sl_multiplier, kelly_ceiling) {
+    showToast(`Saving asset '${ticker}'...`, "info");
+    fetch(`/api/assets/save?ticker=${encodeURIComponent(ticker)}&is_active=${is_active}&tp_multiplier=${tp_multiplier}&sl_multiplier=${sl_multiplier}&kelly_ceiling=${kelly_ceiling}`, { method: 'POST' })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === "success") {
+                showToast(`Asset '${ticker}' successfully updated!`, "success");
+                loadAssetManager();
+            } else {
+                showToast(`Error: ${data.message}`, "error");
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            showToast("Failed to save asset config.", "error");
+        });
+}
+
+function deleteAssetConfig(ticker) {
+    showToast(`Deleting asset '${ticker}'...`, "info");
+    fetch(`/api/assets/delete?ticker=${encodeURIComponent(ticker)}`, { method: 'POST' })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === "success") {
+                showToast(`Asset '${ticker}' successfully removed!`, "success");
+                loadAssetManager();
+            } else {
+                showToast(`Error: ${data.message}`, "error");
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            showToast("Failed to delete asset.", "error");
+        });
+}
+
+// Add New Asset Listener
+const btnAddAsset = document.getElementById("btn-add-asset");
+if (btnAddAsset) {
+    btnAddAsset.addEventListener("click", () => {
+        const inputTicker = document.getElementById("add-asset-ticker");
+        if (!inputTicker) return;
+        const ticker = inputTicker.value.trim().toUpperCase();
+        if (!ticker) {
+            showToast("Please enter a valid ticker (e.g. ADA-USD).", "error");
+            return;
+        }
+        
+        const is_active = document.getElementById("add-asset-active").checked;
+        const tp_multiplier = parseFloat(document.getElementById("add-asset-tp").value);
+        const sl_multiplier = parseFloat(document.getElementById("add-asset-sl").value);
+        const kelly_ceiling = parseFloat(document.getElementById("add-asset-kelly").value);
+        
+        saveAssetConfig(ticker, is_active, tp_multiplier, sl_multiplier, kelly_ceiling);
+        inputTicker.value = "";
+    });
+}
+
+// Initialize on script load
+setTimeout(() => {
+    loadAssetManager();
+}, 2000);

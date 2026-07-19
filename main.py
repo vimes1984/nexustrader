@@ -89,6 +89,111 @@ class NexusTraderOrchestrator:
         """Fetches initial data and trains ML strategies for all tickers."""
         self.loop = asyncio.get_running_loop()
         
+        # Load active assets from database
+        try:
+            db_assets = database.load_active_assets()
+            active_list = [a["ticker"] for a in db_assets if a["is_active"]]
+            if active_list:
+                self.tickers = active_list
+                # Reset local sentiment trackers mapping
+                self.latest_sentiments = {t: 0.0 for t in self.tickers}
+                self.latest_source_sentiments = {t: {} for t in self.tickers}
+                self.last_sentiment_times = {t: 0.0 for t in self.tickers}
+                logging.info(f"Loaded active tickers list from DB: {self.tickers}")
+        except Exception as e:
+            logging.error(f"Error loading active tickers from DB: {e}")
+        
+        # Load risk mode from database if it exists
+        db_risk_mode = database.load_setting("risk_mode")
+        if db_risk_mode:
+            try:
+                self.probability_engine.set_risk_mode(db_risk_mode)
+                logging.info(f"Loaded risk mode from database: {db_risk_mode}")
+            except Exception as e:
+                logging.error(f"Error loading risk mode from DB: {e}")
+                
+        # Sync cash balance with live broker if in live mode
+        try:
+            self.execution_engine.sync_live_balance()
+        except Exception as e:
+            logging.error(f"Error synchronizing live balance at startup: {e}")
+        
+    def init_ticker(self, ticker):
+        """Dynamically initializes data streams, strategy ensemble, and neural weights for a new ticker."""
+        if ticker in self.data_ingestions:
+            return True
+            
+        logging.info(f"Initializing assets and models for {ticker}...")
+        ingestor = DataIngestion(ticker=ticker, interval="1h", period="60d")
+        try:
+            df = ingestor.fetch_historical_data()
+        except Exception as e:
+            logging.error(f"Error fetching data for {ticker}: {e}. Skipping ticker.")
+            return False
+            
+        ensemble = StrategyEnsemble(history_df=df)
+        num_strats = len(ensemble.strategies)
+        learner = create_learning_engine(num_strats)
+        
+        # Load saved Policy Gradient Neural Network weights if they exist
+        db_net_str = database.load_setting(f"policy_net_weights_{ticker}")
+        if db_net_str:
+            try:
+                learner.policy_net.from_json(db_net_str)
+                state = learner.get_state_vector(
+                    df.iloc[-1].to_dict(),
+                    list(df['close'].values[-60:]),
+                    [t for t in self.execution_engine.closed_trades if t['symbol'] == ticker]
+                )
+                ensemble.weights = learner.select_weights(state)
+                logging.info(f"Loaded Policy Network weights for {ticker} from database.")
+            except Exception as e:
+                logging.error(f"Error loading Policy Network weights for {ticker}: {e}")
+        else:
+            ensemble.weights = (np.ones(num_strats) / num_strats).tolist()
+
+        # Save initial weights history point if empty to ensure the line chart displays
+        try:
+            if not database.load_weights_history(ticker, limit=1):
+                # Point 1: Baseline equal weights 2 hours ago
+                equal_weights = {
+                    ensemble.strategies[i].name: float(1.0 / num_strats)
+                    for i in range(num_strats)
+                }
+                database.save_weights_history(time.time() - 7200, ticker, equal_weights)
+                
+                # Point 2: Loaded weights now
+                start_weights = {
+                    ensemble.strategies[i].name: float(ensemble.weights[i])
+                    for i in range(len(ensemble.weights))
+                }
+                database.save_weights_history(time.time(), ticker, start_weights)
+        except Exception as e:
+            logging.error(f"Error pre-populating weights history: {e}")
+            
+        self.data_ingestions[ticker] = ingestor
+        self.strategy_ensembles[ticker] = ensemble
+        self.learning_engines[ticker] = learner
+        return True
+
+    async def initialize(self):
+        """Fetches initial data and trains ML strategies for all tickers."""
+        self.loop = asyncio.get_running_loop()
+        
+        # Load active assets from database
+        try:
+            db_assets = database.load_active_assets()
+            active_list = [a["ticker"] for a in db_assets if a["is_active"]]
+            if active_list:
+                self.tickers = active_list
+                # Reset local sentiment trackers mapping
+                self.latest_sentiments = {t: 0.0 for t in self.tickers}
+                self.latest_source_sentiments = {t: {} for t in self.tickers}
+                self.last_sentiment_times = {t: 0.0 for t in self.tickers}
+                logging.info(f"Loaded active tickers list from DB: {self.tickers}")
+        except Exception as e:
+            logging.error(f"Error loading active tickers from DB: {e}")
+        
         # Load risk mode from database if it exists
         db_risk_mode = database.load_setting("risk_mode")
         if db_risk_mode:
@@ -106,57 +211,7 @@ class NexusTraderOrchestrator:
         
         # Initialize each ticker independently
         for ticker in self.tickers:
-            logging.info(f"Initializing assets and models for {ticker}...")
-            ingestor = DataIngestion(ticker=ticker, interval="1h", period="60d")
-            try:
-                df = ingestor.fetch_historical_data()
-            except Exception as e:
-                logging.error(f"Error fetching data for {ticker}: {e}. Skipping ticker.")
-                continue
-                
-            ensemble = StrategyEnsemble(history_df=df)
-            num_strats = len(ensemble.strategies)
-            learner = create_learning_engine(num_strats)
-            
-            # Load saved Policy Gradient Neural Network weights if they exist
-            db_net_str = database.load_setting(f"policy_net_weights_{ticker}")
-            if db_net_str:
-                try:
-                    learner.policy_net.from_json(db_net_str)
-                    state = learner.get_state_vector(
-                        df.iloc[-1].to_dict(),
-                        list(df['close'].values[-60:]),
-                        [t for t in self.execution_engine.closed_trades if t['symbol'] == ticker]
-                    )
-                    ensemble.weights = learner.select_weights(state)
-                    logging.info(f"Loaded Policy Network weights for {ticker} from database.")
-                except Exception as e:
-                    logging.error(f"Error loading Policy Network weights for {ticker}: {e}")
-            else:
-                ensemble.weights = (np.ones(num_strats) / num_strats).tolist()
-
-            # Save initial weights history point if empty to ensure the line chart displays
-            try:
-                if not database.load_weights_history(ticker, limit=1):
-                    # Point 1: Baseline equal weights 2 hours ago
-                    equal_weights = {
-                        ensemble.strategies[i].name: float(1.0 / num_strats)
-                        for i in range(num_strats)
-                    }
-                    database.save_weights_history(time.time() - 7200, ticker, equal_weights)
-                    
-                    # Point 2: Loaded weights now
-                    start_weights = {
-                        ensemble.strategies[i].name: float(ensemble.weights[i])
-                        for i in range(len(ensemble.weights))
-                    }
-                    database.save_weights_history(time.time(), ticker, start_weights)
-            except Exception as e:
-                logging.error(f"Error pre-populating weights history: {e}")
-                
-            self.data_ingestions[ticker] = ingestor
-            self.strategy_ensembles[ticker] = ensemble
-            self.learning_engines[ticker] = learner
+            self.init_ticker(ticker)
             
         logging.info("NexusTrader Orchestrator initialized successfully for all tickers.")
 
@@ -391,7 +446,8 @@ class NexusTraderOrchestrator:
                     direction=direction,
                     weighted_signal=weighted_signal,
                     row=row,
-                    history_df=ingestor.data
+                    history_df=ingestor.data,
+                    symbol=ticker
                 )
                 evaluation["state"] = state
                 
@@ -1315,6 +1371,48 @@ def set_auto_switch(ticker: str, enable: bool):
         except Exception as e:
             logging.error(f"[AUTO-BRAIN-SWITCH ERROR] Failed to auto-switch brain: {e}")
     return {"status": "success", "auto_switch": enable}
+
+@app.get("/api/assets")
+def get_assets():
+    return database.load_active_assets()
+
+@app.post("/api/assets/save")
+def save_asset(ticker: str, is_active: bool, tp_multiplier: float, sl_multiplier: float, kelly_ceiling: float):
+    ticker = ticker.strip().upper()
+    success = database.save_active_asset(ticker, is_active, tp_multiplier, sl_multiplier, kelly_ceiling)
+    if not success:
+        return {"status": "error", "message": "Failed to save asset config to database."}
+    
+    # Reload active list in orchestrator
+    try:
+        db_assets = database.load_active_assets()
+        active_list = [a["ticker"] for a in db_assets if a["is_active"]]
+        if active_list:
+            orchestrator.tickers = active_list
+            for t in active_list:
+                if t not in orchestrator.latest_sentiments:
+                    orchestrator.latest_sentiments[t] = 0.0
+                    orchestrator.latest_source_sentiments[t] = {}
+                    orchestrator.last_sentiment_times[t] = 0.0
+    except Exception as e:
+        logging.error(f"Error hot-reloading tickers: {e}")
+        
+    return {"status": "success", "message": f"Asset '{ticker}' configuration saved."}
+
+@app.post("/api/assets/delete")
+def delete_asset(ticker: str):
+    ticker = ticker.strip().upper()
+    success = database.delete_active_asset(ticker)
+    if not success:
+        return {"status": "error", "message": "Failed to delete asset from database."}
+        
+    try:
+        db_assets = database.load_active_assets()
+        orchestrator.tickers = [a["ticker"] for a in db_assets if a["is_active"]]
+    except Exception as e:
+        logging.error(f"Error hot-reloading tickers: {e}")
+        
+    return {"status": "success", "message": f"Asset '{ticker}' deleted."}
 
 @app.post("/api/neural/brain/save")
 def save_neural_brain(name: str, ticker: str):

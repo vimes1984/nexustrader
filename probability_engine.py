@@ -20,11 +20,28 @@ class ProbabilityEngine:
         else:
             raise ValueError(f"Invalid risk mode: {mode}")
 
-    def calculate_atr_bounds(self, price, atr, direction):
+    def calculate_atr_bounds(self, price, atr, direction, symbol=None):
         """Calculates Volatility-Adjusted Take-Profit (TP) and Stop-Loss (SL) using ATR."""
         import database
-        tp_multiplier = float(database.load_setting("opt_tp_multiplier", "2.5"))
-        sl_multiplier = float(database.load_setting("opt_sl_multiplier", "1.5"))
+        tp_multiplier = 2.5
+        sl_multiplier = 1.5
+        
+        if symbol:
+            try:
+                conn = database.get_db_connection()
+                cursor = conn.cursor()
+                cursor.execute("SELECT tp_multiplier, sl_multiplier FROM active_assets WHERE ticker = ?", (symbol,))
+                row = cursor.fetchone()
+                conn.close()
+                if row:
+                    tp_multiplier = float(row[0])
+                    sl_multiplier = float(row[1])
+            except Exception:
+                tp_multiplier = float(database.load_setting("opt_tp_multiplier", "2.5"))
+                sl_multiplier = float(database.load_setting("opt_sl_multiplier", "1.5"))
+        else:
+            tp_multiplier = float(database.load_setting("opt_tp_multiplier", "2.5"))
+            sl_multiplier = float(database.load_setting("opt_sl_multiplier", "1.5"))
 
         if atr is None or np.isnan(atr) or atr == 0:
             # Fallback to percentage-based bounds (1.5% TP, 1.0% SL)
@@ -89,10 +106,10 @@ class ProbabilityEngine:
 
         return float(p_win)
 
-    def evaluate_trade(self, price, atr, direction, weighted_signal, row, history_df=None):
+    def evaluate_trade(self, price, atr, direction, weighted_signal, row, history_df=None, symbol=None):
         """Evaluates trade parameters including entry, SL, TP, Win Probability, EV, and size."""
         # 1. Calc SL/TP
-        tp, sl = self.calculate_atr_bounds(price, atr, direction)
+        tp, sl = self.calculate_atr_bounds(price, atr, direction, symbol)
         
         # 2. Get win probability
         p_win = self.estimate_win_probability(weighted_signal, row, history_df)
@@ -118,8 +135,23 @@ class ProbabilityEngine:
         
         # Apply fractional Kelly
         final_fraction = kelly_size * self.kelly_fraction
-        # Cap max position size based on risk profile
-        final_fraction = min(final_fraction, self.max_cap)
+        
+        # Cap max position size based on risk profile or custom kelly ceiling
+        max_cap = self.max_cap
+        if symbol:
+            try:
+                import database
+                conn = database.get_db_connection()
+                cursor = conn.cursor()
+                cursor.execute("SELECT kelly_ceiling FROM active_assets WHERE ticker = ?", (symbol,))
+                row = cursor.fetchone()
+                conn.close()
+                if row:
+                    max_cap = float(row[0])
+            except Exception:
+                pass
+                
+        final_fraction = min(final_fraction, max_cap)
         
         is_viable = (p_win >= self.min_win_rate) and (ev > 0) and (final_fraction > 0)
         
