@@ -1709,15 +1709,23 @@ if (elSavePromptsBtn) {
         elSavePromptsBtn.disabled = true;
         showToast("Saving Agent Prompts...", "info");
         
-        const qVal = encodeURIComponent(elQuant ? elQuant.value : "");
-        const dVal = encodeURIComponent(elDev ? elDev.value : "");
-        const bVal = encodeURIComponent(elBlog ? elBlog.value : "");
-        const nVal = encodeURIComponent(elNn ? elNn.value : "");
-        const sVal = encodeURIComponent(elSent ? elSent.value : "");
-        const rVal = encodeURIComponent(elRisk ? elRisk.value : "");
-        const aVal = encodeURIComponent(elAlloc ? elAlloc.value : "");
+        const payload = {
+            prompt_quant: elQuant ? elQuant.value : "",
+            prompt_dev: elDev ? elDev.value : "",
+            prompt_blog: elBlog ? elBlog.value : "",
+            prompt_nn: elNn ? elNn.value : "",
+            prompt_sentiment: elSent ? elSent.value : "",
+            prompt_risk: elRisk ? elRisk.value : "",
+            prompt_allocator: elAlloc ? elAlloc.value : ""
+        };
         
-        fetch(`/api/system/prompts?prompt_quant=${qVal}&prompt_dev=${dVal}&prompt_blog=${bVal}&prompt_nn=${nVal}&prompt_sentiment=${sVal}&prompt_risk=${rVal}&prompt_allocator=${aVal}`, { method: 'POST' })
+        fetch('/api/system/prompts', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        })
             .then(res => res.json())
             .then(data => {
                 elSavePromptsBtn.disabled = false;

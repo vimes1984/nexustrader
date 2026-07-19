@@ -5,6 +5,7 @@ import sqlite3
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 import uvicorn
 import numpy as np
 import pandas as pd
@@ -1186,10 +1187,14 @@ def get_system_logs(limit: int = 100, log_type: str = "systemd"):
         filename = "nn_agent.log"
     elif log_type == "daily":
         filename = "daily_agent.log"
+    elif log_type == "weekly":
+        filename = "blog/daily_summaries/weekly_self_improvement.md"
+    elif log_type == "sentiment":
+        filename = "blog/daily_summaries/weekly_sentiment_optimization.md"
         
     if os.path.exists(filename):
         try:
-            with open(filename, "r") as f:
+            with open(filename, "r", encoding="utf-8", errors="ignore") as f:
                 lines = f.readlines()[-limit:]
                 return {"status": "success", "logs": "".join(lines)}
         except Exception as e:
@@ -1845,6 +1850,8 @@ Analyze the provided dataset using rigorous statistical methods:
 4. Multi-Brain Allocations & Overrides: Strategize when to activate the auto-switching brain mechanism vs. enforcing manual locked brain overrides on specific assets.
 5. Kelly Criterion Ceiling: Calculate optimal Kelly sizing percentages. Specify the Kelly ceiling threshold to limit maximum capital drawdown per asset.
 
+IMPROVE THIS PROMPT AND VERSION CONTROL IT AND MAKE SURE THE NEXT PROMPT IMPROVES IT'S SELF when it's run.
+
 At the very end of your response, output a strict JSON block specifying the exact configuration parameters to save to our execution settings:
 ```json
 {
@@ -1872,6 +1879,8 @@ Your current priorities:
 - Actively scan system error logs for any exceptions or warnings, locate the source, and design robust self-healing corrections.
 - Ensure comprehensive unit test coverage exists by identifying untested branches and writing robust mock test cases.
 
+IMPROVE THIS PROMPT AND VERSION CONTROL IT AND MAKE SURE THE NEXT PROMPT IMPROVES IT'S SELF when it's run.
+
 Design and implement ONE clean, production-grade, non-breaking feature or UI widget (e.g., system logs refreshers, expected value gauges, or correlation heatmaps).
 Return your response STRICTLY in JSON format containing "explanation" and "modifications" find-and-replace rules."""
 
@@ -1881,6 +1890,9 @@ Frame the narrative around our strategic trajectory toward the $1,000 USD/day ca
 
 Explain model updates, probability distributions, and policy gradient shifts in an engaging, institutional-grade style.
 Highlight our customizable starting deposit baselines, cybernetic notifications bell, new multi-brain selection & custom training platform, dynamic auto-switching, and per-asset Kelly ceilings.
+
+IMPROVE THIS PROMPT AND VERSION CONTROL IT AND MAKE SURE THE NEXT PROMPT IMPROVES IT'S SELF when it's run.
+
 Keep all quantitative tables intact."""
 
 DEFAULT_PROMPT_NN = """You are a world-class Deep Learning Engineer and Neuro-Symbolic Quantitative Researcher.
@@ -1894,6 +1906,9 @@ Our Policy Gradient network now supports:
 5. Dynamic real-time auto-switching of brains based on PnL performance rankings.
 
 Critique the learning rate, weight floor, discount factor, and policy network convergence based on the latest training steps.
+
+IMPROVE THIS PROMPT AND VERSION CONTROL IT AND MAKE SURE THE NEXT PROMPT IMPROVES IT'S SELF when it's run.
+
 At the very end of your response, output recommended setting adjustments strictly in a JSON block:
 ```json
 {
@@ -1907,6 +1922,9 @@ Our core goal is to filter noise and optimize sentiment feed weights to scale bo
 
 Analyze recent feed weighted scores and sentiment data. Propose mapping corrections or new feed sources.
 Suggest when to trigger alerts in the notification dropdown for social sentiment anomalies.
+
+IMPROVE THIS PROMPT AND VERSION CONTROL IT AND MAKE SURE THE NEXT PROMPT IMPROVES IT'S SELF when it's run.
+
 At the very end of your response, output a strict JSON block with feed weights mapping corrections:
 ```json
 {
@@ -1926,6 +1944,8 @@ Our portfolio supports:
 Critique leverage levels, daily drawdown limits, asset-specific Kelly ceilings, and portfolio correlation matrices.
 Monitor our 5-minute failed order cooldown safeguards to prevent API looping under insufficient funds.
 
+IMPROVE THIS PROMPT AND VERSION CONTROL IT AND MAKE SURE THE NEXT PROMPT IMPROVES IT'S SELF when it's run.
+
 At the very end of your response, output a strict JSON block with risk parameter recommendations:
 ```json
 {
@@ -1943,6 +1963,8 @@ Propose adjustments to:
 1. Asset Status: Activate trending/profitable tickers; temporarily deactivate/cooldown underperforming assets with consecutive losses or deep drawdowns.
 2. Kelly Ceiling caps: Limit capital exposure on high-volatility assets while optimizing allocation on stable performers.
 3. Volatility multipliers: Custom ATR TP/SL multipliers tailored to the specific asset's risk regime.
+
+IMPROVE THIS PROMPT AND VERSION CONTROL IT AND MAKE SURE THE NEXT PROMPT IMPROVES IT'S SELF when it's run.
 
 At the very end of your response, output a strict JSON block with your recommended adjustments:
 ```json
@@ -2015,17 +2037,26 @@ def get_prompts():
         "prompt_allocator": database.load_setting("prompt_allocator_agent", DEFAULT_PROMPT_ALLOCATOR)
     }
 
+class PromptsUpdateRequest(BaseModel):
+    prompt_quant: str
+    prompt_dev: str
+    prompt_blog: str
+    prompt_nn: str
+    prompt_sentiment: str
+    prompt_risk: str
+    prompt_allocator: str = None
+
 @app.post("/api/system/prompts")
-def update_prompts(prompt_quant: str, prompt_dev: str, prompt_blog: str, prompt_nn: str, prompt_sentiment: str, prompt_risk: str, prompt_allocator: str = None):
+def update_prompts(req: PromptsUpdateRequest):
     try:
-        database.save_setting("prompt_self_improvement", prompt_quant)
-        database.save_setting("prompt_self_developer", prompt_dev)
-        database.save_setting("prompt_blog_agent", prompt_blog)
-        database.save_setting("prompt_nn_agent", prompt_nn)
-        database.save_setting("prompt_sentiment_agent", prompt_sentiment)
-        database.save_setting("prompt_risk_auditor", prompt_risk)
-        if prompt_allocator is not None:
-            database.save_setting("prompt_allocator_agent", prompt_allocator)
+        database.save_setting("prompt_self_improvement", req.prompt_quant)
+        database.save_setting("prompt_self_developer", req.prompt_dev)
+        database.save_setting("prompt_blog_agent", req.prompt_blog)
+        database.save_setting("prompt_nn_agent", req.prompt_nn)
+        database.save_setting("prompt_sentiment_agent", req.prompt_sentiment)
+        database.save_setting("prompt_risk_auditor", req.prompt_risk)
+        if req.prompt_allocator is not None:
+            database.save_setting("prompt_allocator_agent", req.prompt_allocator)
         return {"status": "success"}
     except Exception as e:
         return {"status": "error", "error": str(e)}

@@ -85,7 +85,7 @@ class TestMainApi(unittest.TestCase):
         self.assertEqual(res["prompt_allocator"], "mocked_prompt_allocator_agent")
 
     def test_update_prompts_saves_to_db(self):
-        res = main.update_prompts(
+        req = main.PromptsUpdateRequest(
             prompt_quant="new_q",
             prompt_dev="new_d",
             prompt_blog="new_b",
@@ -94,6 +94,7 @@ class TestMainApi(unittest.TestCase):
             prompt_risk="new_r",
             prompt_allocator="new_a"
         )
+        res = main.update_prompts(req)
         
         self.assertEqual(res["status"], "success")
         # Verify database save calls
