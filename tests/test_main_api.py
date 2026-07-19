@@ -166,5 +166,14 @@ class TestMainApi(unittest.TestCase):
         self.assertEqual(len(res["optimizations"]), 1)
         self.assertEqual(res["optimizations"][0]["agent"], "PhD Quant Agent")
 
+    def test_get_agent_runs_endpoint(self):
+        database.load_agent_runs.return_value = [
+            {"id": 1, "timestamp": 1234567, "agent": "PhD Quant Agent", "provider": "gemini", "model": "gemini-flash", "prompt": "Test Prompt", "response": "Test Response", "status": "Success"}
+        ]
+        res = main.get_agent_runs()
+        self.assertEqual(res["status"], "success")
+        self.assertEqual(len(res["agent_runs"]), 1)
+        self.assertEqual(res["agent_runs"][0]["agent"], "PhD Quant Agent")
+
 if __name__ == "__main__":
     unittest.main()

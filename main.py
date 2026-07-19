@@ -1209,6 +1209,13 @@ def get_agent_optimizations(limit: int = 100):
     except Exception as e:
         return {"status": "error", "error": str(e)}
 
+@app.get("/api/system/agent_runs")
+def get_agent_runs(limit: int = 100):
+    try:
+        return {"status": "success", "agent_runs": database.load_agent_runs(limit)}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
 # -------------------------------------------------------------
 # Log UI notification to system logs REST API
 # -------------------------------------------------------------

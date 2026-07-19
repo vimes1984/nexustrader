@@ -1556,6 +1556,50 @@
                         </div>
                     </div>
 
+                    <!-- AI Agent LLM Execution Log -->
+                    <div style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 15px; text-align: left; margin-bottom: 20px;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; flex-wrap: wrap; gap: 10px;">
+                            <h3 class="panel-title" style="display: flex; align-items: center; gap: 6px; font-size: 13px; margin: 0;">
+                                <i data-lucide="cpu" style="width: 14px; height: 14px; color: var(--neon-blue);"></i>
+                                AI Agent LLM Execution Log & Prompts Audit Trail
+                            </h3>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <label style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-secondary);">
+                                    <span>Filter by Quant:</span>
+                                    <select id="agent-runs-filter" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 6px; padding: 4px 8px; font-size: 11px; cursor: pointer; outline: none;">
+                                        <option value="all">All Quants</option>
+                                        <option value="PhD Quant Agent">PhD Quant Agent</option>
+                                        <option value="NeuralCore Optimizer">NeuralCore Optimizer</option>
+                                        <option value="Sentiment Sentinel">Sentiment Sentinel</option>
+                                        <option value="Risk Auditor">Risk Auditor</option>
+                                        <option value="Ensemble Asset Allocator">Ensemble Asset Allocator</option>
+                                    </select>
+                                </label>
+                                <input type="text" id="agent-runs-search" placeholder="Search prompts..." style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 6px; padding: 4px 8px; font-size: 11px; width: 140px; outline: none;">
+                            </div>
+                        </div>
+                        <div style="max-height: 250px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px; background: rgba(10,15,30,0.4);">
+                            <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 11px;">
+                                <thead>
+                                    <tr style="background: rgba(255,255,255,0.02); border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">
+                                        <th style="padding: 8px 12px; width: 120px;">Timestamp</th>
+                                        <th style="padding: 8px 12px; width: 135px;">AI Agent</th>
+                                        <th style="padding: 8px 12px; width: 80px;">Engine</th>
+                                        <th style="padding: 8px 12px; width: 100px;">Model</th>
+                                        <th style="padding: 8px 12px; width: 160px;">Prompt / Context</th>
+                                        <th style="padding: 8px 12px; width: 160px;">Raw Response</th>
+                                        <th style="padding: 8px 12px; width: 80px;">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="logs-tab-runs-tbody">
+                                    <tr>
+                                        <td colspan="7" style="color: var(--text-secondary); text-align: center; padding: 20px;">No AI agent executions recorded yet.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
                     <!-- Structured UI Alerts Log -->
                     <div style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 15px; text-align: left;">
                         <h3 class="panel-title" style="display: flex; align-items: center; gap: 6px; font-size: 13px; margin: 0 0 10px 0;">
@@ -1629,6 +1673,28 @@
             </div>
             
             <button class="btn btn-primary" onclick="closeTradeDetailsModal()" style="width: 100%; justify-content: center; font-size: 11px; padding: 8px 16px;">Close Diagnostics</button>
+        </div>
+    </div>
+
+    <!-- Reusable Text Viewer Modal -->
+    <div id="text-viewer-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(5,8,20,0.85); backdrop-filter: blur(10px); z-index: 3000000; align-items: center; justify-content: center;">
+        <div class="glass-panel" style="width: 750px; max-width: 90vw; padding: 24px; border-radius: 12px; border: 1px solid var(--border-color); text-align: left; background: rgba(15,23,42,0.95); box-shadow: 0 10px 40px rgba(0,0,0,0.6); display: flex; flex-direction: column; gap: 15px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
+                <h3 id="text-viewer-title" style="font-size: 15px; font-weight: 700; color: var(--neon-blue); display: flex; align-items: center; gap: 8px; margin: 0;">
+                    <i data-lucide="eye" style="width: 16px; height: 16px;"></i>
+                    Inspect Agent Content
+                </h3>
+                <button onclick="closeTextViewerModal()" style="background: transparent; border: none; color: var(--text-secondary); cursor: pointer; font-size: 20px; line-height: 1; padding: 0;">&times;</button>
+            </div>
+            
+            <div style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); font-size: 11px; max-height: 400px; overflow-y: auto;">
+                <pre id="text-viewer-body" style="margin: 0; white-space: pre-wrap; font-family: monospace; color: var(--text-secondary); text-align: left; line-height: 1.4;"></pre>
+            </div>
+            
+            <div style="display: flex; gap: 10px;">
+                <button class="btn btn-secondary" onclick="copyViewerText()" style="flex: 1; justify-content: center; font-size: 11px; padding: 8px 16px;">Copy Content</button>
+                <button class="btn btn-primary" onclick="closeTextViewerModal()" style="flex: 1; justify-content: center; font-size: 11px; padding: 8px 16px;">Close</button>
+            </div>
         </div>
     </div>
 

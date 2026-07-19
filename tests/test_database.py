@@ -67,5 +67,16 @@ class TestDatabase(unittest.TestCase):
         self.assertEqual(opts[0]["new_value"], "2.0")
         self.assertEqual(opts[0]["rationale"], "For testing")
 
+    def test_agent_runs(self):
+        database.log_agent_run("Test Quant Agent", "gemini", "gemini-flash", "What is 1+1?", "It is 2", "Success")
+        runs = database.load_agent_runs()
+        self.assertEqual(len(runs), 1)
+        self.assertEqual(runs[0]["agent"], "Test Quant Agent")
+        self.assertEqual(runs[0]["provider"], "gemini")
+        self.assertEqual(runs[0]["model"], "gemini-flash")
+        self.assertEqual(runs[0]["prompt"], "What is 1+1?")
+        self.assertEqual(runs[0]["response"], "It is 2")
+        self.assertEqual(runs[0]["status"], "Success")
+
 if __name__ == "__main__":
     unittest.main()

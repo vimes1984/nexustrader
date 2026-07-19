@@ -143,6 +143,18 @@ def query_gemini_robust(api_key: str, prompt, model: str = "gemini-flash-latest"
     except Exception:
         pass
 
+    agent_map = {
+        "quant": "PhD Quant Agent",
+        "dev": "AI Software Developer",
+        "sentiment": "Sentiment Sentinel",
+        "nn": "NeuralCore Optimizer",
+        "risk": "Risk Auditor",
+        "reporter": "Blogger Agent",
+        "allocator": "Ensemble Asset Allocator",
+        "default": "System Agent"
+    }
+    hr_agent = agent_map.get(agent, "System Agent")
+
     # 2. Load config settings from database with per-agent overrides
     db_path = os.path.expanduser("~/.nexustrader/nexustrader.db")
     provider = "gemini"
@@ -273,12 +285,20 @@ def query_gemini_robust(api_key: str, prompt, model: str = "gemini-flash-latest"
             req = urllib.request.Request(url, data=encoded_data, headers=headers)
             with urllib.request.urlopen(req, timeout=45) as resp:
                 res_json = json.loads(resp.read().decode("utf-8"))
+                res_text = ""
                 if provider == "gemini":
-                    return res_json["candidates"][0]["content"]["parts"][0]["text"].strip()
+                    res_text = res_json["candidates"][0]["content"]["parts"][0]["text"].strip()
                 elif provider == "openai":
-                    return res_json["choices"][0]["message"]["content"].strip()
+                    res_text = res_json["choices"][0]["message"]["content"].strip()
                 elif provider == "anthropic":
-                    return res_json["content"][0]["text"].strip()
+                    res_text = res_json["content"][0]["text"].strip()
+                
+                try:
+                    import database
+                    database.log_agent_run(hr_agent, provider, use_model, flat_prompt, res_text, "Success")
+                except Exception:
+                    pass
+                return res_text
         except urllib.error.HTTPError as e:
             if e.code in [429, 500, 502, 503, 504] and retries < max_retries:
                 logging.warning(f"[{provider.upper()} API] Transient HTTP error ({e.code}) hit. Retrying in {delay:.1f}s... (Attempt {retries+1}/{max_retries})")
@@ -306,7 +326,14 @@ def query_gemini_robust(api_key: str, prompt, model: str = "gemini-flash-latest"
                 except Exception:
                     logging.error(f"[{provider.upper()} API] HTTP Error {e.code}: {e.reason}")
                     msg = e.reason
-                raise RuntimeError(f"[{provider.upper()} API Error] HTTP {e.code} {e.reason}: {msg}")
+                
+                err_msg = f"[{provider.upper()} API Error] HTTP {e.code} {e.reason}: {msg}"
+                try:
+                    import database
+                    database.log_agent_run(hr_agent, provider, use_model, flat_prompt, f"Error: {err_msg}", "Failed")
+                except Exception:
+                    pass
+                raise RuntimeError(err_msg)
         except (urllib.error.URLError, ConnectionResetError, BrokenPipeError, TimeoutError) as e:
             if retries < max_retries:
                 logging.warning(f"[{provider.upper()} API] Transient Network error ({e}) hit. Retrying in {delay:.1f}s... (Attempt {retries+1}/{max_retries})")
@@ -315,7 +342,19 @@ def query_gemini_robust(api_key: str, prompt, model: str = "gemini-flash-latest"
                 delay *= backoff_factor
             else:
                 logging.error(f"[{provider.upper()} API] Network Error: {e}")
+                err_msg = f"[{provider.upper()} API Network Error]: {e}"
+                try:
+                    import database
+                    database.log_agent_run(hr_agent, provider, use_model, flat_prompt, f"Error: {err_msg}", "Failed")
+                except Exception:
+                    pass
                 raise e
         except Exception as e:
             logging.error(f"[{provider.upper()} API] Unexpected error: {e}")
+            err_msg = f"[{provider.upper()} API Unexpected Error]: {e}"
+            try:
+                import database
+                database.log_agent_run(hr_agent, provider, use_model, flat_prompt, f"Error: {err_msg}", "Failed")
+            except Exception:
+                pass
             raise e

@@ -256,6 +256,20 @@ def init_db():
     )
     """)
     
+    # Create agent runs audit trail table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS agent_runs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp REAL,
+        agent TEXT,
+        provider TEXT,
+        model TEXT,
+        prompt TEXT,
+        response TEXT,
+        status TEXT
+    )
+    """)
+    
     # Pre-populate and migrate default tickers
     default_tickers = ['ETH-USD', 'SOL-USD', 'BTC-USD', 'DOGE-USD', 'XRP-USD', 'LINK-USD', 'LTC-USD', 'AVAX-USD', 'ADA-USD', 'DOT-USD']
     for t in default_tickers:
@@ -443,6 +457,42 @@ def load_optimizations(limit: int = 100):
         } for r in rows]
     except Exception as e:
         logging.error(f"Error loading optimizations: {e}")
+        return []
+    finally:
+        conn.close()
+
+def log_agent_run(agent: str, provider: str, model: str, prompt: str, response: str, status: str):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "INSERT INTO agent_runs (timestamp, agent, provider, model, prompt, response, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (time.time(), agent, provider, model, prompt, response, status)
+        )
+        conn.commit()
+    except Exception as e:
+        logging.error(f"Error logging agent run: {e}")
+    finally:
+        conn.close()
+
+def load_agent_runs(limit: int = 100):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT id, timestamp, agent, provider, model, prompt, response, status FROM agent_runs ORDER BY timestamp DESC LIMIT ?", (limit,))
+        rows = cursor.fetchall()
+        return [{
+            "id": r[0],
+            "timestamp": r[1],
+            "agent": r[2],
+            "provider": r[3],
+            "model": r[4],
+            "prompt": r[5],
+            "response": r[6],
+            "status": r[7]
+        } for r in rows]
+    except Exception as e:
+        logging.error(f"Error loading agent runs: {e}")
         return []
     finally:
         conn.close()

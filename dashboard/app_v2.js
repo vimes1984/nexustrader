@@ -3091,6 +3091,124 @@ function fetchOptimizationsLogs() {
         .catch(err => console.error("Error loading optimizations history:", err));
 }
 
+let cachedAgentRuns = [];
+
+function renderAgentRuns(runs) {
+    const tbody = document.getElementById("logs-tab-runs-tbody");
+    if (!tbody) return;
+    
+    if (runs.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7" style="color: var(--text-secondary); text-align: center; padding: 20px;">No matching AI agent execution records found.</td>
+            </tr>
+        `;
+        return;
+    }
+    
+    tbody.innerHTML = runs.map(run => {
+        const timeStr = new Date(run.timestamp * 1000).toLocaleString();
+        
+        // Truncate prompt & response preview, escape quotes safely
+        const escPrompt = (run.prompt || "").replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/'/g, "\\'").replace(/\n/g, '\\n').replace(/\r/g, '\\r');
+        const escResponse = (run.response || "").replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/'/g, "\\'").replace(/\n/g, '\\n').replace(/\r/g, '\\r');
+        
+        const previewPrompt = (run.prompt || "").substring(0, 45) + ((run.prompt || "").length > 45 ? "..." : "");
+        const previewResponse = (run.response || "").substring(0, 45) + ((run.response || "").length > 45 ? "..." : "");
+        
+        const statusColor = run.status === "Success" ? "var(--neon-green)" : "var(--neon-red)";
+        
+        return `
+            <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                <td style="padding: 10px 12px; color: var(--text-secondary); white-space: nowrap;">${timeStr}</td>
+                <td style="padding: 10px 12px; font-weight: 600; color: var(--neon-blue);">${run.agent}</td>
+                <td style="padding: 10px 12px; color: var(--text-primary); font-family: monospace;">${run.provider}</td>
+                <td style="padding: 10px 12px; color: var(--text-secondary); font-family: monospace; font-size: 10px;">${run.model}</td>
+                <td style="padding: 10px 12px;">
+                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                        <span style="color: var(--text-secondary); font-size: 10px; font-family: monospace;">${previewPrompt}</span>
+                        <button class="btn btn-secondary" onclick="openTextViewerModal('Inspect Prompt (Agent: ${run.agent})', '${escPrompt}')" style="padding: 2px 6px; font-size: 9px; align-self: flex-start; line-height: 1;">View Full Prompt</button>
+                    </div>
+                </td>
+                <td style="padding: 10px 12px;">
+                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                        <span style="color: var(--text-secondary); font-size: 10px; font-family: monospace;">${previewResponse}</span>
+                        <button class="btn btn-secondary" onclick="openTextViewerModal('Inspect Raw Response (Agent: ${run.agent})', '${escResponse}')" style="padding: 2px 6px; font-size: 9px; align-self: flex-start; line-height: 1;">View Full Response</button>
+                    </div>
+                </td>
+                <td style="padding: 10px 12px; font-weight: bold; color: ${statusColor};">${run.status}</td>
+            </tr>
+        `;
+    }).join("");
+}
+
+function applyAgentRunsFilters() {
+    const filterAgent = document.getElementById("agent-runs-filter")?.value || "all";
+    const searchQuery = document.getElementById("agent-runs-search")?.value.toLowerCase().trim() || "";
+    
+    let filtered = cachedAgentRuns;
+    if (filterAgent !== "all") {
+        filtered = filtered.filter(run => run.agent === filterAgent);
+    }
+    if (searchQuery) {
+        filtered = filtered.filter(run => 
+            run.prompt.toLowerCase().includes(searchQuery) ||
+            run.response.toLowerCase().includes(searchQuery) ||
+            run.model.toLowerCase().includes(searchQuery)
+        );
+    }
+    renderAgentRuns(filtered);
+}
+
+function fetchAgentRunsLogs() {
+    const tbody = document.getElementById("logs-tab-runs-tbody");
+    if (!tbody) return;
+    
+    fetch(`/api/system/agent_runs?limit=100&t=${Date.now()}`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === "success" && data.agent_runs) {
+                cachedAgentRuns = data.agent_runs;
+                applyAgentRunsFilters();
+            }
+        })
+        .catch(err => console.error("Error loading agent runs history:", err));
+}
+
+// Reusable text viewer modal actions
+function openTextViewerModal(title, text) {
+    const modal = document.getElementById("text-viewer-modal");
+    const mTitle = document.getElementById("text-viewer-title");
+    const mBody = document.getElementById("text-viewer-body");
+    
+    if (modal && mTitle && mBody) {
+        mTitle.textContent = title;
+        mBody.textContent = text;
+        modal.style.display = "flex";
+    }
+}
+
+function closeTextViewerModal() {
+    const modal = document.getElementById("text-viewer-modal");
+    if (modal) {
+        modal.style.display = "none";
+    }
+}
+
+function copyViewerText() {
+    const text = document.getElementById("text-viewer-body")?.textContent || "";
+    if (text) {
+        navigator.clipboard.writeText(text)
+            .then(() => showToast("Copied to clipboard.", "success"))
+            .catch(() => showToast("Failed to copy.", "error"));
+    }
+}
+
+// Expose modal actions globally for onclick handlers
+window.closeTextViewerModal = closeTextViewerModal;
+window.copyViewerText = copyViewerText;
+window.openTextViewerModal = openTextViewerModal;
+
 // Hook up manual refresh button and auto-refresh loop
 document.addEventListener("DOMContentLoaded", () => {
     const btnRefreshLogs = document.getElementById("btn-refresh-logs");
@@ -3100,11 +3218,13 @@ document.addEventListener("DOMContentLoaded", () => {
     // Initial fetch
     fetchSystemLogs();
     fetchOptimizationsLogs();
+    fetchAgentRunsLogs();
     
     if (btnRefreshLogs) {
         btnRefreshLogs.addEventListener("click", () => {
             fetchSystemLogs();
             fetchOptimizationsLogs();
+            fetchAgentRunsLogs();
             showToast("System diagnostic logs refreshed.", "success");
         });
     }
@@ -3123,6 +3243,15 @@ document.addEventListener("DOMContentLoaded", () => {
     if (searchOpt) {
         searchOpt.addEventListener("input", applyOptimizationsFilters);
     }
+
+    const filterAgentRuns = document.getElementById("agent-runs-filter");
+    const searchAgentRuns = document.getElementById("agent-runs-search");
+    if (filterAgentRuns) {
+        filterAgentRuns.addEventListener("change", applyAgentRunsFilters);
+    }
+    if (searchAgentRuns) {
+        searchAgentRuns.addEventListener("input", applyAgentRunsFilters);
+    }
     
     // Auto-refresh loop
     logPollInterval = setInterval(() => {
@@ -3132,6 +3261,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (isTabLogsActive && isAutoRefreshEnabled) {
             fetchSystemLogs();
             fetchOptimizationsLogs();
+            fetchAgentRunsLogs();
         }
     }, 5000);
 
