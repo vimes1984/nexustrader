@@ -46,13 +46,15 @@ class TestDashboardContract(unittest.TestCase):
         # Mock database settings load/save
         from unittest.mock import patch, MagicMock
         sys.modules['ccxt'] = MagicMock()
-        sys.modules['database'] = MagicMock()
-        import database
+        database = sys.modules.get('database')
+        if not database:
+            sys.modules['database'] = MagicMock()
+            database = sys.modules['database']
         
-        database.load_setting = MagicMock(return_value="gemini")
+        database.load_setting.side_effect = lambda key, default="": "gemini" if "provider" in key else ""
         database.save_setting = MagicMock()
-        database.load_active_assets = MagicMock(return_value=[])
-        database.list_policy_brains = MagicMock(return_value=[])
+        database.load_active_assets.return_value = []
+        database.list_policy_brains.return_value = []
         
         with patch('main.update_crontab_schedule'):
             import main

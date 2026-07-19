@@ -1877,12 +1877,27 @@ At the very end of your response, output a strict JSON block with risk parameter
 ```"""
 
 @app.get("/api/system/agent_llm")
-def get_agent_llm_config():
-    provider = database.load_setting("agent_llm_provider", "gemini")
-    base_url = database.load_setting("agent_llm_base_url", "")
-    model = database.load_setting("agent_llm_model", "")
-    api_key = database.load_setting("agent_llm_api_key", "")
-    
+def get_agent_llm_config(agent: str = "default"):
+    suffix = f"_{agent}" if agent != "default" else ""
+    provider_key = f"agent_llm_provider{suffix}"
+    provider = database.load_setting(provider_key, "")
+    if not provider and agent != "default":
+        provider = database.load_setting("agent_llm_provider", "gemini")
+    elif not provider:
+        provider = "gemini"
+        
+    base_url = database.load_setting(f"agent_llm_base_url{suffix}", "")
+    if not base_url and agent != "default":
+        base_url = database.load_setting("agent_llm_base_url", "")
+        
+    model = database.load_setting(f"agent_llm_model{suffix}", "")
+    if not model and agent != "default":
+        model = database.load_setting("agent_llm_model", "")
+        
+    api_key = database.load_setting(f"agent_llm_api_key{suffix}", "")
+    if not api_key and agent != "default":
+        api_key = database.load_setting("agent_llm_api_key", "")
+        
     masked_key = ""
     if api_key:
         masked_key = api_key[:4] + "*" * (len(api_key) - 8) + api_key[-4:] if len(api_key) > 8 else "****"
@@ -1895,15 +1910,16 @@ def get_agent_llm_config():
     }
 
 @app.post("/api/system/agent_llm")
-def save_agent_llm_config(provider: str, base_url: str = "", model: str = "", api_key: str = ""):
-    database.save_setting("agent_llm_provider", provider.strip().lower())
-    database.save_setting("agent_llm_base_url", base_url.strip())
-    database.save_setting("agent_llm_model", model.strip())
+def save_agent_llm_config(provider: str, base_url: str = "", model: str = "", api_key: str = "", agent: str = "default"):
+    suffix = f"_{agent}" if agent != "default" else ""
+    database.save_setting(f"agent_llm_provider{suffix}", provider.strip().lower())
+    database.save_setting(f"agent_llm_base_url{suffix}", base_url.strip())
+    database.save_setting(f"agent_llm_model{suffix}", model.strip())
     
     if api_key.strip() and not api_key.strip().startswith("****") and "*" not in api_key:
-        database.save_setting("agent_llm_api_key", api_key.strip())
+        database.save_setting(f"agent_llm_api_key{suffix}", api_key.strip())
         
-    return {"status": "success", "message": "Agent LLM configuration saved successfully."}
+    return {"status": "success", "message": f"Agent LLM configuration for '{agent}' saved successfully."}
 
 @app.get("/api/system/prompts")
 def get_prompts():

@@ -3484,6 +3484,7 @@ setTimeout(() => {
 // Agent LLM Provider Configuration Implementations
 // -------------------------------------------------------------
 function loadAgentLlmConfig() {
+    const elTarget = document.getElementById("setting-agent-llm-target");
     const elProvider = document.getElementById("setting-agent-llm-provider");
     const elBaseUrl = document.getElementById("setting-agent-llm-base-url");
     const elModel = document.getElementById("setting-agent-llm-model");
@@ -3491,47 +3492,103 @@ function loadAgentLlmConfig() {
     
     if (!elProvider) return;
     
-    fetch(`/api/system/agent_llm?t=${Date.now()}`)
+    const agent = elTarget ? elTarget.value : "default";
+    
+    fetch(`/api/system/agent_llm?agent=${encodeURIComponent(agent)}&t=${Date.now()}`)
         .then(res => res.json())
         .then(data => {
             elProvider.value = data.provider;
             elBaseUrl.value = data.base_url || "";
             elModel.value = data.model || "";
             elApiKey.value = data.api_key || "";
+            
+            toggleAgentLlmInputs(data.provider);
         })
         .catch(err => console.error("Error loading agent LLM configuration:", err));
 }
 
+function toggleAgentLlmInputs(provider) {
+    const containerUrl = document.getElementById("container-agent-llm-base-url");
+    const containerModel = document.getElementById("container-agent-llm-model");
+    const labelKey = document.getElementById("label-agent-llm-api-key");
+    const inputUrl = document.getElementById("setting-agent-llm-base-url");
+    const inputModel = document.getElementById("setting-agent-llm-model");
+    
+    if (!containerUrl || !containerModel || !labelKey) return;
+    
+    if (provider === "gemini") {
+        containerUrl.style.display = "none";
+        containerModel.style.display = "none";
+        labelKey.textContent = "Gemini API Secret Key";
+    } else if (provider === "openai") {
+        containerUrl.style.display = "flex";
+        containerModel.style.display = "flex";
+        if (inputUrl && !inputUrl.value) inputUrl.value = "https://api.openai.com/v1";
+        if (inputModel && !inputModel.value) inputModel.value = "gpt-4o";
+        labelKey.textContent = "OpenAI API Secret Token";
+    } else if (provider === "anthropic") {
+        containerUrl.style.display = "flex";
+        containerModel.style.display = "flex";
+        if (inputUrl && !inputUrl.value) inputUrl.value = "https://api.anthropic.com/v1";
+        if (inputModel && !inputModel.value) inputModel.value = "claude-3-5-sonnet-20241022";
+        labelKey.textContent = "Anthropic API Secret Key";
+    } else if (provider === "openclaw") {
+        containerUrl.style.display = "flex";
+        containerModel.style.display = "flex";
+        if (inputUrl && !inputUrl.value) inputUrl.value = "http://192.168.0.81:18789/v1";
+        if (inputModel && !inputModel.value) inputModel.value = "claude-3-5-sonnet-20241022";
+        labelKey.textContent = "OpenClaw Password (if authenticated)";
+    }
+}
+
 function saveAgentLlmConfig() {
+    const elTarget = document.getElementById("setting-agent-llm-target");
     const provider = document.getElementById("setting-agent-llm-provider").value;
     const base_url = document.getElementById("setting-agent-llm-base-url").value;
     const model = document.getElementById("setting-agent-llm-model").value;
     const api_key = document.getElementById("setting-agent-llm-api-key").value;
+    const agent = elTarget ? elTarget.value : "default";
     
     const saveBtn = document.getElementById("save-agent-llm-btn");
     if (saveBtn) saveBtn.disabled = true;
     
-    showToast("Saving Agent LLM configuration...", "info");
+    showToast(`Saving LLM config for '${agent}'...`, "info");
     
-    fetch(`/api/system/agent_llm?provider=${encodeURIComponent(provider)}&base_url=${encodeURIComponent(base_url)}&model=${encodeURIComponent(model)}&api_key=${encodeURIComponent(api_key)}`, { method: 'POST' })
+    fetch(`/api/system/agent_llm?provider=${encodeURIComponent(provider)}&base_url=${encodeURIComponent(base_url)}&model=${encodeURIComponent(model)}&api_key=${encodeURIComponent(api_key)}&agent=${encodeURIComponent(agent)}`, { method: 'POST' })
         .then(res => res.json())
         .then(data => {
             if (saveBtn) saveBtn.disabled = false;
             if (data.status === "success") {
-                showToast("Agent LLM configuration saved successfully!", "success");
+                showToast(`LLM config for '${agent}' saved successfully!`, "success");
                 loadAgentLlmConfig();
             } else {
-                showToast("Failed to save Agent LLM config.", "error");
+                showToast("Failed to save LLM config.", "error");
             }
         })
         .catch(err => {
             if (saveBtn) saveBtn.disabled = false;
             console.error(err);
-            showToast("Error saving Agent LLM config.", "error");
+            showToast("Error saving LLM config.", "error");
         });
 }
 
 const btnSaveAgentLlm = document.getElementById("save-agent-llm-btn");
 if (btnSaveAgentLlm) {
     btnSaveAgentLlm.addEventListener("click", saveAgentLlmConfig);
+}
+
+const elTargetSelect = document.getElementById("setting-agent-llm-target");
+if (elTargetSelect) {
+    elTargetSelect.addEventListener("change", loadAgentLlmConfig);
+}
+
+const elProviderSelect = document.getElementById("setting-agent-llm-provider");
+if (elProviderSelect) {
+    elProviderSelect.addEventListener("change", (e) => {
+        const inputUrl = document.getElementById("setting-agent-llm-base-url");
+        const inputModel = document.getElementById("setting-agent-llm-model");
+        if (inputUrl) inputUrl.value = "";
+        if (inputModel) inputModel.value = "";
+        toggleAgentLlmInputs(e.target.value);
+    });
 }

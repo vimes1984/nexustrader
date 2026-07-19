@@ -113,7 +113,34 @@ def query_gemini_robust(api_key: str, prompt, model: str = "gemini-2.0-flash", m
     import os
     import sqlite3
     
-    # 1. Load config settings from database
+    # 1. Identify which agent is executing by walking up the call stack
+    agent = "default"
+    try:
+        import inspect
+        for frame_info in inspect.stack():
+            filename = os.path.basename(frame_info.filename)
+            if filename in ["self_improvement_agent.py", "weekly_optimizer.py"]:
+                agent = "quant"
+                break
+            elif filename == "agent_self_developer.py":
+                agent = "dev"
+                break
+            elif filename in ["sentiment_agent.py", "sentiment_analyzer.py"]:
+                agent = "sentiment"
+                break
+            elif filename == "nn_agent.py":
+                agent = "nn"
+                break
+            elif filename == "risk_auditor.py":
+                agent = "risk"
+                break
+            elif filename in ["blog_agent.py", "daily_reporter.py"]:
+                agent = "reporter"
+                break
+    except Exception:
+        pass
+
+    # 2. Load config settings from database with per-agent overrides
     db_path = os.path.expanduser("~/.nexustrader/nexustrader.db")
     provider = "gemini"
     config_model = ""
@@ -127,10 +154,28 @@ def query_gemini_robust(api_key: str, prompt, model: str = "gemini-2.0-flash", m
         rows = c.fetchall()
         conn.close()
         settings = {r[0]: r[1] for r in rows}
-        provider = settings.get("agent_llm_provider", "gemini").lower()
-        config_model = settings.get("agent_llm_model", "").strip()
-        api_key_override = settings.get("agent_llm_api_key", "").strip()
-        base_url = settings.get("agent_llm_base_url", "").strip()
+        
+        # Check agent-specific settings first, then fallback to global defaults
+        suffix = f"_{agent}" if agent != "default" else ""
+        
+        provider = settings.get(f"agent_llm_provider{suffix}", "")
+        if not provider and agent != "default":
+            provider = settings.get("agent_llm_provider", "gemini")
+        elif not provider:
+            provider = "gemini"
+        provider = provider.lower()
+            
+        base_url = settings.get(f"agent_llm_base_url{suffix}", "")
+        if not base_url and agent != "default":
+            base_url = settings.get("agent_llm_base_url", "")
+            
+        config_model = settings.get(f"agent_llm_model{suffix}", "")
+        if not config_model and agent != "default":
+            config_model = settings.get("agent_llm_model", "")
+            
+        api_key_override = settings.get(f"agent_llm_api_key{suffix}", "")
+        if not api_key_override and agent != "default":
+            api_key_override = settings.get("agent_llm_api_key", "")
     except Exception:
         pass
         
