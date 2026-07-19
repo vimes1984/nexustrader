@@ -103,7 +103,7 @@ def detect_psychological_sweep(df, lookback=24, round_number_base=5.0):
 
     return 0.0
 
-def query_gemini_robust(api_key: str, prompt, model: str = "gemini-2.0-flash", max_retries: int = 5, backoff_factor: float = 2.0) -> str:
+def query_gemini_robust(api_key: str, prompt, model: str = "gemini-flash-latest", max_retries: int = 5, backoff_factor: float = 2.0) -> str:
     """Queries configured LLM Provider (Gemini, OpenAI, Anthropic, OpenClaw) with backoff on transient errors."""
     import urllib.request
     import urllib.error
@@ -225,7 +225,7 @@ def query_gemini_robust(api_key: str, prompt, model: str = "gemini-2.0-flash", m
             
     elif provider in ["openai", "openclaw"]:
         url = base_url if base_url else "https://api.openai.com/v1/chat/completions"
-        if not use_model or use_model == "gemini-2.0-flash":
+        if not use_model or use_model in ["gemini-2.0-flash", "gemini-flash-latest"]:
             use_model = "gpt-4o"
         payload = {
             "model": use_model,
@@ -239,7 +239,7 @@ def query_gemini_robust(api_key: str, prompt, model: str = "gemini-2.0-flash", m
         
     elif provider == "anthropic":
         url = base_url if base_url else "https://api.anthropic.com/v1/messages"
-        if not use_model or use_model == "gemini-2.0-flash":
+        if not use_model or use_model in ["gemini-2.0-flash", "gemini-flash-latest"]:
             use_model = "claude-3-5-sonnet-20241022"
         payload = {
             "model": use_model,
