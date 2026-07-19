@@ -104,12 +104,47 @@ class ExecutionEngine:
             # 2. Total Portfolio Value (USD cash + holdings value)
             total_value_usd = usd_cash
             try:
-                # Fetch live rates for conversions
-                tickers = exchange.fetch_tickers(['BTC/USD', 'ETH/USD', 'SOL/USD', 'DOGE/USD', 'XRP/USD'])
+                # Dynamically construct target tickers based on held assets and active assets configuration
+                held_assets = []
+                for asset, qty in total_bal.items():
+                    try:
+                        if float(qty) > 0.000001 and asset not in ['USD', 'ZUSD', 'EUR', 'ZEUR']:
+                            norm = asset
+                            if norm == "XXBT": norm = "BTC"
+                            if norm == "XETH": norm = "ETH"
+                            if norm == "XXRP": norm = "XRP"
+                            held_assets.append(f"{norm}/USD")
+                    except Exception:
+                        pass
+                
+                # Add tickers from database active assets to make sure we cover them
+                try:
+                    active_assets = database.load_active_assets()
+                    if active_assets:
+                        for aa in active_assets:
+                            t_base = aa["ticker"].split("-")[0]
+                            held_assets.append(f"{t_base}/USD")
+                except Exception:
+                    pass
+                
+                # Always ensure baseline default tickers are queried
+                for base in ["BTC", "ETH", "SOL", "DOGE", "XRP"]:
+                    held_assets.append(f"{base}/USD")
+                
+                # Filter and deduplicate
+                held_assets = list(set(held_assets))
+                
+                tickers = exchange.fetch_tickers(held_assets)
                 prices = {sym.split('/')[0]: float(tick['last']) for sym, tick in tickers.items() if tick.get('last') is not None}
             except Exception as pe:
                 logging.error(f"[LIVE VALUE SYNC] Failed to fetch conversion tickers: {pe}")
-                prices = {}
+                # Fallback to fetching all tickers if specific symbol lookup fails
+                try:
+                    tickers = exchange.fetch_tickers()
+                    prices = {sym.split('/')[0]: float(tick['last']) for sym, tick in tickers.items() if tick.get('last') is not None}
+                except Exception as pe2:
+                    logging.error(f"[LIVE VALUE SYNC FALLBACK] Failed to fetch all tickers: {pe2}")
+                    prices = {}
                 
             for asset, qty in total_bal.items():
                 qty = float(qty)

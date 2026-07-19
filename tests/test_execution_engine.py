@@ -101,5 +101,48 @@ class TestExecutionEngine(unittest.TestCase):
         self.assertNotIn(symbol, self.engine.active_positions)
         self.engine.learning_callback.assert_called_once()
 
+    @patch('ccxt.kraken')
+    def test_sync_live_balance(self, mock_kraken):
+        # Setup mock exchange instance
+        mock_exchange = MagicMock()
+        mock_kraken.return_value = mock_exchange
+        
+        # Mock balance info
+        mock_exchange.fetch_balance.return_value = {
+            'total': {
+                'USD': 50.0,
+                'BTC': 0.1,
+                'ETH': 0.5
+            }
+        }
+        
+        # Mock fetch_tickers
+        mock_exchange.fetch_tickers.return_value = {
+            'BTC/USD': {'last': 50000.0},
+            'ETH/USD': {'last': 3000.0},
+            'SOL/USD': {'last': 100.0},
+            'DOGE/USD': {'last': 0.1},
+            'XRP/USD': {'last': 0.5}
+        }
+        
+        # Configure execution engine for live mode
+        self.engine.trading_mode = "live"
+        self.engine.config = {
+            "broker": "kraken",
+            "api_credentials": {
+                "api_key": "test-key",
+                "api_secret": "test-secret"
+            }
+        }
+        
+        # Run sync balance
+        self.engine.sync_live_balance()
+        
+        # Assert cash balance updated correctly
+        self.assertEqual(self.engine.balance, 50.0)
+        
+        # Assert live equity includes BTC & ETH value: 50.0 + (0.1 * 50000) + (0.5 * 3000) = 6550.0
+        self.assertEqual(self.engine.live_equity, 6550.0)
+
 if __name__ == "__main__":
     unittest.main()

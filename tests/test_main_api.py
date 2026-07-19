@@ -175,5 +175,34 @@ class TestMainApi(unittest.TestCase):
         self.assertEqual(len(res["agent_runs"]), 1)
         self.assertEqual(res["agent_runs"][0]["agent"], "PhD Quant Agent")
 
+    @patch('os.path.exists', return_value=True)
+    @patch('builtins.open', new_callable=MagicMock)
+    @patch('ccxt.kraken')
+    def test_test_broker_connection_success(self, mock_kraken, mock_open, mock_exists):
+        config_data = {
+            "broker": "kraken",
+            "api_credentials": {
+                "api_key": "test_key",
+                "api_secret": "test_secret"
+            }
+        }
+        
+        # Mock file read
+        mock_file = MagicMock()
+        mock_file.read.return_value = json.dumps(config_data)
+        mock_open.return_value.__enter__.return_value = mock_file
+        
+        # Mock CCXT connection
+        mock_exchange = MagicMock()
+        mock_kraken.return_value = mock_exchange
+        mock_exchange.fetch_balance.return_value = {
+            'total': {'USD': 100.0, 'BTC': 0.0}
+        }
+        
+        res = main.test_broker_connection()
+        self.assertEqual(res["status"], "success")
+        self.assertIn("Successfully connected", res["message"])
+        self.assertEqual(res["balances"], {'USD': 100.0})
+
 if __name__ == "__main__":
     unittest.main()

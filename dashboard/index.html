@@ -1236,6 +1236,30 @@
                                 <span>Exchange API Secret Key</span>
                                 <input type="password" id="setting-api-secret" placeholder="Enter exchange API secret..." style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 12px; border-radius: 8px; font-family: inherit; font-size: 12px; outline: none; width: 100%;">
                             </label>
+                            
+                            <!-- Sleek Inline Connection Test Trigger & Output -->
+                            <div style="border-top: 1px solid var(--border-color); padding-top: 15px; margin-top: 5px;">
+                                <button type="button" class="btn" id="btn-test-broker-connection-settings" style="width: 100%; justify-content: center; gap: 6px; border-color: rgba(0, 240, 255, 0.2); color: var(--neon-blue); font-size: 12px; padding: 8px;">
+                                    <i data-lucide="check-circle" style="width: 14px; height: 14px;"></i>
+                                    Test Exchange API Connection
+                                </button>
+                                
+                                <div id="settings-broker-status-card" style="margin-top: 12px; padding: 12px; border-radius: 8px; background: rgba(255,255,255,0.01); border: 1px solid var(--border-color); display: none; flex-direction: column; gap: 10px; font-size: 12px;">
+                                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                                        <span style="color: var(--text-secondary);">Connection State:</span>
+                                        <span id="settings-broker-status-badge" class="status-badge" style="font-size: 10px;">UNTESTED</span>
+                                    </div>
+                                    <div id="settings-broker-balances-section" style="display: none; border-top: 1px solid var(--border-color); padding-top: 10px; flex-direction: column; gap: 8px;">
+                                        <span style="font-size: 11px; font-weight: 600; color: var(--text-primary);">Live Wallet Balances:</span>
+                                        <div id="settings-broker-balances-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; font-family: monospace;">
+                                            <!-- Dynamically populated balances chips -->
+                                        </div>
+                                    </div>
+                                    <div id="settings-broker-error-section" style="display: none; color: var(--neon-red); font-size: 11px; font-family: monospace; background: rgba(239,68,68,0.05); padding: 8px; border-radius: 4px; border: 1px solid rgba(239,68,68,0.2);">
+                                        <!-- Error message -->
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </article>
 
@@ -1272,15 +1296,11 @@
                 </div>
 
                 <div class="main-right-column" style="display: flex; flex-direction: column; gap: 20px;">
-                    <!-- Save and Test buttons -->
+                    <!-- Save actions -->
                     <article class="glass-panel" style="padding: 20px;">
-                        <button class="btn btn-primary" id="save-system-config-btn" style="width: 100%; justify-content: center; padding: 10px; font-size: 13px; margin-bottom: 10px;">
+                        <button class="btn btn-primary" id="save-system-config-btn" style="width: 100%; justify-content: center; padding: 10px; font-size: 13px;">
                             <i data-lucide="save" style="width: 16px; height: 16px; margin-right: 4px;"></i>
                             Save Broker & Risk Settings
-                        </button>
-                        <button class="btn" id="test-broker-api-btn" style="width: 100%; justify-content: center; border-color: rgba(0, 240, 255, 0.2); color: var(--neon-blue); font-size: 12px; padding: 10px;">
-                            <i data-lucide="check-circle" style="width: 15px; height: 15px; margin-right: 4px;"></i>
-                            Test Exchange API connection
                         </button>
                     </article>
                 </div>

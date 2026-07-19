@@ -2155,35 +2155,89 @@ if (elResetCooldownsBtn) {
 }
 
 // 1. Test Broker API Connection Listener
-const elTestBrokerBtn = document.getElementById("test-broker-api-btn");
-if (elTestBrokerBtn) {
-    elTestBrokerBtn.addEventListener("click", () => {
-        elTestBrokerBtn.disabled = true;
-        elBlogStatusMsg.textContent = "Testing broker API connection...";
-        elBlogStatusMsg.className = "color-blue";
+const elTestBrokerSettingsBtn = document.getElementById("btn-test-broker-connection-settings");
+const elBrokerStatusCard = document.getElementById("settings-broker-status-card");
+const elBrokerStatusBadge = document.getElementById("settings-broker-status-badge");
+const elBrokerBalancesSec = document.getElementById("settings-broker-balances-section");
+const elBrokerBalancesGrid = document.getElementById("settings-broker-balances-grid");
+const elBrokerErrorSec = document.getElementById("settings-broker-error-section");
+
+if (elTestBrokerSettingsBtn) {
+    elTestBrokerSettingsBtn.addEventListener("click", () => {
+        elTestBrokerSettingsBtn.disabled = true;
+        if (elBrokerStatusCard) {
+            elBrokerStatusCard.style.display = "flex";
+        }
+        if (elBrokerStatusBadge) {
+            elBrokerStatusBadge.textContent = "TESTING...";
+            elBrokerStatusBadge.style.background = "rgba(0, 240, 255, 0.15)";
+            elBrokerStatusBadge.style.color = "var(--neon-blue)";
+            elBrokerStatusBadge.style.borderColor = "rgba(0, 240, 255, 0.3)";
+        }
+        if (elBrokerBalancesSec) elBrokerBalancesSec.style.display = "none";
+        if (elBrokerErrorSec) elBrokerErrorSec.style.display = "none";
         
         fetch(`/api/system/test_broker?t=${Date.now()}`)
             .then(res => res.json())
             .then(data => {
-                elTestBrokerBtn.disabled = false;
+                elTestBrokerSettingsBtn.disabled = false;
                 if (data.status === "success") {
-                    elBlogStatusMsg.textContent = data.message;
-                    elBlogStatusMsg.className = "color-green";
-                    
-                    // Display balance info
-                    const balStrings = Object.entries(data.balances).map(([asset, qty]) => `${qty} ${asset}`).join(", ");
-                    alert(`✅ API Connection Success!\n\nBalances: ${balStrings || "No positive asset balances found."}`);
-                    setTimeout(() => { elBlogStatusMsg.textContent = ""; }, 5000);
+                    if (elBrokerStatusBadge) {
+                        elBrokerStatusBadge.textContent = "ONLINE & CONNECTED";
+                        elBrokerStatusBadge.style.background = "rgba(16, 185, 129, 0.15)";
+                        elBrokerStatusBadge.style.color = "var(--neon-green)";
+                        elBrokerStatusBadge.style.borderColor = "rgba(16, 185, 129, 0.3)";
+                    }
+                    if (elBrokerBalancesSec && elBrokerBalancesGrid) {
+                        elBrokerBalancesGrid.innerHTML = "";
+                        const entries = Object.entries(data.balances || {});
+                        if (entries.length > 0) {
+                            entries.forEach(([asset, qty]) => {
+                                const chip = document.createElement("div");
+                                chip.style.padding = "6px 10px";
+                                chip.style.borderRadius = "6px";
+                                chip.style.background = "rgba(255,255,255,0.02)";
+                                chip.style.border = "1px solid var(--border-color)";
+                                chip.style.textAlign = "center";
+                                chip.style.fontSize = "11px";
+                                chip.style.color = "var(--text-primary)";
+                                chip.innerHTML = `<strong>${asset}</strong><div style="font-size: 9px; color: var(--text-secondary); margin-top: 2px;">${parseFloat(qty).toFixed(4)}</div>`;
+                                elBrokerBalancesGrid.appendChild(chip);
+                            });
+                            elBrokerBalancesSec.style.display = "flex";
+                        } else {
+                            elBrokerBalancesGrid.innerHTML = `<span style="font-size: 11px; color: var(--text-muted);">No positive balances found.</span>`;
+                            elBrokerBalancesSec.style.display = "flex";
+                        }
+                    }
+                    showToast("Broker API Connection verified!", "success");
                 } else {
-                    elBlogStatusMsg.textContent = "Connection failed. Check details.";
-                    elBlogStatusMsg.className = "color-red";
-                    alert(`❌ API Connection Failed:\n\n${data.message}`);
+                    if (elBrokerStatusBadge) {
+                        elBrokerStatusBadge.textContent = "CONNECTION FAILED";
+                        elBrokerStatusBadge.style.background = "rgba(239, 68, 68, 0.15)";
+                        elBrokerStatusBadge.style.color = "var(--neon-red)";
+                        elBrokerStatusBadge.style.borderColor = "rgba(239, 68, 68, 0.3)";
+                    }
+                    if (elBrokerErrorSec) {
+                        elBrokerErrorSec.textContent = data.message || "Failed to establish exchange connection.";
+                        elBrokerErrorSec.style.display = "block";
+                    }
+                    showToast("Broker API Connection failed.", "error");
                 }
             })
             .catch(err => {
-                elTestBrokerBtn.disabled = false;
-                elBlogStatusMsg.textContent = "Error testing connection.";
-                elBlogStatusMsg.className = "color-red";
+                elTestBrokerSettingsBtn.disabled = false;
+                if (elBrokerStatusBadge) {
+                    elBrokerStatusBadge.textContent = "ERROR";
+                    elBrokerStatusBadge.style.background = "rgba(239, 68, 68, 0.15)";
+                    elBrokerStatusBadge.style.color = "var(--neon-red)";
+                    elBrokerStatusBadge.style.borderColor = "rgba(239, 68, 68, 0.3)";
+                }
+                if (elBrokerErrorSec) {
+                    elBrokerErrorSec.textContent = "Network error: Failed to connect to local daemon API.";
+                    elBrokerErrorSec.style.display = "block";
+                }
+                showToast("Error checking broker connection.", "error");
                 console.error(err);
             });
     });
