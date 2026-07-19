@@ -10,13 +10,22 @@ import database
 
 class TestDatabase(unittest.TestCase):
     def setUp(self):
-        self.test_db = "test_database_module.db"
+        self.test_db = os.path.abspath("test_database_module.db")
         database.DB_PATH = self.test_db
         database.init_db()
 
     def tearDown(self):
+        # Close any active SQLite connections to release locks before deleting
+        try:
+            conn = sqlite3.connect(self.test_db)
+            conn.close()
+        except Exception:
+            pass
         if os.path.exists(self.test_db):
-            os.remove(self.test_db)
+            try:
+                os.remove(self.test_db)
+            except Exception:
+                pass
 
     def test_settings_save_and_load(self):
         database.save_setting("test_key", "test_val")
