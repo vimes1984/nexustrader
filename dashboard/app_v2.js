@@ -931,6 +931,16 @@ function refreshNeuralCoreBrainSelector(ticker) {
             });
         })
         .catch(err => console.error("Error populating neural core brain selector:", err));
+        
+    fetch(`/api/neural/brain/auto_switch?ticker=${ticker}&t=${Date.now()}`)
+        .then(res => res.json())
+        .then(resData => {
+            const autoSwitchCheck = document.getElementById("toggle-auto-switch-brain");
+            if (autoSwitchCheck) {
+                autoSwitchCheck.checked = resData.auto_switch;
+            }
+        })
+        .catch(err => console.error("Error loading auto_switch configuration state:", err));
 }
 
 // Switch Active Ticker Handler
@@ -2585,6 +2595,32 @@ if (elApplyActiveBrainNeuralBtn) {
     });
 }
 
+// Auto-Switch Brains Checkbox Listener
+const elAutoSwitchBrainCheck = document.getElementById("toggle-auto-switch-brain");
+if (elAutoSwitchBrainCheck) {
+    elAutoSwitchBrainCheck.addEventListener("change", () => {
+        const enable = elAutoSwitchBrainCheck.checked;
+        fetch(`/api/neural/brain/auto_switch?ticker=${encodeURIComponent(activeTicker)}&enable=${enable}`, { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === "success") {
+                    showToast(`Auto-Select Best Brain ${enable ? 'enabled' : 'disabled'}.`, "success");
+                    if (enable) {
+                        setTimeout(() => {
+                            refreshNeuralCoreBrainSelector(activeTicker);
+                        }, 500);
+                    }
+                } else {
+                    showToast("Failed to toggle Auto-Select mode.", "error");
+                }
+            })
+            .catch(err => {
+                console.error("Error setting auto-switch state:", err);
+                showToast("Error updating Auto-Select mode.", "error");
+            });
+    });
+}
+
 // -------------------------------------------------------------
 // Populate NN values in Neural tab from config values on load
 // -------------------------------------------------------------
@@ -2750,7 +2786,14 @@ function selectBrainForSpecs(name, ticker) {
 // Global scope functions for the button onclick triggers
 window.activateNeuralBrain = function(name, ticker) {
     showToast(`Activating brain '${name}'...`, "info");
-    fetch(`/api/neural/brain/activate?name=${encodeURIComponent(name)}&ticker=${encodeURIComponent(ticker)}`, { method: 'POST' })
+    
+    // Set auto-switch checkbox to unchecked since user is doing a manual override
+    const autoSwitchCheck = document.getElementById("toggle-auto-switch-brain");
+    if (autoSwitchCheck) {
+        autoSwitchCheck.checked = false;
+    }
+    
+    fetch(`/api/neural/brain/activate?name=${encodeURIComponent(name)}&ticker=${encodeURIComponent(ticker)}&is_manual=true`, { method: 'POST' })
         .then(res => res.json())
         .then(data => {
             if (data.status === "success") {

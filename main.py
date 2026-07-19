@@ -251,6 +251,27 @@ class NexusTraderOrchestrator:
             "model_dna": model_dna,
             "last_save_time": last_save_time
         }))
+        
+        # Auto-switch to the best performing brain if enabled
+        auto_switch = database.load_setting(f"auto_switch_brains_{ticker}", "true") == "true"
+        if auto_switch and self.mode != "simulation":
+            try:
+                conn = database.get_db_connection()
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT name FROM policy_brains WHERE ticker = ? ORDER BY accumulated_pnl_percent DESC, training_steps DESC LIMIT 1",
+                    (ticker,)
+                )
+                row = cursor.fetchone()
+                conn.close()
+                if row:
+                    best_brain = row[0]
+                    active_brain = database.load_setting(f"active_policy_brain_{ticker}", "Default Brain")
+                    if best_brain != active_brain:
+                        logging.info(f"[AUTO-BRAIN-SWITCH] Auto-switching active brain for {ticker} to best model '{best_brain}'")
+                        activate_neural_brain(best_brain, ticker, is_manual=False)
+            except Exception as e:
+                logging.error(f"[AUTO-BRAIN-SWITCH ERROR] Failed to auto-switch brain: {e}")
 
     def process_tick(self, row, ticker):
         """Orchestrates single price tick logic for a specific ticker."""
@@ -1219,13 +1240,15 @@ def get_brain_specs(name: str, ticker: str):
     }
 
 @app.post("/api/neural/brain/activate")
-def activate_neural_brain(name: str, ticker: str):
+def activate_neural_brain(name: str, ticker: str, is_manual: bool = False):
     brain = database.load_policy_brain(name, ticker)
     if not brain:
         return {"status": "error", "message": f"Brain '{name}' not found."}
     
     database.save_setting(f"policy_net_weights_{ticker}", brain["weights"])
     database.save_setting(f"active_policy_brain_{ticker}", name)
+    if is_manual:
+        database.save_setting(f"auto_switch_brains_{ticker}", "false")
     
     learner = orchestrator.learning_engines.get(ticker)
     if learner:
@@ -1267,6 +1290,31 @@ def activate_neural_brain(name: str, ticker: str):
             return {"status": "error", "message": f"Hot-load exception: {e}"}
             
     return {"status": "success", "message": f"Brain '{name}' activated."}
+
+@app.get("/api/neural/brain/auto_switch")
+def get_auto_switch(ticker: str):
+    state = database.load_setting(f"auto_switch_brains_{ticker}", "true") == "true"
+    return {"ticker": ticker, "auto_switch": state}
+
+@app.post("/api/neural/brain/auto_switch")
+def set_auto_switch(ticker: str, enable: bool):
+    database.save_setting(f"auto_switch_brains_{ticker}", "true" if enable else "false")
+    if enable:
+        try:
+            conn = database.get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT name FROM policy_brains WHERE ticker = ? ORDER BY accumulated_pnl_percent DESC, training_steps DESC LIMIT 1",
+                (ticker,)
+            )
+            row = cursor.fetchone()
+            conn.close()
+            if row:
+                best_brain = row[0]
+                activate_neural_brain(best_brain, ticker, is_manual=False)
+        except Exception as e:
+            logging.error(f"[AUTO-BRAIN-SWITCH ERROR] Failed to auto-switch brain: {e}")
+    return {"status": "success", "auto_switch": enable}
 
 @app.post("/api/neural/brain/save")
 def save_neural_brain(name: str, ticker: str):

@@ -4,7 +4,7 @@
 
 set -e
 
-REMOTE_HOST="nexustrader.local"
+REMOTE_HOST="192.168.0.144"
 REMOTE_USER="root"
 REMOTE_PATH="/root/nexustrader"
 
@@ -24,7 +24,7 @@ fi
 
 # 2. Sync codebase
 echo "📦 Syncing code files via rsync..."
-rsync -av \
+rsync -av -e "ssh -o StrictHostKeyChecking=no" \
     --exclude=".git" \
     --exclude="venv" \
     --exclude="__pycache__" \
@@ -35,12 +35,12 @@ rsync -av \
 
 # 3. Reload and restart daemon
 echo "⚙️ Reloading systemd and restarting daemon..."
-ssh "$REMOTE_USER@$REMOTE_HOST" "systemctl daemon-reload && systemctl restart nexustrader.service"
+ssh -o StrictHostKeyChecking=no "$REMOTE_USER@$REMOTE_HOST" "systemctl daemon-reload && systemctl restart nexustrader.service"
 
 # 4. Print status
 echo "🔍 Verifying active daemon status..."
 sleep 2
-ssh "$REMOTE_USER@$REMOTE_HOST" "systemctl status nexustrader.service"
+ssh -o StrictHostKeyChecking=no "$REMOTE_USER@$REMOTE_HOST" "systemctl status nexustrader.service"
 
 echo "=========================================================="
 echo "🎉 Deployment Completed Successfully!"
