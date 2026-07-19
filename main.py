@@ -1374,14 +1374,51 @@ def set_auto_switch(ticker: str, enable: bool):
 
 @app.get("/api/assets")
 def get_assets():
-    return database.load_active_assets()
+    assets = database.load_active_assets()
+    result = []
+    for a in assets:
+        ticker = a["ticker"]
+        brains = database.list_policy_brains(ticker)
+        brain_names = [b["name"] for b in brains]
+        if "Default Brain" not in brain_names:
+            brain_names.append("Default Brain")
+            
+        active_brain = database.load_setting(f"active_policy_brain_{ticker}", "Default Brain")
+        auto_switch = database.load_setting(f"auto_switch_brains_{ticker}", "true") == "true"
+        
+        a_copy = dict(a)
+        a_copy["brains"] = brain_names
+        a_copy["active_brain"] = active_brain
+        a_copy["auto_switch"] = auto_switch
+        result.append(a_copy)
+    return result
 
 @app.post("/api/assets/save")
-def save_asset(ticker: str, is_active: bool, tp_multiplier: float, sl_multiplier: float, kelly_ceiling: float):
+def save_asset(ticker: str, is_active: bool, tp_multiplier: float, sl_multiplier: float, kelly_ceiling: float, brain_mode: str = "auto"):
     ticker = ticker.strip().upper()
     success = database.save_active_asset(ticker, is_active, tp_multiplier, sl_multiplier, kelly_ceiling)
     if not success:
         return {"status": "error", "message": "Failed to save asset config to database."}
+        
+    # Configure brain allocation mode
+    if brain_mode == "auto":
+        database.save_setting(f"auto_switch_brains_{ticker}", "true")
+        try:
+            conn = database.get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT name FROM policy_brains WHERE ticker = ? ORDER BY accumulated_pnl_percent DESC, training_steps DESC LIMIT 1",
+                (ticker,)
+            )
+            row = cursor.fetchone()
+            conn.close()
+            if row:
+                activate_neural_brain(row[0], ticker, is_manual=False)
+        except Exception:
+            pass
+    else:
+        database.save_setting(f"auto_switch_brains_{ticker}", "false")
+        activate_neural_brain(brain_mode, ticker, is_manual=True)
     
     # Reload active list in orchestrator
     try:
@@ -1394,6 +1431,7 @@ def save_asset(ticker: str, is_active: bool, tp_multiplier: float, sl_multiplier
                     orchestrator.latest_sentiments[t] = 0.0
                     orchestrator.latest_source_sentiments[t] = {}
                     orchestrator.last_sentiment_times[t] = 0.0
+                orchestrator.init_ticker(t)
     except Exception as e:
         logging.error(f"Error hot-reloading tickers: {e}")
         

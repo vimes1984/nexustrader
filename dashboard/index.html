@@ -145,6 +145,10 @@
                 <i data-lucide="brain-circuit" style="width: 16px; height: 16px;"></i>
                 Neural Core
             </button>
+            <button class="nav-tab" data-tab="tab-assets" style="flex: 1; min-width: 90px; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 12px; background: transparent; border: 1px solid transparent; color: var(--text-secondary); border-radius: 8px; font-family: inherit; font-size: 12px; font-weight: 500; cursor: pointer; transition: var(--transition);">
+                <i data-lucide="coins" style="width: 16px; height: 16px; color: var(--neon-blue);"></i>
+                Assets Manager
+            </button>
             <button class="nav-tab" data-tab="tab-simulator" style="flex: 1; min-width: 90px; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 12px; background: transparent; border: 1px solid transparent; color: var(--text-secondary); border-radius: 8px; font-family: inherit; font-size: 12px; font-weight: 500; cursor: pointer; transition: var(--transition);">
                 <i data-lucide="play-circle" style="width: 16px; height: 16px; color: var(--neon-purple);"></i>
                 Training Simulator
@@ -599,6 +603,70 @@
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px; font-size: 10px; color: var(--text-muted);">
                             <span>● Synapse Engaged</span>
                             <span>○ Inactive Pathway</span>
+                        </div>
+                    </article>
+                </div>
+            </main>
+        </div>
+
+        <!-- TAB CONTENT 2.3: ACTIVE ASSET MANAGER -->
+        <div id="tab-assets" class="tab-content">
+            <main class="main-content" style="grid-template-columns: 1fr; gap: 20px; display: grid;">
+                <div class="main-left-column">
+                    <article class="glass-panel" style="padding: 24px; display: flex; flex-direction: column; gap: 15px;">
+                        <h2 class="panel-title" style="display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="coins" style="color: var(--neon-blue)"></i>
+                            Active Asset Manager & Strategy Allocation Overrides
+                        </h2>
+                        <span style="font-size: 11px; color: var(--text-muted); text-align: left;">
+                            Configure active tokens, define custom Take Profit/Stop Loss parameters, and lock specific Policy models or enable automated brain selection per asset. Hover over table headers to view metrics descriptions.
+                        </span>
+                        
+                        <div style="overflow-x: auto; border: 1px solid var(--border-color); border-radius: 8px; background: rgba(0,0,0,0.2);">
+                            <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 12px; color: var(--text-primary);">
+                                <thead>
+                                    <tr style="border-bottom: 1px solid var(--border-color); background: rgba(255,255,255,0.02);">
+                                        <th style="padding: 12px 10px;" title="Trading pair identifier (Yahoo Finance symbol for paper trading / broker symbol for live).">Ticker ℹ️</th>
+                                        <th style="padding: 12px 10px; text-align: center;" title="Toggles whether the system active streams are listening to this asset and executing trades on it.">Active? ℹ️</th>
+                                        <th style="padding: 12px 10px; text-align: center;" title="Volatility-adjusted profit target multiplier (x ATR). High values allow trades to run longer.">TP Mult. ℹ️</th>
+                                        <th style="padding: 12px 10px; text-align: center;" title="Volatility-adjusted risk limit multiplier (x ATR). Lower values close losing trades faster.">SL Mult. ℹ️</th>
+                                        <th style="padding: 12px 10px; text-align: center;" title="Caps the maximum Kelly leverage fraction allocated to a single trade (0.05 = 5%, 0.20 = 20%).">Kelly Cap ℹ️</th>
+                                        <th style="padding: 12px 10px; text-align: center;" title="Specify whether to Auto-Select the best performing model based on historical PnL, or select/lock a specific brain.">Strategy Brain ℹ️</th>
+                                        <th style="padding: 12px 10px; text-align: center;">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="asset-manager-tbody">
+                                    <!-- Dynamic rows populated from Javascript -->
+                                </tbody>
+                                <tfoot>
+                                    <tr style="border-top: 1px dashed var(--border-color); background: rgba(0,240,255,0.01);">
+                                        <td style="padding: 10px;">
+                                            <input type="text" id="add-asset-ticker" placeholder="e.g. LINK-USD" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 5px 8px; border-radius: 4px; font-family: inherit; font-size: 11px; width: 90px;" title="Enter asset pair symbol (e.g., LINK-USD, LTC-USD, ADA-USD).">
+                                        </td>
+                                        <td style="padding: 10px; text-align: center;">
+                                            <input type="checkbox" id="add-asset-active" checked style="accent-color: var(--neon-blue); cursor: pointer;" title="Toggles if this asset should begin trading immediately on add.">
+                                        </td>
+                                        <td style="padding: 10px; text-align: center;">
+                                            <input type="number" id="add-asset-tp" step="0.1" value="2.5" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 5px; border-radius: 4px; width: 50px; text-align: center;" title="Default Take Profit multiplier.">
+                                        </td>
+                                        <td style="padding: 10px; text-align: center;">
+                                            <input type="number" id="add-asset-sl" step="0.1" value="1.5" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 5px; border-radius: 4px; width: 50px; text-align: center;" title="Default Stop Loss multiplier.">
+                                        </td>
+                                        <td style="padding: 10px; text-align: center;">
+                                            <input type="number" id="add-asset-kelly" step="0.05" value="0.20" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 5px; border-radius: 4px; width: 50px; text-align: center;" title="Default Kelly fraction ceiling.">
+                                        </td>
+                                        <td style="padding: 10px; text-align: center;">
+                                            <select id="add-asset-brain" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 5px 8px; border-radius: 4px; font-family: inherit; font-size: 11px; width: 130px;" title="Strategy Brain allocation mode.">
+                                                <option value="auto">Auto-Select (Best)</option>
+                                                <option value="Default Brain">Default Brain</option>
+                                            </select>
+                                        </td>
+                                        <td style="padding: 10px; text-align: center;">
+                                            <button class="btn btn-primary" id="btn-add-asset" style="padding: 4px 8px; font-size: 10px; cursor: pointer;">Add Asset</button>
+                                        </td>
+                                    </tr>
+                                </tfoot>
+                            </table>
                         </div>
                     </article>
                 </div>
@@ -1139,57 +1207,6 @@
                                 <span>Max Daily Drawdown Loss (%)</span>
                                 <input type="number" id="setting-max-drawdown" min="1" max="25" value="5" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 6px; border-radius: 6px; width: 60px; text-align: center;">
                             </label>
-                        </div>
-                    </article>
-                    
-                    <!-- Active Asset Manager -->
-                    <article class="glass-panel" style="padding: 24px; margin-top: 20px; display: flex; flex-direction: column; gap: 15px;">
-                        <h2 class="panel-title" style="display: flex; align-items: center; gap: 8px;">
-                            <i data-lucide="coins" style="color: var(--neon-blue)"></i>
-                            Active Asset Manager & Risk Overrides
-                        </h2>
-                        <span style="font-size: 11px; color: var(--text-muted); text-align: left;">
-                            Manage which crypto assets are active in trading and define per-asset overrides for Take Profit (TP), Stop Loss (SL), and Kelly Ceiling.
-                        </span>
-                        
-                        <div style="overflow-x: auto; border: 1px solid var(--border-color); border-radius: 8px; background: rgba(0,0,0,0.2);">
-                            <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 12px; color: var(--text-primary);">
-                                <thead>
-                                    <tr style="border-bottom: 1px solid var(--border-color); background: rgba(255,255,255,0.02);">
-                                        <th style="padding: 10px;">Ticker</th>
-                                        <th style="padding: 10px; text-align: center;">Active?</th>
-                                        <th style="padding: 10px; text-align: center;">TP Mult.</th>
-                                        <th style="padding: 10px; text-align: center;">SL Mult.</th>
-                                        <th style="padding: 10px; text-align: center;">Kelly Cap</th>
-                                        <th style="padding: 10px; text-align: center;">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="asset-manager-tbody">
-                                    <!-- Dynamic rows -->
-                                </tbody>
-                                <tfoot>
-                                    <tr style="border-top: 1px dashed var(--border-color); background: rgba(0,240,255,0.01);">
-                                        <td style="padding: 10px;">
-                                            <input type="text" id="add-asset-ticker" placeholder="e.g. ADA-USD" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 5px 8px; border-radius: 4px; font-family: inherit; font-size: 11px; width: 85px;">
-                                        </td>
-                                        <td style="padding: 10px; text-align: center;">
-                                            <input type="checkbox" id="add-asset-active" checked style="accent-color: var(--neon-blue); cursor: pointer;">
-                                        </td>
-                                        <td style="padding: 10px; text-align: center;">
-                                            <input type="number" id="add-asset-tp" step="0.1" value="2.5" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 5px; border-radius: 4px; width: 50px; text-align: center;">
-                                        </td>
-                                        <td style="padding: 10px; text-align: center;">
-                                            <input type="number" id="add-asset-sl" step="0.1" value="1.5" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 5px; border-radius: 4px; width: 50px; text-align: center;">
-                                        </td>
-                                        <td style="padding: 10px; text-align: center;">
-                                            <input type="number" id="add-asset-kelly" step="0.05" value="0.20" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 5px; border-radius: 4px; width: 50px; text-align: center;">
-                                        </td>
-                                        <td style="padding: 10px; text-align: center;">
-                                            <button class="btn btn-primary" id="btn-add-asset" style="padding: 4px 8px; font-size: 10px; cursor: pointer;">Add</button>
-                                        </td>
-                                    </tr>
-                                </tfoot>
-                            </table>
                         </div>
                     </article>
                 </div>

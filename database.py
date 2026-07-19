@@ -243,12 +243,13 @@ def init_db():
     )
     """)
     
-    # Pre-populate default tickers
-    cursor.execute("SELECT COUNT(*) FROM active_assets")
-    if cursor.fetchone()[0] == 0:
-        default_tickers = ['ETH-USD', 'SOL-USD', 'BTC-USD', 'DOGE-USD', 'XRP-USD']
-        for t in default_tickers:
-            cursor.execute("INSERT INTO active_assets (ticker, is_active) VALUES (?, 1)", (t,))
+    # Pre-populate and migrate default tickers
+    default_tickers = ['ETH-USD', 'SOL-USD', 'BTC-USD', 'DOGE-USD', 'XRP-USD', 'LINK-USD', 'LTC-USD', 'AVAX-USD', 'ADA-USD', 'DOT-USD']
+    for t in default_tickers:
+        try:
+            cursor.execute("INSERT OR IGNORE INTO active_assets (ticker, is_active) VALUES (?, 1)", (t,))
+        except Exception:
+            pass
             
     # Commit and close
     conn.commit()

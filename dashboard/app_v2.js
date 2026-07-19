@@ -2494,7 +2494,7 @@ elNavTabs.forEach(tab => {
             loadWeightsHistory(activeTicker);
             loadNeuralBrains(activeTicker);
             refreshNeuralCoreBrainSelector(activeTicker);
-        } else if (targetTabId === "tab-settings") {
+        } else if (targetTabId === "tab-assets") {
             loadAssetManager();
         } else if (targetTabId === "tab-simulator") {
             loadNeuralBrains(activeTicker);
@@ -3327,22 +3327,46 @@ function loadAssetManager() {
         .then(res => res.json())
         .then(assets => {
             tbody.innerHTML = "";
+            
+            // Build add-asset-brain selector options dynamically from all unique brains in response
+            const addAssetSelect = document.getElementById("add-asset-brain");
+            if (addAssetSelect) {
+                const uniqueBrains = new Set(["Default Brain"]);
+                assets.forEach(asset => {
+                    asset.brains.forEach(b => uniqueBrains.add(b));
+                });
+                addAssetSelect.innerHTML = `<option value="auto">Auto-Select (Best)</option>`;
+                uniqueBrains.forEach(b => {
+                    addAssetSelect.innerHTML += `<option value="${b}">${b}</option>`;
+                });
+            }
+            
             assets.forEach(asset => {
+                let brainOptions = `<option value="auto" ${asset.auto_switch ? 'selected' : ''}>Auto-Select (Best)</option>`;
+                asset.brains.forEach(bName => {
+                    brainOptions += `<option value="${bName}" ${(!asset.auto_switch && asset.active_brain === bName) ? 'selected' : ''}>${bName}</option>`;
+                });
+                
                 const tr = document.createElement("tr");
                 tr.style.borderBottom = "1px solid rgba(255,255,255,0.05)";
                 tr.innerHTML = `
-                    <td style="padding: 10px; font-weight: 600; text-align: left;">${asset.ticker}</td>
+                    <td style="padding: 10px; font-weight: 600; text-align: left;" title="Asset pair symbol name.">${asset.ticker}</td>
                     <td style="padding: 10px; text-align: center;">
-                        <input type="checkbox" class="asset-active-check" data-ticker="${asset.ticker}" ${asset.is_active ? 'checked' : ''} style="accent-color: var(--neon-blue); cursor: pointer; width: 15px; height: 15px;">
+                        <input type="checkbox" class="asset-active-check" data-ticker="${asset.ticker}" ${asset.is_active ? 'checked' : ''} style="accent-color: var(--neon-blue); cursor: pointer; width: 15px; height: 15px;" title="Active status checkbox.">
                     </td>
                     <td style="padding: 10px; text-align: center;">
-                        <input type="number" class="asset-tp-input" data-ticker="${asset.ticker}" step="0.1" value="${asset.tp_multiplier}" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px; border-radius: 4px; width: 50px; text-align: center;">
+                        <input type="number" class="asset-tp-input" data-ticker="${asset.ticker}" step="0.1" value="${asset.tp_multiplier}" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px; border-radius: 4px; width: 50px; text-align: center;" title="Custom Take Profit multiplier value.">
                     </td>
                     <td style="padding: 10px; text-align: center;">
-                        <input type="number" class="asset-sl-input" data-ticker="${asset.ticker}" step="0.1" value="${asset.sl_multiplier}" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px; border-radius: 4px; width: 50px; text-align: center;">
+                        <input type="number" class="asset-sl-input" data-ticker="${asset.ticker}" step="0.1" value="${asset.sl_multiplier}" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px; border-radius: 4px; width: 50px; text-align: center;" title="Custom Stop Loss multiplier value.">
                     </td>
                     <td style="padding: 10px; text-align: center;">
-                        <input type="number" class="asset-kelly-input" data-ticker="${asset.ticker}" step="0.05" value="${asset.kelly_ceiling}" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px; border-radius: 4px; width: 50px; text-align: center;">
+                        <input type="number" class="asset-kelly-input" data-ticker="${asset.ticker}" step="0.05" value="${asset.kelly_ceiling}" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px; border-radius: 4px; width: 50px; text-align: center;" title="Custom Kelly leverage size limit ceiling value.">
+                    </td>
+                    <td style="padding: 10px; text-align: center;">
+                        <select class="asset-brain-select" data-ticker="${asset.ticker}" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px 8px; border-radius: 4px; font-family: inherit; font-size: 11px; width: 130px; cursor: pointer;" title="Lock custom brain or set to auto-select.">
+                            ${brainOptions}
+                        </select>
                     </td>
                     <td style="padding: 10px; text-align: center; display: flex; gap: 6px; justify-content: center; align-items: center;">
                         <button class="btn btn-save-asset" data-ticker="${asset.ticker}" style="padding: 4px 8px; font-size: 10px; border-color: var(--neon-green); color: var(--neon-green); background: rgba(0,255,100,0.05); cursor: pointer; border-radius: 4px;">Save</button>
@@ -3360,8 +3384,9 @@ function loadAssetManager() {
                     const tp_multiplier = parseFloat(tbody.querySelector(`.asset-tp-input[data-ticker="${ticker}"]`).value);
                     const sl_multiplier = parseFloat(tbody.querySelector(`.asset-sl-input[data-ticker="${ticker}"]`).value);
                     const kelly_ceiling = parseFloat(tbody.querySelector(`.asset-kelly-input[data-ticker="${ticker}"]`).value);
+                    const brain_mode = tbody.querySelector(`.asset-brain-select[data-ticker="${ticker}"]`).value;
                     
-                    saveAssetConfig(ticker, is_active, tp_multiplier, sl_multiplier, kelly_ceiling);
+                    saveAssetConfig(ticker, is_active, tp_multiplier, sl_multiplier, kelly_ceiling, brain_mode);
                 });
             });
             
@@ -3378,9 +3403,9 @@ function loadAssetManager() {
         .catch(err => console.error("Error loading asset manager:", err));
 }
 
-function saveAssetConfig(ticker, is_active, tp_multiplier, sl_multiplier, kelly_ceiling) {
+function saveAssetConfig(ticker, is_active, tp_multiplier, sl_multiplier, kelly_ceiling, brain_mode = "auto") {
     showToast(`Saving asset '${ticker}'...`, "info");
-    fetch(`/api/assets/save?ticker=${encodeURIComponent(ticker)}&is_active=${is_active}&tp_multiplier=${tp_multiplier}&sl_multiplier=${sl_multiplier}&kelly_ceiling=${kelly_ceiling}`, { method: 'POST' })
+    fetch(`/api/assets/save?ticker=${encodeURIComponent(ticker)}&is_active=${is_active}&tp_multiplier=${tp_multiplier}&sl_multiplier=${sl_multiplier}&kelly_ceiling=${kelly_ceiling}&brain_mode=${encodeURIComponent(brain_mode)}`, { method: 'POST' })
         .then(res => res.json())
         .then(data => {
             if (data.status === "success") {
@@ -3430,8 +3455,9 @@ if (btnAddAsset) {
         const tp_multiplier = parseFloat(document.getElementById("add-asset-tp").value);
         const sl_multiplier = parseFloat(document.getElementById("add-asset-sl").value);
         const kelly_ceiling = parseFloat(document.getElementById("add-asset-kelly").value);
+        const brain_mode = document.getElementById("add-asset-brain").value;
         
-        saveAssetConfig(ticker, is_active, tp_multiplier, sl_multiplier, kelly_ceiling);
+        saveAssetConfig(ticker, is_active, tp_multiplier, sl_multiplier, kelly_ceiling, brain_mode);
         inputTicker.value = "";
     });
 }
