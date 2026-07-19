@@ -24,7 +24,7 @@ def save_setting(key, value):
     conn.commit()
     conn.close()
 
-def run_sentiment_self_improvement():
+def run_sentiment_self_improvement(trigger_deploy: bool = False):
     logging.info("Starting Sentiment Engine self-improvement session...")
     settings = load_settings()
     gemini_api_key = settings.get("blog_gemini_api_key", "").strip()
@@ -131,14 +131,15 @@ Return ONLY a JSON block containing the key "revised_prompt_sentiment_agent" wit
         except Exception as e:
             logging.error(f"Failed to append Sentiment logs to blog summaries: {e}")
             
-    # Trigger reload on Proxmox
-    try:
-        subprocess.run(["./deploy.sh"], timeout=30)
-        logging.info("Deploy completed after Sentiment optimization.")
-    except Exception as e:
-        logging.error(f"Deploy execution failed: {e}")
+    # Trigger reload on Proxmox if requested
+    if trigger_deploy:
+        try:
+            subprocess.run(["./deploy.sh"], timeout=30)
+            logging.info("Deploy completed after Sentiment optimization.")
+        except Exception as e:
+            logging.error(f"Deploy execution failed: {e}")
         
     return f"Success! Sentiment self-improvement completed.\n\n" + report_content
 
 if __name__ == "__main__":
-    print(run_sentiment_self_improvement())
+    print(run_sentiment_self_improvement(trigger_deploy=True))

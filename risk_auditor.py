@@ -24,7 +24,7 @@ def save_setting(key, value):
     conn.commit()
     conn.close()
 
-def run_risk_audit():
+def run_risk_audit(trigger_deploy: bool = False):
     logging.info("Starting Quantitative Portfolio Risk Audit...")
     settings = load_settings()
     gemini_api_key = settings.get("blog_gemini_api_key", "").strip()
@@ -154,14 +154,15 @@ Return ONLY a JSON block containing the key "revised_prompt_risk_auditor" with y
         except Exception as e:
             logging.error(f"Failed to append Risk logs to blog summaries: {e}")
             
-    # Trigger reload on Proxmox
-    try:
-        subprocess.run(["./deploy.sh"], timeout=30)
-        logging.info("Deploy completed after Risk Audit.")
-    except Exception as e:
-        logging.error(f"Deploy execution failed: {e}")
+    # Trigger reload on Proxmox if requested
+    if trigger_deploy:
+        try:
+            subprocess.run(["./deploy.sh"], timeout=30)
+            logging.info("Deploy completed after Risk Audit.")
+        except Exception as e:
+            logging.error(f"Deploy execution failed: {e}")
         
     return f"Success! Risk Audit completed.\n\n" + report_content
 
 if __name__ == "__main__":
-    print(run_risk_audit())
+    print(run_risk_audit(trigger_deploy=True))

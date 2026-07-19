@@ -17,7 +17,7 @@ def load_settings():
     conn.close()
     return {r[0]: r[1] for r in rows}
 
-def run_self_developer():
+def run_self_developer(trigger_deploy: bool = False):
     logging.info("Starting autonomous agent self-developer session...")
     settings = load_settings()
     gemini_api_key = settings.get("blog_gemini_api_key", "").strip()
@@ -165,17 +165,18 @@ The "find" blocks MUST MATCH EXACTLY (whitespace, newlines, etc.) to the existin
                 f.write(original)
         return f"Validation failed: {e}"
         
-    # Deploy to Proxmox server
-    try:
-        deploy_res = subprocess.run(
-            ["./deploy.sh"],
-            capture_output=True,
-            text=True,
-            timeout=30
-        )
-        logging.info(f"Deployment completed: {deploy_res.stdout}")
-    except Exception as e:
-        logging.error(f"Deployment failed: {e}")
+    # Deploy to Proxmox server if requested
+    if trigger_deploy:
+        try:
+            deploy_res = subprocess.run(
+                ["./deploy.sh"],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            logging.info(f"Deployment completed: {deploy_res.stdout}")
+        except Exception as e:
+            logging.error(f"Deployment failed: {e}")
         
     # Run meta-prompt optimization
     optimize_own_prompt(settings, gemini_api_key)
@@ -263,4 +264,4 @@ Return ONLY a JSON block containing the key "revised_prompt_self_developer" with
     return None
 
 if __name__ == "__main__":
-    print(run_self_developer())
+    print(run_self_developer(trigger_deploy=True))
