@@ -286,13 +286,27 @@ def query_gemini_robust(api_key: str, prompt, model: str = "gemini-flash-latest"
                 retries += 1
                 delay *= backoff_factor
             else:
+                msg = ""
                 try:
                     err_body = e.read().decode("utf-8")
                     logging.error(f"[{provider.upper()} API] HTTP Error {e.code}: {e.reason} - Body: {err_body}")
-                    e.reason = f"{e.reason} - {err_body}"
+                    try:
+                        err_json = json.loads(err_body)
+                        if "error" in err_json:
+                            if isinstance(err_json["error"], dict):
+                                msg = err_json["error"].get("message", err_body)
+                            else:
+                                msg = str(err_json["error"])
+                        elif "message" in err_json:
+                            msg = err_json["message"]
+                        else:
+                            msg = err_body
+                    except Exception:
+                        msg = err_body
                 except Exception:
                     logging.error(f"[{provider.upper()} API] HTTP Error {e.code}: {e.reason}")
-                raise e
+                    msg = e.reason
+                raise RuntimeError(f"[{provider.upper()} API Error] HTTP {e.code} {e.reason}: {msg}")
         except (urllib.error.URLError, ConnectionResetError, BrokenPipeError, TimeoutError) as e:
             if retries < max_retries:
                 logging.warning(f"[{provider.upper()} API] Transient Network error ({e}) hit. Retrying in {delay:.1f}s... (Attempt {retries+1}/{max_retries})")

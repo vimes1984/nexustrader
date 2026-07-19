@@ -225,12 +225,12 @@ def run_self_improvement():
             
         conn.close()
         
-        # 5. Gemini AI PhD Quant & Mathematician Critical Analysis
+        # 5. AI PhD Quant & Mathematician Critical Analysis
         gemini_api_key = settings.get("blog_gemini_api_key", "").strip()
         ai_enabled = settings.get("blog_ai_enabled", "false") == "true"
         
         if ai_enabled and gemini_api_key:
-            report_lines.append("\n### 💡 Gemini AI PhD Quant & Mathematician Evaluation:")
+            report_lines.append("\n### 💡 AI PhD Quant & Mathematician Evaluation:")
             try:
                 # Load prompt template from settings with default fallback
                 db_prompt = settings.get("prompt_self_improvement")
@@ -312,7 +312,7 @@ Current Session Data:
                         conn_asset.close()
                         report_lines.append(f"\n📊 **Auto-Applied Asset Setting (PhD Quant)**: `{ticker}` -> Active: `{is_active}`, TP: `{tp_mult}x`, SL: `{sl_mult}x`, Kelly Cap: `{kelly}`")
             except Exception as e:
-                report_lines.append(f"Error calling Gemini AI for PhD analysis: {e}")
+                report_lines.append(f"Error calling AI for PhD analysis: {e}")
                 
             # Perform Meta-Prompt Optimization for PhD Quant
             revised_prompt = optimize_own_prompt(settings, recent_trades, best_oversold, best_overbought, best_threshold, best_tp_mult, best_sl_mult, gemini_api_key)
@@ -320,7 +320,7 @@ Current Session Data:
                 report_lines.append(f"\n🧠 **AI Prompt Meta-Optimization**: Successfully analyzed agent outputs and evolved PhD Quant prompt template to focus closer on the $1,000 USD/day mission.")
         else:
             report_lines.append("\n### 💡 AI Recommendations Status:")
-            report_lines.append("*Gemini AI recommendations disabled or API key not configured in settings.*")
+            report_lines.append("*AI recommendations disabled or API key not configured in settings.*")
 
         report_content = "\n".join(report_lines)
         logging.info("Strategy parameters optimized successfully:\n" + report_content)

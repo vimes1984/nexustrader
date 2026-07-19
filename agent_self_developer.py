@@ -106,8 +106,8 @@ The "find" blocks MUST MATCH EXACTLY (whitespace, newlines, etc.) to the existin
         
         response_data = json.loads(raw_text)
     except Exception as e:
-        logging.error(f"Gemini API call failed: {e}")
-        return f"Gemini API call failed: {e}"
+        logging.error(f"API call failed: {e}")
+        return f"API call failed: {e}"
         
     explanation = response_data.get("explanation", "No explanation provided.")
     modifications = response_data.get("modifications", [])

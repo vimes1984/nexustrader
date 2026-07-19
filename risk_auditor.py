@@ -97,8 +97,8 @@ Recent trades telemetry:
                 save_setting("loss_cooldown_hours", str(r_cooldown))
                 report_lines.append(f"\n📊 **Auto-Applied Setting**: Loss Cooldown adjusted to `{r_cooldown} hours`")
     except Exception as e:
-        logging.error(f"Gemini API call failed: {e}")
-        return f"Gemini API call failed: {e}"
+        logging.error(f"API call failed: {e}")
+        return f"API call failed: {e}"
         
     # Perform Meta-Prompt Optimization for Risk Auditor Prompt
     try:

@@ -74,8 +74,8 @@ Current news sentiment weight factor in Strategy Ensemble: {settings.get("recomm
                 save_setting("recommended_news_sentiment_weight", str(r_weight))
                 report_lines.append(f"\n📊 **Auto-Applied Setting**: News Sentiment Weight adjusted to `{r_weight}`")
     except Exception as e:
-        logging.error(f"Gemini API call failed: {e}")
-        return f"Gemini API call failed: {e}"
+        logging.error(f"API call failed: {e}")
+        return f"API call failed: {e}"
         
     # Perform Meta-Prompt Optimization for Sentiment Prompt
     try:

@@ -141,8 +141,8 @@ Recent Performance Summary (Last 100 Trades Grouped By Ticker):
                 save_active_asset(ticker, is_active, tp_mult, sl_mult, kelly)
                 report_lines.append(f"\n📊 **Auto-Applied Asset Setting**: `{ticker}` -> Active: `{is_active}`, TP: `{tp_mult}x`, SL: `{sl_mult}x`, Kelly Cap: `{kelly}`")
     except Exception as e:
-        logging.error(f"Gemini API call failed: {e}")
-        return f"Gemini API call failed: {e}"
+        logging.error(f"API call failed: {e}")
+        return f"API call failed: {e}"
         
     # Perform Meta-Prompt Optimization for Allocator Prompt
     try:

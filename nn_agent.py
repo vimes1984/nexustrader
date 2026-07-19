@@ -101,8 +101,8 @@ Recent closed trades for analysis:
                 save_setting("nn_weight_floor", str(r_floor))
                 report_lines.append(f"\n📊 **Auto-Applied Setting**: NN Weight Floor adjusted to `{r_floor}`")
     except Exception as e:
-        logging.error(f"Gemini API call failed: {e}")
-        return f"Gemini API call failed: {e}"
+        logging.error(f"API call failed: {e}")
+        return f"API call failed: {e}"
         
     # Perform Meta-Prompt Optimization for NN Prompt
     try:
