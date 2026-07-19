@@ -27,6 +27,8 @@ from probability_engine import ProbabilityEngine
 from learning_engine import LearningEngine
 from execution_engine import ExecutionEngine
 import database
+from evaluation.singletons import kill_switch, drawdown_tracker, mutation_freeze
+from trading_modes import migrate_existing_settings as migrate_settings
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -86,39 +88,6 @@ class NexusTraderOrchestrator:
         # Setup learning callback connection
         self.execution_engine.set_learning_callback(self.on_trade_closed)
 
-    async def initialize(self):
-        """Fetches initial data and trains ML strategies for all tickers."""
-        self.loop = asyncio.get_running_loop()
-        
-        # Load active assets from database
-        try:
-            db_assets = database.load_active_assets()
-            active_list = [a["ticker"] for a in db_assets if a["is_active"]]
-            if active_list:
-                self.tickers = active_list
-                # Reset local sentiment trackers mapping
-                self.latest_sentiments = {t: 0.0 for t in self.tickers}
-                self.latest_source_sentiments = {t: {} for t in self.tickers}
-                self.last_sentiment_times = {t: 0.0 for t in self.tickers}
-                logging.info(f"Loaded active tickers list from DB: {self.tickers}")
-        except Exception as e:
-            logging.error(f"Error loading active tickers from DB: {e}")
-        
-        # Load risk mode from database if it exists
-        db_risk_mode = database.load_setting("risk_mode")
-        if db_risk_mode:
-            try:
-                self.probability_engine.set_risk_mode(db_risk_mode)
-                logging.info(f"Loaded risk mode from database: {db_risk_mode}")
-            except Exception as e:
-                logging.error(f"Error loading risk mode from DB: {e}")
-                
-        # Sync cash balance with live broker if in live mode
-        try:
-            self.execution_engine.sync_live_balance()
-        except Exception as e:
-            logging.error(f"Error synchronizing live balance at startup: {e}")
-        
     def init_ticker(self, ticker):
         """Dynamically initializes data streams, strategy ensemble, and neural weights for a new ticker."""
         if ticker in self.data_ingestions:
@@ -223,7 +192,18 @@ class NexusTraderOrchestrator:
 
     def on_trade_closed(self, ticker, entry_state, strategy_signals, direction, pnl_percent):
         """Callback from ExecutionEngine when a trade is closed."""
-        logging.info(f"[{ticker}] Trade closed with PnL%: {pnl_percent*100:.2f}%. Training Policy Network...")
+        logging.info("[{}] Trade closed with PnL%: {:.2f}%. Training Policy Network...".format(ticker, pnl_percent*100))
+        # Feed PnL to KillSwitch and drawdown tracker
+        if self.execution_engine.trading_mode == "live":
+            pnl_abs = pnl_percent * self.execution_engine.balance
+            kill_switch.record_trade(pnl_abs)
+            # Update drawdown from current equity
+            current_prices = {}
+            for t in self.tickers:
+                if t in self.data_ingestions:
+                    current_prices[t] = self.data_ingestions[t].live_price or 0.0
+            equity = self.execution_engine.get_equity(current_prices)
+            drawdown_tracker.update(equity)
         
         learner = self.learning_engines[ticker]
         ensemble = self.strategy_ensembles[ticker]
@@ -478,37 +458,48 @@ class NexusTraderOrchestrator:
                 
                 # If viable, open position
                 if evaluation["is_viable"]:
-                    evaluation["sentiment_sources"] = row.get("sentiment_sources", {})
-                    # Gather the active signals at entry
-                    signals_at_entry = [
-                        strat.generate_signal(row)
-                        for strat in ensemble.strategies
-                    ]
-                    
-                    opened = self.execution_engine.open_position(
-                        ticker,
-                        evaluation,
-                        signals_at_entry
+                    # KillSwitch check before opening
+                    exposure = sum(
+                        abs(v.get("quantity", 0)) * v.get("entry_price", 0)
+                        for v in self.execution_engine.active_positions.values()
                     )
-                    
-                    if opened:
-                        trade_opened = True
-                        if self.execution_engine.trading_mode == "live":
-                            self._run_async(self.broadcast_message({
-                                "type": "trade_opened",
-                                "ticker": ticker,
-                                "position": self.execution_engine.active_positions[ticker],
-                                "balance": self.execution_engine.balance,
-                                "equity": current_equity
-                            }))
-                        else:
-                            self._run_async(self.broadcast_message({
-                                "type": "limit_order_placed",
-                                "ticker": ticker,
-                                "order": self.execution_engine.pending_limit_orders[ticker],
-                                "balance": self.execution_engine.balance,
-                                "equity": current_equity
-                            }))
+                    safe, reason = kill_switch.check(
+                        current_drawdown=drawdown_tracker.current_drawdown,
+                        open_positions={k: v.get("quantity", 0) for k, v in self.execution_engine.active_positions.items()},
+                        total_exposure=exposure,
+                    )
+                    if not safe:
+                        logging.warning("[KillSwitch] Blocking trade: {}".format(reason))
+                    else:
+                        evaluation["sentiment_sources"] = row.get("sentiment_sources", {})
+                        # Gather the active signals at entry
+                        signals_at_entry = [
+                            strat.generate_signal(row)
+                            for strat in ensemble.strategies
+                        ]
+                        opened = self.execution_engine.open_position(
+                            ticker,
+                            evaluation,
+                            signals_at_entry
+                        )
+                        if opened:
+                            trade_opened = True
+                            if self.execution_engine.trading_mode == "live":
+                                self._run_async(self.broadcast_message({
+                                    "type": "trade_opened",
+                                    "ticker": ticker,
+                                    "position": self.execution_engine.active_positions[ticker],
+                                    "balance": self.execution_engine.balance,
+                                    "equity": current_equity
+                                }))
+                            else:
+                                self._run_async(self.broadcast_message({
+                                    "type": "limit_order_placed",
+                                    "ticker": ticker,
+                                    "order": self.execution_engine.pending_limit_orders[ticker],
+                                    "balance": self.execution_engine.balance,
+                                    "equity": current_equity
+                                }))
 
         # Check Loss Cooldown status
         cooldown_end = float(database.load_setting(f"cooldown_end_{ticker}", "0.0"))
@@ -630,6 +621,33 @@ orchestrator = NexusTraderOrchestrator()
 @app.on_event("startup")
 async def startup_event():
     await orchestrator.initialize()
+
+    # Initialize safety systems from saved state
+    ks_data = database.load_setting("killswitch_state", "")
+    if ks_data:
+        try:
+            parsed = json.loads(ks_data)
+            kill_switch.__dict__.update(type(kill_switch).from_dict(parsed).__dict__)
+            logging.info("[KillSwitch] Restored from saved state")
+        except Exception as e:
+            logging.error("Error restoring KillSwitch state: {}".format(e))
+
+    dd_data = database.load_setting("drawdown_tracker_state", "")
+    if dd_data:
+        try:
+            parsed = json.loads(dd_data)
+            drawdown_tracker.__dict__.update(type(drawdown_tracker).from_dict(parsed).__dict__)
+            logging.info("[DrawdownTracker] Restored from saved state")
+        except Exception as e:
+            logging.error("Error restoring DrawdownTracker state: {}".format(e))
+
+    # Migrate existing settings to research: namespace
+    try:
+        count = migrate_settings(database)
+        if count > 0:
+            logging.info("Migrated {} settings to research: namespace".format(count))
+    except Exception as e:
+        logging.error("Settings migration error: {}".format(e))
     
     # Seed default policy brains for all tickers
     for ticker in orchestrator.tickers:
@@ -677,9 +695,40 @@ async def startup_event():
 
 @app.on_event("shutdown")
 async def shutdown_event():
+    # Save safety state before shutdown
+    try:
+        database.save_setting("killswitch_state", json.dumps(kill_switch.to_dict()))
+        database.save_setting("drawdown_tracker_state", json.dumps(drawdown_tracker.to_dict()))
+    except Exception as e:
+        logging.error("Error saving safety state on shutdown: {}".format(e))
     orchestrator.stop_stream()
 
 # API Endpoints
+@app.get("/api/safety/status")
+def get_safety_status():
+    """KillSwitch and drawdown tracker status."""
+    safe, reason = kill_switch.check()
+    if safe:
+        reason = None
+    return {
+        "kill_switch": {
+            "tripped": kill_switch.tripped,
+            "trigger_reason": kill_switch.trigger_reason,
+            "daily_pnl": round(kill_switch.daily_pnl, 2),
+            "safe": safe,
+        },
+        "drawdown": {
+            "current_pct": round(drawdown_tracker.current_drawdown * 100, 2),
+            "max_pct": round(drawdown_tracker.max_drawdown * 100, 2),
+            "peak_equity": round(drawdown_tracker.peak, 2),
+        },
+        "mutation_freeze": {
+            "frozen": mutation_freeze.frozen,
+            "pending_suggestions": len(mutation_freeze.pending_suggestions),
+        },
+    }
+
+
 @app.get("/api/status")
 def get_status():
     current_prices = {}
