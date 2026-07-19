@@ -104,57 +104,136 @@ def detect_psychological_sweep(df, lookback=24, round_number_base=5.0):
     return 0.0
 
 def query_gemini_robust(api_key: str, prompt, model: str = "gemini-2.0-flash", max_retries: int = 5, backoff_factor: float = 2.0) -> str:
-    """Queries Google Gemini API with exponential backoff on HTTP 429 rate limit errors."""
+    """Queries configured LLM Provider (Gemini, OpenAI, Anthropic, OpenClaw) with backoff on transient errors."""
     import urllib.request
     import urllib.error
     import json
     import time
     import logging
+    import os
+    import sqlite3
     
-    # Check if the Antigravity local proxy is online on port 8001
-    use_proxy = False
+    # 1. Load config settings from database
+    db_path = os.path.expanduser("~/.nexustrader/nexustrader.db")
+    provider = "gemini"
+    config_model = ""
+    api_key_override = ""
+    base_url = ""
     try:
-        req_health = urllib.request.Request("http://127.0.0.1:8001/health")
-        with urllib.request.urlopen(req_health, timeout=1.0) as resp:
-            data_health = json.loads(resp.read().decode("utf-8"))
-            if data_health.get("status") == "ok":
-                use_proxy = True
+        conn = sqlite3.connect(db_path)
+        c = conn.cursor()
+        c.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
+        c.execute("SELECT key, value FROM settings")
+        rows = c.fetchall()
+        conn.close()
+        settings = {r[0]: r[1] for r in rows}
+        provider = settings.get("agent_llm_provider", "gemini").lower()
+        config_model = settings.get("agent_llm_model", "").strip()
+        api_key_override = settings.get("agent_llm_api_key", "").strip()
+        base_url = settings.get("agent_llm_base_url", "").strip()
     except Exception:
         pass
-
-    if use_proxy:
-        url = f"http://127.0.0.1:8001/v1beta/models/{model}:generateContent"
-        logging.info("[PROXY ROUTE] Routing request through local Antigravity proxy on 127.0.0.1:8001")
-    else:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
-
-    if isinstance(prompt, dict):
-        payload = prompt
-    else:
-        payload = {"contents": [{"parts": [{"text": prompt}]}]}
-    encoded_data = json.dumps(payload).encode("utf-8")
+        
+    # Overwrite if database overrides exist
+    if api_key_override:
+        api_key = api_key_override
+    use_model = config_model if config_model else model
     
+    # 2. Convert Gemini structure dict prompt to flat string if needed
+    flat_prompt = ""
+    if isinstance(prompt, dict):
+        if "contents" in prompt:
+            parts = []
+            for c in prompt["contents"]:
+                if "parts" in c:
+                    for p in c["parts"]:
+                        if "text" in p:
+                            parts.append(p["text"])
+            flat_prompt = "\n".join(parts)
+        else:
+            flat_prompt = json.dumps(prompt)
+    else:
+        flat_prompt = str(prompt)
+        
+    # 3. Build target URL, payload, headers depending on provider
+    if provider == "gemini":
+        use_proxy = False
+        try:
+            req_health = urllib.request.Request("http://127.0.0.1:8001/health")
+            with urllib.request.urlopen(req_health, timeout=1.0) as resp:
+                data_health = json.loads(resp.read().decode("utf-8"))
+                if data_health.get("status") == "ok":
+                    use_proxy = True
+        except Exception:
+            pass
+
+        if use_proxy:
+            url = f"http://127.0.0.1:8001/v1beta/models/{use_model}:generateContent"
+            logging.info("[PROXY ROUTE] Routing request through local Antigravity proxy on 127.0.0.1:8001")
+        else:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{use_model}:generateContent?key={api_key}"
+            
+        payload = prompt if isinstance(prompt, dict) else {"contents": [{"parts": [{"text": flat_prompt}]}]}
+        headers = {"Content-Type": "application/json"}
+        if api_key:
+            headers["x-goog-api-key"] = api_key
+            
+    elif provider in ["openai", "openclaw"]:
+        url = base_url if base_url else "https://api.openai.com/v1/chat/completions"
+        if not use_model or use_model == "gemini-2.0-flash":
+            use_model = "gpt-4o"
+        payload = {
+            "model": use_model,
+            "messages": [{"role": "user", "content": flat_prompt}],
+            "temperature": 0.2
+        }
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}"
+        }
+        
+    elif provider == "anthropic":
+        url = base_url if base_url else "https://api.anthropic.com/v1/messages"
+        if not use_model or use_model == "gemini-2.0-flash":
+            use_model = "claude-3-5-sonnet-20241022"
+        payload = {
+            "model": use_model,
+            "messages": [{"role": "user", "content": flat_prompt}],
+            "max_tokens": 4096,
+            "temperature": 0.2
+        }
+        headers = {
+            "Content-Type": "application/json",
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01"
+        }
+    else:
+        raise ValueError(f"Unsupported LLM provider: {provider}")
+        
+    encoded_data = json.dumps(payload).encode("utf-8")
     retries = 0
-    delay = 2.0 # Start with 2 seconds delay
+    delay = 2.0
     
     while True:
         try:
-            headers = {"Content-Type": "application/json"}
-            if api_key:
-                headers["x-goog-api-key"] = api_key
             req = urllib.request.Request(url, data=encoded_data, headers=headers)
-            with urllib.request.urlopen(req, timeout=30) as resp:
+            with urllib.request.urlopen(req, timeout=45) as resp:
                 res_json = json.loads(resp.read().decode("utf-8"))
-                return res_json["candidates"][0]["content"]["parts"][0]["text"].strip()
+                if provider == "gemini":
+                    return res_json["candidates"][0]["content"]["parts"][0]["text"].strip()
+                elif provider in ["openai", "openclaw"]:
+                    return res_json["choices"][0]["message"]["content"].strip()
+                elif provider == "anthropic":
+                    return res_json["content"][0]["text"].strip()
         except urllib.error.HTTPError as e:
             if e.code in [429, 500, 502, 503, 504] and retries < max_retries:
-                logging.warning(f"[GEMINI API] Transient error ({e.code}) hit. Retrying in {delay:.1f}s... (Attempt {retries+1}/{max_retries})")
+                logging.warning(f"[{provider.upper()} API] Transient error ({e.code}) hit. Retrying in {delay:.1f}s... (Attempt {retries+1}/{max_retries})")
                 time.sleep(delay)
                 retries += 1
                 delay *= backoff_factor
             else:
-                logging.error(f"[GEMINI API] HTTP Error {e.code}: {e.reason}")
+                logging.error(f"[{provider.upper()} API] HTTP Error {e.code}: {e.reason}")
                 raise e
         except Exception as e:
-            logging.error(f"[GEMINI API] Unexpected error: {e}")
+            logging.error(f"[{provider.upper()} API] Unexpected error: {e}")
             raise e

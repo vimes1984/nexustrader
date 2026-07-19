@@ -2501,6 +2501,8 @@ elNavTabs.forEach(tab => {
             if (!simChart) {
                 initSimChart();
             }
+        } else if (targetTabId === "tab-agents") {
+            loadAgentLlmConfig();
         } else if (targetTabId === "tab-logs") {
             fetchSystemLogs();
         }
@@ -3465,4 +3467,61 @@ if (btnAddAsset) {
 // Initialize on script load
 setTimeout(() => {
     loadAssetManager();
+    loadAgentLlmConfig();
 }, 2000);
+
+// -------------------------------------------------------------
+// Agent LLM Provider Configuration Implementations
+// -------------------------------------------------------------
+function loadAgentLlmConfig() {
+    const elProvider = document.getElementById("setting-agent-llm-provider");
+    const elBaseUrl = document.getElementById("setting-agent-llm-base-url");
+    const elModel = document.getElementById("setting-agent-llm-model");
+    const elApiKey = document.getElementById("setting-agent-llm-api-key");
+    
+    if (!elProvider) return;
+    
+    fetch(`/api/system/agent_llm?t=${Date.now()}`)
+        .then(res => res.json())
+        .then(data => {
+            elProvider.value = data.provider;
+            elBaseUrl.value = data.base_url || "";
+            elModel.value = data.model || "";
+            elApiKey.value = data.api_key || "";
+        })
+        .catch(err => console.error("Error loading agent LLM configuration:", err));
+}
+
+function saveAgentLlmConfig() {
+    const provider = document.getElementById("setting-agent-llm-provider").value;
+    const base_url = document.getElementById("setting-agent-llm-base-url").value;
+    const model = document.getElementById("setting-agent-llm-model").value;
+    const api_key = document.getElementById("setting-agent-llm-api-key").value;
+    
+    const saveBtn = document.getElementById("save-agent-llm-btn");
+    if (saveBtn) saveBtn.disabled = true;
+    
+    showToast("Saving Agent LLM configuration...", "info");
+    
+    fetch(`/api/system/agent_llm?provider=${encodeURIComponent(provider)}&base_url=${encodeURIComponent(base_url)}&model=${encodeURIComponent(model)}&api_key=${encodeURIComponent(api_key)}`, { method: 'POST' })
+        .then(res => res.json())
+        .then(data => {
+            if (saveBtn) saveBtn.disabled = false;
+            if (data.status === "success") {
+                showToast("Agent LLM configuration saved successfully!", "success");
+                loadAgentLlmConfig();
+            } else {
+                showToast("Failed to save Agent LLM config.", "error");
+            }
+        })
+        .catch(err => {
+            if (saveBtn) saveBtn.disabled = false;
+            console.error(err);
+            showToast("Error saving Agent LLM config.", "error");
+        });
+}
+
+const btnSaveAgentLlm = document.getElementById("save-agent-llm-btn");
+if (btnSaveAgentLlm) {
+    btnSaveAgentLlm.addEventListener("click", saveAgentLlmConfig);
+}

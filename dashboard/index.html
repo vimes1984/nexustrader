@@ -1105,6 +1105,49 @@
                             </button>
                         </div>
                     </article>
+                    
+                    <!-- Agent LLM Gateway Router -->
+                    <article class="glass-panel" style="padding: 24px; margin-top: 20px; display: flex; flex-direction: column; gap: 15px;">
+                        <h2 class="panel-title" style="display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="cpu" style="color: var(--neon-purple);"></i>
+                            Agent LLM Provider Configuration
+                        </h2>
+                        <span style="font-size: 11px; color: var(--text-muted); text-align: left;">
+                            Point your quant, developer, and auditor agents to different LLM endpoints including OpenAI, Anthropic, Gemini, or OpenClaw compatible proxies.
+                        </span>
+                        
+                        <div style="display: flex; flex-direction: column; gap: 12px; font-size: 12px;">
+                            <label style="display: flex; flex-direction: column; gap: 5px; text-align: left;">
+                                <span>LLM Provider Selection</span>
+                                <select id="setting-agent-llm-provider" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 12px; border-radius: 8px; font-family: inherit; font-size: 12px; outline: none; cursor: pointer;">
+                                    <option value="gemini">Google Gemini</option>
+                                    <option value="openai">OpenAI (GPT)</option>
+                                    <option value="anthropic">Anthropic (Claude)</option>
+                                    <option value="openclaw">OpenClaw / Custom Proxy</option>
+                                </select>
+                            </label>
+                            
+                            <label style="display: flex; flex-direction: column; gap: 5px; text-align: left;">
+                                <span>Custom Base URL (optional)</span>
+                                <input type="text" id="setting-agent-llm-base-url" placeholder="e.g. https://api.openai.com/v1" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 12px; border-radius: 8px; font-family: inherit; font-size: 12px; outline: none; width: 100%;">
+                            </label>
+                            
+                            <label style="display: flex; flex-direction: column; gap: 5px; text-align: left;">
+                                <span>Model Identifier (optional)</span>
+                                <input type="text" id="setting-agent-llm-model" placeholder="e.g. gpt-4o, claude-3-5-sonnet" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 12px; border-radius: 8px; font-family: inherit; font-size: 12px; outline: none; width: 100%;">
+                            </label>
+                            
+                            <label style="display: flex; flex-direction: column; gap: 5px; text-align: left;">
+                                <span>API Secret Key</span>
+                                <input type="password" id="setting-agent-llm-api-key" placeholder="Enter API secret key..." style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 12px; border-radius: 8px; font-family: inherit; font-size: 12px; outline: none; width: 100%;">
+                            </label>
+                            
+                            <button class="btn btn-primary" id="save-agent-llm-btn" style="width: 100%; justify-content: center; padding: 10px; font-size: 12px; margin-top: 5px; cursor: pointer;">
+                                <i data-lucide="save" style="width: 15px; height: 15px; margin-right: 4px;"></i>
+                                Save Agent LLM Config
+                            </button>
+                        </div>
+                    </article>
 
                     <!-- Feeds & Cooldown Panel -->
                     <article class="glass-panel" style="padding: 24px;">
