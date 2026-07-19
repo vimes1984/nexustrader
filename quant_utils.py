@@ -225,6 +225,9 @@ def query_gemini_robust(api_key: str, prompt, model: str = "gemini-flash-latest"
             
     elif provider in ["openai", "openclaw"]:
         url = base_url if base_url else "https://api.openai.com/v1/chat/completions"
+        if url and not url.endswith("/chat/completions"):
+            url = url.rstrip("/") + "/chat/completions"
+            
         if not use_model or use_model in ["gemini-2.0-flash", "gemini-flash-latest"]:
             use_model = "gpt-4o"
         payload = {
@@ -239,6 +242,9 @@ def query_gemini_robust(api_key: str, prompt, model: str = "gemini-flash-latest"
         
     elif provider == "anthropic":
         url = base_url if base_url else "https://api.anthropic.com/v1/messages"
+        if url and not url.endswith("/messages"):
+            url = url.rstrip("/") + "/messages"
+            
         if not use_model or use_model in ["gemini-2.0-flash", "gemini-flash-latest"]:
             use_model = "claude-3-5-sonnet-20241022"
         payload = {
