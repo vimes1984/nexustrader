@@ -1487,6 +1487,15 @@
                             System Diagnostic Terminal
                         </h2>
                         <div style="display: flex; align-items: center; gap: 15px;">
+                            <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary);">
+                                <span>Log Stream:</span>
+                                <select id="log-stream-select" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 6px; padding: 4px 8px; font-size: 11px; cursor: pointer; outline: none;">
+                                    <option value="systemd">System Journal (journalctl)</option>
+                                    <option value="app">Application Output (nexustrader_log.txt)</option>
+                                    <option value="nn">NeuralCore Trainer (nn_agent.log)</option>
+                                    <option value="daily">Blogger Agent (daily_agent.log)</option>
+                                </select>
+                            </label>
                             <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); cursor: pointer;">
                                 <input type="checkbox" id="log-auto-refresh" checked style="accent-color: var(--neon-blue); cursor: pointer;">
                                 Auto-Refresh (5s)

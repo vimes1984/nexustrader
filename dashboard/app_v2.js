@@ -2997,7 +2997,10 @@ function fetchSystemLogs() {
     const term = document.getElementById("system-terminal-output");
     if (!term) return;
     
-    fetch(`/api/system/logs?limit=150&t=${Date.now()}`)
+    const streamSelect = document.getElementById("log-stream-select");
+    const logType = streamSelect ? streamSelect.value : "systemd";
+    
+    fetch(`/api/system/logs?limit=150&log_type=${logType}&t=${Date.now()}`)
         .then(res => res.json())
         .then(data => {
             if (data.status === "success") {
@@ -3022,11 +3025,18 @@ function fetchSystemLogs() {
 document.addEventListener("DOMContentLoaded", () => {
     const btnRefreshLogs = document.getElementById("btn-refresh-logs");
     const checkAutoRefresh = document.getElementById("log-auto-refresh");
+    const logStreamSelect = document.getElementById("log-stream-select");
     
     if (btnRefreshLogs) {
         btnRefreshLogs.addEventListener("click", () => {
             fetchSystemLogs();
             showToast("System diagnostic logs refreshed.", "success");
+        });
+    }
+    
+    if (logStreamSelect) {
+        logStreamSelect.addEventListener("change", () => {
+            fetchSystemLogs();
         });
     }
     

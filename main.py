@@ -1170,26 +1170,32 @@ def update_system_config(trading_mode: str, risk_mode: str, max_drawdown: float,
 # System logs retriever REST API
 # -------------------------------------------------------------
 @app.get("/api/system/logs")
-def get_system_logs(limit: int = 100):
+def get_system_logs(limit: int = 100, log_type: str = "systemd"):
     import subprocess
-    try:
-        res = subprocess.check_output(["journalctl", "-u", "nexustrader.service", "-n", str(limit), "--no-pager"])
-        return {"status": "success", "logs": res.decode("utf-8")}
-    except Exception as e:
-        # Fallback to local files if journalctl fails
-        log_paths = ["nexustrader_log.txt", "nn_agent.log", "daily_agent.log"]
-        logs = []
-        for path in log_paths:
-            if os.path.exists(path):
-                try:
-                    with open(path, "r") as f:
-                        lines = f.readlines()[-limit:]
-                        logs.append(f"=== {path} ===\n" + "".join(lines))
-                except Exception:
-                    pass
-        if logs:
-            return {"status": "success", "logs": "\n\n".join(logs)}
-        return {"status": "error", "message": f"Could not fetch logs: {e}"}
+    
+    if log_type == "systemd":
+        try:
+            res = subprocess.check_output(["journalctl", "-u", "nexustrader.service", "-n", str(limit), "--no-pager"])
+            return {"status": "success", "logs": res.decode("utf-8")}
+        except Exception as e:
+            # Fallback automatically to app log if journalctl fails
+            log_type = "app"
+            
+    filename = "nexustrader_log.txt"
+    if log_type == "nn":
+        filename = "nn_agent.log"
+    elif log_type == "daily":
+        filename = "daily_agent.log"
+        
+    if os.path.exists(filename):
+        try:
+            with open(filename, "r") as f:
+                lines = f.readlines()[-limit:]
+                return {"status": "success", "logs": "".join(lines)}
+        except Exception as e:
+            return {"status": "error", "message": f"Could not read log file {filename}: {e}"}
+            
+    return {"status": "success", "logs": f"Log stream '{log_type}' ({filename}) has no recorded entries yet."}
 
 # -------------------------------------------------------------
 # Log UI notification to system logs REST API

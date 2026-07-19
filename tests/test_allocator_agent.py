@@ -21,7 +21,7 @@ class TestAllocatorAgent(unittest.TestCase):
         c = conn.cursor()
         c.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
         c.execute("CREATE TABLE IF NOT EXISTS active_assets (ticker TEXT PRIMARY KEY, is_active INTEGER, tp_multiplier REAL, sl_multiplier REAL, kelly_ceiling REAL)")
-        c.execute("CREATE TABLE IF NOT EXISTS trades (id INTEGER PRIMARY KEY, timestamp REAL, ticker TEXT, result TEXT, pnl_pct REAL, pnl REAL)")
+        c.execute("CREATE TABLE IF NOT EXISTS trades (id INTEGER PRIMARY KEY, symbol TEXT, direction TEXT, quantity REAL, entry_price REAL, exit_price REAL, pnl REAL, pnl_percent REAL, exit_reason TEXT, entry_time REAL, exit_time REAL)")
         
         # Seed settings
         c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('blog_gemini_api_key', 'test-key')")
@@ -31,7 +31,7 @@ class TestAllocatorAgent(unittest.TestCase):
         c.execute("INSERT OR REPLACE INTO active_assets (ticker, is_active, tp_multiplier, sl_multiplier, kelly_ceiling) VALUES ('BTC-USD', 1, 2.5, 1.5, 0.2)")
         
         # Seed trades
-        c.execute("INSERT INTO trades (timestamp, ticker, result, pnl_pct, pnl) VALUES (1784400000, 'BTC-USD', 'WIN', 2.5, 15.0)")
+        c.execute("INSERT INTO trades (symbol, pnl, pnl_percent) VALUES ('BTC-USD', 15.0, 2.5)")
         
         conn.commit()
         conn.close()

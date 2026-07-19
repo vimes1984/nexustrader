@@ -52,18 +52,18 @@ def save_active_asset(ticker, is_active, tp_multiplier, sl_multiplier, kelly_cei
 def load_performance_summary():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    c.execute("SELECT ticker, result, pnl_pct FROM trades ORDER BY timestamp DESC LIMIT 100")
+    c.execute("SELECT symbol, pnl_percent, pnl FROM trades ORDER BY id DESC LIMIT 100")
     rows = c.fetchall()
     conn.close()
     
     summary = {}
-    for ticker, result, pnl in rows:
-        if ticker not in summary:
-            summary[ticker] = {"trades": 0, "wins": 0, "total_pnl": 0.0}
-        summary[ticker]["trades"] += 1
-        if result == "WIN":
-            summary[ticker]["wins"] += 1
-        summary[ticker]["total_pnl"] += float(pnl or 0.0)
+    for symbol, pnl_pct, pnl in rows:
+        if symbol not in summary:
+            summary[symbol] = {"trades": 0, "wins": 0, "total_pnl": 0.0}
+        summary[symbol]["trades"] += 1
+        if pnl and float(pnl) > 0:
+            summary[symbol]["wins"] += 1
+        summary[symbol]["total_pnl"] += float(pnl or 0.0)
     return summary
 
 def run_allocator_self_improvement(trigger_deploy: bool = False):
