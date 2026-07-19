@@ -1816,7 +1816,7 @@ Our platform has been upgraded with:
 2. 5-minute Asset Cooldown safeguards on failed entry orders (Insufficient Funds, exchange limits, etc.).
 3. Multi-brain repository where we can snapshot current weights, switch active policy brains, or train a fresh brain from scratch.
 4. Per-Asset Manager: Custom volatility multipliers, per-asset Kelly ceilings, dynamic auto-switching toggle, and locked manual overrides.
-5. Per-Agent LLM Gateway Routers: Map specific agents to Google Gemini, OpenAI, Anthropic, or local OpenClaw proxy configs.
+5. Per-Agent LLM Gateway Routers: Map specific agents to Google Gemini, OpenAI, or Anthropic configs.
 
 Analyze the provided dataset using rigorous statistical methods:
 1. Volatility Regime Profiling: Analyze the average true range (ATR), recent volatility shifts, and risk-reward ratios. Recommend custom Take Profit (TP) and Stop Loss (SL) volatility multipliers.
@@ -1844,7 +1844,7 @@ Our platform features:
 3. Cybernetic Alert system with Clickable Toast notifications and Bell Dropdown.
 4. Multi-Brain repository (Activate, snapshot, delete, or train new brain from scratch).
 5. Real-time System Logs terminal panel to display service output.
-6. Dynamic per-agent LLM Router (routing to OpenAI, Gemini, Anthropic, or OpenClaw).
+6. Dynamic per-agent LLM Router (routing to OpenAI, Gemini, or Anthropic).
 7. Asset Manager dashboard tab supporting custom Kelly ceilings, dynamic auto-switching, and locked brain overrides.
 
 Your current priorities:
@@ -1901,7 +1901,7 @@ Our portfolio supports:
 1. Per-asset Kelly ceiling caps to limit maximum asset allocation and avoid over-leveraged drawdowns.
 2. Custom volatility TP/SL multipliers to exit trades dynamically during volatile regime shifts.
 3. Automated brain switching vs. locked strategy brain overrides for targeted asset classes.
-4. Per-agent LLM routers mapped to Gemini, OpenAI, Anthropic, or OpenClaw endpoints.
+4. Per-agent LLM routers mapped to Gemini, OpenAI, or Anthropic endpoints.
 
 Critique leverage levels, daily drawdown limits, asset-specific Kelly ceilings, and portfolio correlation matrices.
 Monitor our 5-minute failed order cooldown safeguards to prevent API looping under insufficient funds.

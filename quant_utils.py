@@ -104,7 +104,7 @@ def detect_psychological_sweep(df, lookback=24, round_number_base=5.0):
     return 0.0
 
 def query_gemini_robust(api_key: str, prompt, model: str = "gemini-flash-latest", max_retries: int = 5, backoff_factor: float = 2.0) -> str:
-    """Queries configured LLM Provider (Gemini, OpenAI, Anthropic, OpenClaw) with backoff on transient errors."""
+    """Queries configured LLM Provider (Gemini, OpenAI, Anthropic) with backoff on transient errors."""
     import urllib.request
     import urllib.error
     import json
@@ -223,7 +223,7 @@ def query_gemini_robust(api_key: str, prompt, model: str = "gemini-flash-latest"
         if api_key:
             headers["x-goog-api-key"] = api_key
             
-    elif provider in ["openai", "openclaw"]:
+    elif provider == "openai":
         url = base_url if base_url else "https://api.openai.com/v1/chat/completions"
         if url and not url.endswith("/chat/completions"):
             url = url.rstrip("/") + "/chat/completions"
@@ -272,7 +272,7 @@ def query_gemini_robust(api_key: str, prompt, model: str = "gemini-flash-latest"
                 res_json = json.loads(resp.read().decode("utf-8"))
                 if provider == "gemini":
                     return res_json["candidates"][0]["content"]["parts"][0]["text"].strip()
-                elif provider in ["openai", "openclaw"]:
+                elif provider == "openai":
                     return res_json["choices"][0]["message"]["content"].strip()
                 elif provider == "anthropic":
                     return res_json["content"][0]["text"].strip()

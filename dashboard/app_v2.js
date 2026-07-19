@@ -3532,12 +3532,6 @@ function toggleAgentLlmInputs(provider) {
         if (inputUrl && !inputUrl.value) inputUrl.value = "https://api.anthropic.com/v1";
         if (inputModel && !inputModel.value) inputModel.value = "claude-3-5-sonnet-20241022";
         labelKey.textContent = "Anthropic API Secret Key";
-    } else if (provider === "openclaw") {
-        containerUrl.style.display = "flex";
-        containerModel.style.display = "flex";
-        if (inputUrl && !inputUrl.value) inputUrl.value = "http://192.168.0.81:18789/v1";
-        if (inputModel && !inputModel.value) inputModel.value = "claude-3-5-sonnet-20241022";
-        labelKey.textContent = "OpenClaw Password (if authenticated)";
     }
 }
 
