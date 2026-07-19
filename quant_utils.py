@@ -217,21 +217,7 @@ def query_gemini_robust(api_key: str, prompt, model: str = "gemini-flash-latest"
         
     # 3. Build target URL, payload, headers depending on provider
     if provider == "gemini":
-        use_proxy = False
-        try:
-            req_health = urllib.request.Request("http://127.0.0.1:8001/health")
-            with urllib.request.urlopen(req_health, timeout=1.0) as resp:
-                data_health = json.loads(resp.read().decode("utf-8"))
-                if data_health.get("status") == "ok":
-                    use_proxy = True
-        except Exception:
-            pass
-
-        if use_proxy:
-            url = f"http://127.0.0.1:8001/v1beta/models/{use_model}:generateContent"
-            logging.info("[PROXY ROUTE] Routing request through local Antigravity proxy on 127.0.0.1:8001")
-        else:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{use_model}:generateContent?key={api_key}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{use_model}:generateContent?key={api_key}"
             
         payload = prompt if isinstance(prompt, dict) else {"contents": [{"parts": [{"text": flat_prompt}]}]}
         headers = {"Content-Type": "application/json"}
