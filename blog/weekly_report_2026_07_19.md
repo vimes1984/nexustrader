@@ -1,9 +1,9 @@
 # Weekly Performance Log: NexusTrader Algorithmic Operations
 **Reporting Period:** July 12, 2026 to July 19, 2026  
 **System Status:** ACTIVE 🟢  
-> [!IMPORTANT]
-> **Operational Status:** `PAPER TRADING (LIVE SIMULATION)`  
-> The system is running simulations on live market feed ticks. Trades are executed using virtual balances (paper trading) with zero capital risk.
+> [!WARNING]
+> **Operational Status:** `LIVE CAPITAL TRADING (REAL MONEY)`  
+> **WARNING:** The system is currently executing live transactions with real capital via broker API credentials. Real financial assets are at risk.
 
 
 Welcome to the weekly performance report of **NexusTrader**, a self-learning quantitative trading bot driven by an ensemble of technical strategies and optimized in real-time by a Policy Gradient Neural Network.
@@ -16,14 +16,14 @@ Below is an extensive breakdown of the system's performance, resource allocation
 
 | Metric | Value |
 | :--- | :--- |
-| **Current Account Equity** | **€1789.15** |
-| **Starting Balance (Week Start)** | €1790.58 |
-| **Net PnL (Euros)** | **€-1.43** |
-| **Weekly Return (%)** | **-0.08%** |
-| **Risk Profile Configuration** | `AGGRESSIVE` |
-| **Active Trade Count** | 42 |
-| **Overall System Win Rate** | **31.0%** |
-| **Profit Factor** | **0.33** |
+| **Current Account Equity** | **€3.75** |
+| **Starting Balance (Week Start)** | €8.04 |
+| **Net PnL (Euros)** | **€-4.29** |
+| **Weekly Return (%)** | **-53.36%** |
+| **Risk Profile Configuration** | `CONSERVATIVE` |
+| **Active Trade Count** | 30 |
+| **Overall System Win Rate** | **13.3%** |
+| **Profit Factor** | **0.22** |
 
 ---
 
@@ -32,11 +32,11 @@ Performance metrics segmented by individual portfolio asset ticker:
 
 | Asset Ticker | Trades Executed | Win Rate | Net Asset PnL |
 | :--- | :--- | :--- | :--- |
-| BTC-EUR | 11 | 36.4% | €-0.59 |
-| DOGE-EUR | 5 | 60.0% | €-0.17 |
-| ETH-EUR | 5 | 20.0% | €-0.27 |
-| SOL-EUR | 10 | 30.0% | €-0.26 |
-| XRP-EUR | 11 | 18.2% | €-0.13 |
+| BTC-USD | 10 | 10.0% | €-2.13 |
+| DOGE-USD | 3 | 33.3% | €-0.03 |
+| ETH-USD | 4 | 0.0% | €-0.37 |
+| SOL-USD | 11 | 18.2% | €-1.71 |
+| XRP-USD | 2 | 0.0% | €-0.04 |
 
 
 ---
@@ -48,13 +48,13 @@ Current baseline weights computed by the neural network:
 
 | Strategy | Allocation Weight | Visual Distribution |
 | :--- | :--- | :--- |
-| **EMA Crossover** | 7.9% | `██████░░░░░░░░░` |
-| **RSI Reversion** | 19.7% | `███████████████` |
-| **BB Breakout** | 16.7% | `█████████████░░` |
-| **ML Random Forest** | 13.1% | `██████████░░░░░` |
-| **Kalman Trend** | 11.9% | `█████████░░░░░░` |
-| **Psych Sweep** | 18.3% | `██████████████░` |
-| **News Sentiment** | 12.2% | `█████████░░░░░░` |
+| **EMA Crossover** | 10.9% | `██████████░░░░░` |
+| **RSI Reversion** | 13.0% | `███████████░░░░` |
+| **BB Breakout** | 15.4% | `█████████████░░` |
+| **ML Random Forest** | 17.2% | `███████████████` |
+| **Kalman Trend** | 17.1% | `███████████████` |
+| **Psych Sweep** | 16.3% | `██████████████░` |
+| **News Sentiment** | 10.1% | `█████████░░░░░░` |
 
 
 ---
@@ -63,28 +63,68 @@ Current baseline weights computed by the neural network:
 
 | News/Social Source | Sample Count | Correlation (PnL) | Active Weight |
 | --- | --- | --- | --- |
-| **cointelegraph** | 13 | -0.2284 | **0.7716** |
-| **cryptobriefing** | 8 | -0.2567 | **0.7433** |
-| **beincrypto** | 15 | +0.1922 | **1.1922** |
-| **reddit** | 9 | +0.1539 | **1.1539** |
+| **cointelegraph** | 4 | +0.0000 | **1.0000** |
+| **cryptobriefing** | 10 | +0.0000 | **1.0000** |
+| **beincrypto** | 0 | +0.0000 | **1.0000** |
+| **reddit** | 11 | +0.4921 | **1.4921** |
 ---
 
 
 ## Weekly Hyperparameter Backtest Optimization & Self-Improvement
-Optimizations run over a window of **4095** historical price ticks.
+Optimizations run over a window of **1424** historical price ticks.
 
 ### Optimized Strategy Parameters:
-* **RSI Reversion Strategy**: Oversold Threshold = `40.0`, Overbought Threshold = `60.0` (Backtest PnL: `€2066852.9937`)
+* **RSI Reversion Strategy**: Oversold Threshold = `25.0`, Overbought Threshold = `75.0` (Backtest PnL: `€64565.1427`)
 * **Kalman Filter Trend Strategy**: Trigger Filter Threshold = `0.0010` / `0.10%` (Backtest PnL: `€-999999.0000`)
-* **Volatility ATR Risk Strategy**: Take Profit Multiplier = `3.5x ATR`, Stop Loss Multiplier = `1.0x ATR` (Backtest PnL: `€8413.6964`)
+* **Volatility ATR Risk Strategy**: Take Profit Multiplier = `3.5x ATR`, Stop Loss Multiplier = `1.0x ATR` (Backtest PnL: `€-19154.9881`)
 
 ### Policy Gradient Neural Network Evaluation:
 Evaluating neural network weights update records...
-* Recent 20 Trades Win Rate: **20.0%** | Average Trade PnL: **€-0.05**
+* Recent 20 Trades Win Rate: **15.0%** | Average Trade PnL: **€-0.12**
 * Policy Gradient NN backpropagation gradient steps verified: **Stable**.
 
-### 💡 AI Recommendations Status:
-*AI recommendations disabled or API key not configured in settings.*
+### 💡 AI PhD Quant & Mathematician Evaluation:
+To evaluate the performance of the NexusTrader self-learning ensemble bot, we need to analyze the provided data using rigorous statistical methods. Here's a step-by-step breakdown of the analysis:
+
+### 1. Volatility Regime Profiling
+
+- **ATR and Volatility Shifts**: The Average True Range (ATR) is a measure of market volatility. The current TP multiplier is set at 3.5x and SL at 1.0x. Given the high volatility observed in the trades, particularly with SOL-USD, these multipliers may need adjustment.
+- **Risk-Reward Ratios**: The current setup seems to have a higher risk (SL = 1.0x) compared to the reward (TP = 3.5x), which might not be optimal given the observed losses. A more balanced approach could be beneficial.
+
+### 2. Trade Return Skewness
+
+- **Win/Loss Distribution**: The dataset shows a significant number of losses, with some trades having substantial negative returns (e.g., SOL-USD). This indicates a potential fat-tailed loss distribution.
+- **Sharpe/Sortino Ratios**: These ratios would likely be low given the high volatility and negative returns. The Sortino ratio, which penalizes downside volatility, would be particularly useful here to assess risk-adjusted returns.
+
+### 3. Ensemble Synergy
+
+- **Systemic Beta Exposure**: The strategy signals indicate a mix of positive and negative signals, but the overall performance suggests potential unhedged systemic beta exposure, especially in volatile assets like SOL-USD.
+
+### 4. Multi-Brain Allocations & Overrides
+
+- **Auto-Switching vs. Manual Overrides**: Given the current performance, it might be beneficial to implement more frequent manual overrides or adjust the auto-switching criteria to respond more dynamically to market conditions.
+
+### 5. Kelly Criterion Ceiling
+
+- **Optimal Kelly Sizing**: The Kelly Criterion helps determine the optimal bet size. Given the high drawdowns, a conservative approach with a lower Kelly ceiling might be appropriate to limit exposure and reduce drawdowns.
+
+### Recommendations
+
+- **Risk Mode**: Given the current performance and high drawdowns, a "conservative" risk mode is recommended to stabilize returns and reduce volatility.
+- **TP and SL Multipliers**: Adjust the TP multiplier to 2.5x and SL multiplier to 1.5x to better balance risk and reward.
+- **Kelly Ceiling**: Set a conservative Kelly ceiling of 0.05 (5%) to limit drawdown per asset.
+
+### JSON Configuration
+
+
+
+📊 **Auto-Applied Setting**: Risk Mode adjusted to `conservative`
+
+📊 **Auto-Applied Setting**: Take Profit Multiplier adjusted to `2.5x ATR`
+
+📊 **Auto-Applied Setting**: Stop Loss Multiplier adjusted to `1.5x ATR`
+
+🧠 **AI Prompt Meta-Optimization**: Successfully analyzed agent outputs and evolved PhD Quant prompt template to focus closer on the $1,000 USD/day mission.
 ---
 
 ## 📈 Detailed Strategy Attribution
@@ -92,69 +132,57 @@ This table highlights how individual strategies contributed to the trades opened
 
 | Strategy Component | Aligned Trades | Win Rate When Aligned | Net Strategy PnL |
 | :--- | :--- | :--- | :--- |
-| EMA Crossover | 36 | 33.3% | €-0.90 |
-| RSI Reversion | 15 | 33.3% | €-0.58 |
-| BB Breakout | 8 | 12.5% | €-0.24 |
-| ML Random Forest | 7 | 14.3% | €-0.25 |
-| Kalman Trend | 15 | 40.0% | €-0.82 |
+| EMA Crossover | 19 | 5.3% | €-3.97 |
+| RSI Reversion | 7 | 14.3% | €-0.84 |
+| BB Breakout | 10 | 30.0% | €+0.21 |
+| ML Random Forest | 7 | 14.3% | €-0.92 |
+| Kalman Trend | 22 | 4.5% | €-5.07 |
 | Psych Sweep | 0 | - | €+0.00 |
-| News Sentiment | 7 | 14.3% | €-0.66 |
+| News Sentiment | 13 | 15.4% | €-0.99 |
 
 
 ---
 
 ## 🔍 Trade Diagnostics & Extremes
 
-* 🟢 **Best Execution:** **XRP-EUR** (BUY) - Exit PnL: **€0.20** (+0.69%) via *Take Profit*
-* 🔴 **Worst Drawdown:** **BTC-EUR** (SELL) - Exit PnL: **€-0.36** (-0.19%) via *Stop Loss*
+* 🟢 **Best Execution:** **SOL-USD** (BUY) - Exit PnL: **€0.55** (+12.33%) via *Take Profit*
+* 🔴 **Worst Drawdown:** **BTC-USD** (BUY) - Exit PnL: **€-0.66** (-17.14%) via *Stop Loss*
 
 
 ### Cumulative Balance Progression
 | Trade # | Ticker | Side | Net PnL | Portfolio Balance |
 | --- | --- | --- | --- | --- |
-| Start | - | - | - | €1790.58 |
-| 1 | ETH-EUR | BUY | €-0.02 | €1790.56 |
-| 2 | ETH-EUR | BUY | €-0.02 | €1790.54 |
-| 3 | DOGE-EUR | BUY | €-0.02 | €1790.53 |
-| 4 | SOL-EUR | BUY | €-0.02 | €1790.51 |
-| 5 | BTC-EUR | BUY | €-0.01 | €1790.50 |
-| 6 | ETH-EUR | BUY | €-0.01 | €1790.49 |
-| 7 | SOL-EUR | BUY | €-0.02 | €1790.48 |
-| 8 | BTC-EUR | BUY | €-0.01 | €1790.46 |
-| 9 | DOGE-EUR | BUY | €+0.01 | €1790.47 |
-| 10 | SOL-EUR | BUY | €+0.01 | €1790.48 |
-| 11 | BTC-EUR | BUY | €+0.00 | €1790.49 |
-| 12 | XRP-EUR | BUY | €-0.03 | €1790.46 |
-| 13 | DOGE-EUR | BUY | €+0.02 | €1790.49 |
-| 14 | ETH-EUR | BUY | €+0.02 | €1790.51 |
-| 15 | XRP-EUR | BUY | €+0.02 | €1790.52 |
-| 16 | SOL-EUR | BUY | €+0.01 | €1790.53 |
-| 17 | SOL-EUR | SELL | €-0.05 | €1790.49 |
-| 18 | DOGE-EUR | BUY | €+0.03 | €1790.52 |
-| 19 | SOL-EUR | SELL | €+0.20 | €1790.72 |
-| 20 | ETH-EUR | BUY | €-0.25 | €1790.47 |
-| 21 | DOGE-EUR | BUY | €-0.22 | €1790.25 |
-| 22 | XRP-EUR | BUY | €-0.03 | €1790.22 |
-| 23 | XRP-EUR | BUY | €-0.03 | €1790.19 |
-| 24 | BTC-EUR | BUY | €-0.20 | €1789.99 |
-| 25 | XRP-EUR | BUY | €-0.01 | €1789.98 |
-| 26 | XRP-EUR | SELL | €-0.03 | €1789.94 |
-| 27 | SOL-EUR | BUY | €-0.08 | €1789.86 |
-| 28 | BTC-EUR | BUY | €+0.02 | €1789.88 |
-| 29 | BTC-EUR | BUY | €+0.08 | €1789.96 |
-| 30 | XRP-EUR | BUY | €+0.20 | €1790.16 |
-| 31 | BTC-EUR | BUY | €+0.08 | €1790.25 |
-| 32 | XRP-EUR | BUY | €-0.10 | €1790.15 |
-| 33 | BTC-EUR | BUY | €-0.12 | €1790.03 |
-| 34 | SOL-EUR | SELL | €-0.12 | €1789.91 |
-| 35 | BTC-EUR | SELL | €-0.05 | €1789.85 |
-| 36 | XRP-EUR | SELL | €-0.07 | €1789.79 |
-| 37 | BTC-EUR | BUY | €-0.03 | €1789.76 |
-| 38 | XRP-EUR | BUY | €-0.03 | €1789.73 |
-| 39 | SOL-EUR | SELL | €-0.17 | €1789.57 |
-| 40 | XRP-EUR | SELL | €-0.02 | €1789.55 |
-| 41 | SOL-EUR | BUY | €-0.04 | €1789.51 |
-| 42 | BTC-EUR | SELL | €-0.36 | €1789.15 |
+| Start | - | - | - | €8.04 |
+| 1 | BTC-USD | BUY | €+0.06 | €8.10 |
+| 2 | BTC-USD | BUY | €-0.60 | €7.50 |
+| 3 | BTC-USD | BUY | €-0.01 | €7.49 |
+| 4 | BTC-USD | BUY | €-0.07 | €7.42 |
+| 5 | XRP-USD | BUY | €-0.02 | €7.40 |
+| 6 | BTC-USD | BUY | €-0.66 | €6.74 |
+| 7 | BTC-USD | BUY | €-0.00 | €6.74 |
+| 8 | XRP-USD | BUY | €-0.02 | €6.72 |
+| 9 | BTC-USD | BUY | €-0.00 | €6.71 |
+| 10 | BTC-USD | BUY | €-0.60 | €6.12 |
+| 11 | SOL-USD | BUY | €-0.55 | €5.57 |
+| 12 | SOL-USD | SELL | €-0.54 | €5.03 |
+| 13 | SOL-USD | SELL | €-0.54 | €4.48 |
+| 14 | SOL-USD | BUY | €-0.54 | €3.94 |
+| 15 | SOL-USD | BUY | €-0.01 | €3.93 |
+| 16 | SOL-USD | BUY | €+0.55 | €4.49 |
+| 17 | SOL-USD | BUY | €-0.00 | €4.48 |
+| 18 | SOL-USD | BUY | €+0.52 | €5.00 |
+| 19 | SOL-USD | BUY | €-0.00 | €4.99 |
+| 20 | SOL-USD | BUY | €-0.53 | €4.46 |
+| 21 | SOL-USD | BUY | €-0.06 | €4.41 |
+| 22 | DOGE-USD | BUY | €+0.07 | €4.47 |
+| 23 | DOGE-USD | BUY | €-0.02 | €4.45 |
+| 24 | ETH-USD | BUY | €-0.18 | €4.27 |
+| 25 | ETH-USD | BUY | €-0.01 | €4.26 |
+| 26 | DOGE-USD | BUY | €-0.08 | €4.19 |
+| 27 | ETH-USD | BUY | €-0.17 | €4.01 |
+| 28 | ETH-USD | BUY | €-0.01 | €4.01 |
+| 29 | BTC-USD | BUY | €-0.09 | €3.91 |
+| 30 | BTC-USD | BUY | €-0.16 | €3.75 |
 
 
 ---
