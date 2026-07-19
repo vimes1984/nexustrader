@@ -272,12 +272,21 @@ def query_gemini_robust(api_key: str, prompt, model: str = "gemini-flash-latest"
                     return res_json["content"][0]["text"].strip()
         except urllib.error.HTTPError as e:
             if e.code in [429, 500, 502, 503, 504] and retries < max_retries:
-                logging.warning(f"[{provider.upper()} API] Transient error ({e.code}) hit. Retrying in {delay:.1f}s... (Attempt {retries+1}/{max_retries})")
+                logging.warning(f"[{provider.upper()} API] Transient HTTP error ({e.code}) hit. Retrying in {delay:.1f}s... (Attempt {retries+1}/{max_retries})")
                 time.sleep(delay)
                 retries += 1
                 delay *= backoff_factor
             else:
                 logging.error(f"[{provider.upper()} API] HTTP Error {e.code}: {e.reason}")
+                raise e
+        except (urllib.error.URLError, ConnectionResetError, BrokenPipeError, TimeoutError) as e:
+            if retries < max_retries:
+                logging.warning(f"[{provider.upper()} API] Transient Network error ({e}) hit. Retrying in {delay:.1f}s... (Attempt {retries+1}/{max_retries})")
+                time.sleep(delay)
+                retries += 1
+                delay *= backoff_factor
+            else:
+                logging.error(f"[{provider.upper()} API] Network Error: {e}")
                 raise e
         except Exception as e:
             logging.error(f"[{provider.upper()} API] Unexpected error: {e}")
