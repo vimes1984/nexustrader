@@ -1516,10 +1516,26 @@
                     
                     <!-- Audit Trail of AI Agent Parameter Adjustments -->
                     <div style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 15px; text-align: left; margin-bottom: 20px;">
-                        <h3 class="panel-title" style="display: flex; align-items: center; gap: 6px; font-size: 13px; margin: 0 0 10px 0;">
-                            <i data-lucide="shield-check" style="width: 14px; height: 14px; color: var(--neon-blue);"></i>
-                            Audit Trail of AI Agent Parameter Adjustments
-                        </h3>
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; flex-wrap: wrap; gap: 10px;">
+                            <h3 class="panel-title" style="display: flex; align-items: center; gap: 6px; font-size: 13px; margin: 0;">
+                                <i data-lucide="shield-check" style="width: 14px; height: 14px; color: var(--neon-blue);"></i>
+                                Audit Trail of AI Agent Parameter Adjustments
+                            </h3>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <label style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-secondary);">
+                                    <span>Filter by Quant:</span>
+                                    <select id="optimizations-agent-filter" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 6px; padding: 4px 8px; font-size: 11px; cursor: pointer; outline: none;">
+                                        <option value="all">All Quants</option>
+                                        <option value="PhD Quant Agent">PhD Quant Agent</option>
+                                        <option value="NeuralCore Optimizer">NeuralCore Optimizer</option>
+                                        <option value="Sentiment Sentinel">Sentiment Sentinel</option>
+                                        <option value="Risk Auditor">Risk Auditor</option>
+                                        <option value="Ensemble Asset Allocator">Ensemble Asset Allocator</option>
+                                    </select>
+                                </label>
+                                <input type="text" id="optimizations-search" placeholder="Search parameters..." style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 6px; padding: 4px 8px; font-size: 11px; width: 140px; outline: none;">
+                            </div>
+                        </div>
                         <div style="max-height: 250px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px; background: rgba(10,15,30,0.4);">
                             <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 11px;">
                                 <thead>

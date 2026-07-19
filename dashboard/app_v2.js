@@ -3029,35 +3029,63 @@ function fetchSystemLogs() {
         });
 }
 
+let cachedOptimizations = [];
+
+function renderOptimizations(opts) {
+    const tbody = document.getElementById("logs-tab-optimizations-tbody");
+    if (!tbody) return;
+    
+    if (opts.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="5" style="color: var(--text-secondary); text-align: center; padding: 20px;">No matching parameter adjustments found.</td>
+            </tr>
+        `;
+        return;
+    }
+    
+    tbody.innerHTML = opts.map(opt => {
+        const timeStr = new Date(opt.timestamp * 1000).toLocaleString();
+        return `
+            <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
+                <td style="padding: 10px 12px; color: var(--text-secondary); white-space: nowrap;">${timeStr}</td>
+                <td style="padding: 10px 12px; font-weight: 600; color: var(--neon-blue);">${opt.agent}</td>
+                <td style="padding: 10px 12px; font-family: monospace; color: var(--text-primary);">${opt.parameter}</td>
+                <td style="padding: 10px 12px; color: var(--text-secondary); font-family: monospace;">${opt.old_value || '-'}</td>
+                <td style="padding: 10px 12px; font-weight: 600; color: var(--neon-green); font-family: monospace;">${opt.new_value}</td>
+            </tr>
+        `;
+    }).join("");
+}
+
+function applyOptimizationsFilters() {
+    const filterAgent = document.getElementById("optimizations-agent-filter")?.value || "all";
+    const searchQuery = document.getElementById("optimizations-search")?.value.toLowerCase().trim() || "";
+    
+    let filtered = cachedOptimizations;
+    if (filterAgent !== "all") {
+        filtered = filtered.filter(opt => opt.agent === filterAgent);
+    }
+    if (searchQuery) {
+        filtered = filtered.filter(opt => 
+            opt.parameter.toLowerCase().includes(searchQuery) ||
+            opt.new_value.toLowerCase().includes(searchQuery) ||
+            (opt.old_value && opt.old_value.toLowerCase().includes(searchQuery))
+        );
+    }
+    renderOptimizations(filtered);
+}
+
 function fetchOptimizationsLogs() {
     const tbody = document.getElementById("logs-tab-optimizations-tbody");
     if (!tbody) return;
     
-    fetch(`/api/system/optimizations?limit=50&t=${Date.now()}`)
+    fetch(`/api/system/optimizations?limit=100&t=${Date.now()}`)
         .then(res => res.json())
         .then(data => {
             if (data.status === "success" && data.optimizations) {
-                if (data.optimizations.length === 0) {
-                    tbody.innerHTML = `
-                        <tr>
-                            <td colspan="5" style="color: var(--text-secondary); text-align: center; padding: 20px;">No parameter adjustments made by AI agents yet.</td>
-                        </tr>
-                    `;
-                    return;
-                }
-                
-                tbody.innerHTML = data.optimizations.map(opt => {
-                    const timeStr = new Date(opt.timestamp * 1000).toLocaleString();
-                    return `
-                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">
-                            <td style="padding: 10px 12px; color: var(--text-secondary); white-space: nowrap;">${timeStr}</td>
-                            <td style="padding: 10px 12px; font-weight: 600; color: var(--neon-blue);">${opt.agent}</td>
-                            <td style="padding: 10px 12px; font-family: monospace; color: var(--text-primary);">${opt.parameter}</td>
-                            <td style="padding: 10px 12px; color: var(--text-secondary); font-family: monospace;">${opt.old_value || '-'}</td>
-                            <td style="padding: 10px 12px; font-weight: 600; color: var(--neon-green); font-family: monospace;">${opt.new_value}</td>
-                        </tr>
-                    `;
-                }).join("");
+                cachedOptimizations = data.optimizations;
+                applyOptimizationsFilters();
             }
         })
         .catch(err => console.error("Error loading optimizations history:", err));
@@ -3085,6 +3113,15 @@ document.addEventListener("DOMContentLoaded", () => {
         logStreamSelect.addEventListener("change", () => {
             fetchSystemLogs();
         });
+    }
+
+    const filterAgent = document.getElementById("optimizations-agent-filter");
+    const searchOpt = document.getElementById("optimizations-search");
+    if (filterAgent) {
+        filterAgent.addEventListener("change", applyOptimizationsFilters);
+    }
+    if (searchOpt) {
+        searchOpt.addEventListener("input", applyOptimizationsFilters);
     }
     
     // Auto-refresh loop
