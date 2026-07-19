@@ -3109,10 +3109,6 @@ function renderAgentRuns(runs) {
     tbody.innerHTML = runs.map(run => {
         const timeStr = new Date(run.timestamp * 1000).toLocaleString();
         
-        // Truncate prompt & response preview, escape quotes safely
-        const escPrompt = (run.prompt || "").replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/'/g, "\\'").replace(/\n/g, '\\n').replace(/\r/g, '\\r');
-        const escResponse = (run.response || "").replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/'/g, "\\'").replace(/\n/g, '\\n').replace(/\r/g, '\\r');
-        
         const previewPrompt = (run.prompt || "").substring(0, 45) + ((run.prompt || "").length > 45 ? "..." : "");
         const previewResponse = (run.response || "").substring(0, 45) + ((run.response || "").length > 45 ? "..." : "");
         
@@ -3127,13 +3123,13 @@ function renderAgentRuns(runs) {
                 <td style="padding: 10px 12px;">
                     <div style="display: flex; flex-direction: column; gap: 4px;">
                         <span style="color: var(--text-secondary); font-size: 10px; font-family: monospace;">${previewPrompt}</span>
-                        <button class="btn btn-secondary" onclick="openTextViewerModal('Inspect Prompt (Agent: ${run.agent})', '${escPrompt}')" style="padding: 2px 6px; font-size: 9px; align-self: flex-start; line-height: 1;">View Full Prompt</button>
+                        <button class="btn btn-secondary" onclick="viewAgentRunPrompt(${run.id})" style="padding: 2px 6px; font-size: 9px; align-self: flex-start; line-height: 1;">View Full Prompt</button>
                     </div>
                 </td>
                 <td style="padding: 10px 12px;">
                     <div style="display: flex; flex-direction: column; gap: 4px;">
                         <span style="color: var(--text-secondary); font-size: 10px; font-family: monospace;">${previewResponse}</span>
-                        <button class="btn btn-secondary" onclick="openTextViewerModal('Inspect Raw Response (Agent: ${run.agent})', '${escResponse}')" style="padding: 2px 6px; font-size: 9px; align-self: flex-start; line-height: 1;">View Full Response</button>
+                        <button class="btn btn-secondary" onclick="viewAgentRunResponse(${run.id})" style="padding: 2px 6px; font-size: 9px; align-self: flex-start; line-height: 1;">View Full Response</button>
                     </div>
                 </td>
                 <td style="padding: 10px 12px; font-weight: bold; color: ${statusColor};">${run.status}</td>
@@ -3204,10 +3200,26 @@ function copyViewerText() {
     }
 }
 
+function viewAgentRunPrompt(runId) {
+    const run = cachedAgentRuns.find(r => r.id === runId);
+    if (run) {
+        openTextViewerModal(`Inspect Prompt (Agent: ${run.agent})`, run.prompt);
+    }
+}
+
+function viewAgentRunResponse(runId) {
+    const run = cachedAgentRuns.find(r => r.id === runId);
+    if (run) {
+        openTextViewerModal(`Inspect Raw Response (Agent: ${run.agent})`, run.response);
+    }
+}
+
 // Expose modal actions globally for onclick handlers
 window.closeTextViewerModal = closeTextViewerModal;
 window.copyViewerText = copyViewerText;
 window.openTextViewerModal = openTextViewerModal;
+window.viewAgentRunPrompt = viewAgentRunPrompt;
+window.viewAgentRunResponse = viewAgentRunResponse;
 
 // Hook up manual refresh button and auto-refresh loop
 document.addEventListener("DOMContentLoaded", () => {
