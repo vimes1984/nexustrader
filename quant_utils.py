@@ -283,7 +283,12 @@ def query_gemini_robust(api_key: str, prompt, model: str = "gemini-flash-latest"
                 retries += 1
                 delay *= backoff_factor
             else:
-                logging.error(f"[{provider.upper()} API] HTTP Error {e.code}: {e.reason}")
+                try:
+                    err_body = e.read().decode("utf-8")
+                    logging.error(f"[{provider.upper()} API] HTTP Error {e.code}: {e.reason} - Body: {err_body}")
+                    e.reason = f"{e.reason} - {err_body}"
+                except Exception:
+                    logging.error(f"[{provider.upper()} API] HTTP Error {e.code}: {e.reason}")
                 raise e
         except (urllib.error.URLError, ConnectionResetError, BrokenPipeError, TimeoutError) as e:
             if retries < max_retries:
