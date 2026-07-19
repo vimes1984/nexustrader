@@ -1379,50 +1379,59 @@ function updatePerformanceKPIs(trades, currentEquity) {
 }
 
 // User Interaction Listeners
-elPlayPauseBtn.addEventListener("click", () => {
-    isStopped = !isStopped;
-    const action = isStopped ? "stop" : "start";
-    const speed = parseFloat(elSpeedSlider.value);
-    
-    fetch(`/api/control?action=${action}&speed=${speed}&mode=${globalTradingMode === 'live' ? 'live' : 'simulation'}`, { method: 'POST' })
-        .then(res => res.json())
-        .then(data => {
-            if (isStopped) {
-                elPlayPauseText.textContent = "Resume";
-                elPlayPauseBtn.querySelector("i").setAttribute("data-lucide", "play");
-                document.getElementById("status-text").textContent = "Paused";
-                document.getElementById("bot-status").classList.add("stopped");
-            } else {
-                elPlayPauseText.textContent = "Pause";
-                elPlayPauseBtn.querySelector("i").setAttribute("data-lucide", "pause");
-                document.getElementById("status-text").textContent = globalTradingMode === 'live' ? `Live (${globalBrokerName.toUpperCase()})` : "Simulating";
-                document.getElementById("bot-status").classList.remove("stopped");
-            }
-            lucide.createIcons();
-        });
-});
-
-elSpeedSlider.addEventListener("input", (e) => {
-    const val = parseFloat(e.target.value);
-    elSpeedLabel.textContent = `${val.toFixed(2)}s`;
-    
-    if (!isStopped) {
-        // Update speed on the fly
-        fetch(`/api/control?action=start&speed=${val}&mode=${globalTradingMode === 'live' ? 'live' : 'simulation'}`, { method: 'POST' });
-    }
-});
-
-elResetBtn.addEventListener("click", () => {
-    if (confirm("Are you sure you want to reset simulation, balance, and learning weights?")) {
-        fetch("/api/control?action=reset", { method: 'POST' })
+if (elPlayPauseBtn) {
+    elPlayPauseBtn.addEventListener("click", () => {
+        isStopped = !isStopped;
+        const action = isStopped ? "stop" : "start";
+        const speed = elSpeedSlider ? parseFloat(elSpeedSlider.value) : 0.2;
+        
+        fetch(`/api/control?action=${action}&speed=${speed}&mode=${globalTradingMode === 'live' ? 'live' : 'simulation'}`, { method: 'POST' })
             .then(res => res.json())
             .then(data => {
-                // Reset local states
-                priceData.length = 0;
-                chartLabels.length = 0;
-                bbUpperData.length = 0;
-                bbLowerData.length = 0;
-                chart.update();
+                if (isStopped) {
+                    if (elPlayPauseText) elPlayPauseText.textContent = "Resume";
+                    const iconEl = elPlayPauseBtn.querySelector("i");
+                    if (iconEl) iconEl.setAttribute("data-lucide", "play");
+                    const stEl = document.getElementById("status-text");
+                    if (stEl) stEl.textContent = "Paused";
+                    const bsEl = document.getElementById("bot-status");
+                    if (bsEl) bsEl.classList.add("stopped");
+                } else {
+                    if (elPlayPauseText) elPlayPauseText.textContent = "Pause";
+                    const iconEl = elPlayPauseBtn.querySelector("i");
+                    if (iconEl) iconEl.setAttribute("data-lucide", "pause");
+                    const stEl = document.getElementById("status-text");
+                    if (stEl) stEl.textContent = globalTradingMode === 'live' ? `Live (${globalBrokerName.toUpperCase()})` : "Simulating";
+                    const bsEl = document.getElementById("bot-status");
+                    if (bsEl) bsEl.classList.remove("stopped");
+                }
+                if (typeof lucide !== 'undefined') lucide.createIcons();
+            });
+    });
+}
+
+if (elSpeedSlider) {
+    elSpeedSlider.addEventListener("input", (e) => {
+        const val = parseFloat(e.target.value);
+        if (elSpeedLabel) elSpeedLabel.textContent = `${val.toFixed(2)}s`;
+        
+        if (!isStopped) {
+            fetch(`/api/control?action=start&speed=${val}&mode=${globalTradingMode === 'live' ? 'live' : 'simulation'}`, { method: 'POST' });
+        }
+    });
+}
+
+if (elResetBtn) {
+    elResetBtn.addEventListener("click", () => {
+        if (confirm("Are you sure you want to reset simulation, balance, and learning weights?")) {
+            fetch("/api/control?action=reset", { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    priceData.length = 0;
+                    chartLabels.length = 0;
+                    bbUpperData.length = 0;
+                    bbLowerData.length = 0;
+                    if (chart) chart.update();
                 
                 isStopped = false;
                 elPlayPauseText.textContent = "Pause";
@@ -1460,6 +1469,7 @@ elResetBtn.addEventListener("click", () => {
             });
     }
 });
+}
 
 // Risk Mode Event Listener
 if (elRiskSelect) {

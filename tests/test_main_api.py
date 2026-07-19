@@ -114,5 +114,38 @@ class TestMainApi(unittest.TestCase):
         self.assertEqual(res["sentiment_agent_hour"], 2)
         self.assertEqual(res["risk_auditor_hour"], 3)
 
+    def test_get_assets_endpoint(self):
+        database.load_active_assets.return_value = [
+            {"ticker": "BTC-USD", "is_active": 1, "tp_multiplier": 2.5, "sl_multiplier": 1.5, "kelly_ceiling": 0.2}
+        ]
+        database.list_policy_brains.return_value = [{"name": "Brain-A"}]
+        
+        res = main.get_assets()
+        self.assertEqual(len(res), 1)
+        self.assertEqual(res[0]["ticker"], "BTC-USD")
+        self.assertIn("Brain-A", res[0]["brains"])
+        self.assertIn("Default Brain", res[0]["brains"])
+        
+    def test_save_asset_endpoint(self):
+        database.save_active_asset.reset_mock()
+        database.save_active_asset.return_value = True
+        res = main.save_asset(ticker="BTC-USD", is_active=True, tp_multiplier=2.5, sl_multiplier=1.5, kelly_ceiling=0.2)
+        self.assertEqual(res["status"], "success")
+        database.save_active_asset.assert_called_once_with("BTC-USD", True, 2.5, 1.5, 0.2)
+        
+    def test_get_agent_llm_config_endpoint(self):
+        database.load_setting.side_effect = lambda key, default="": "gemini" if key == "agent_llm_provider" else "sk-123456789" if key == "agent_llm_api_key" else "test-val"
+        res = main.get_agent_llm_config()
+        self.assertEqual(res["provider"], "gemini")
+        self.assertEqual(res["api_key"], "sk-1****6789")
+        
+    def test_save_agent_llm_config_endpoint(self):
+        res = main.save_agent_llm_config(provider="openai", base_url="https://test.com", model="gpt-4", api_key="sk-newkey")
+        self.assertEqual(res["status"], "success")
+        database.save_setting.assert_any_call("agent_llm_provider", "openai")
+        database.save_setting.assert_any_call("agent_llm_base_url", "https://test.com")
+        database.save_setting.assert_any_call("agent_llm_model", "gpt-4")
+        database.save_setting.assert_any_call("agent_llm_api_key", "sk-newkey")
+
 if __name__ == "__main__":
     unittest.main()
