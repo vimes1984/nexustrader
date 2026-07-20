@@ -195,7 +195,7 @@
                 </button>
                 <button class="nav-tab" data-tab="tab-longterm" style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: transparent; border: none; border-radius: 8px; color: var(--text-secondary); font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer; text-align: left; transition: all 0.2s ease;">
                     <i data-lucide="trending-up" style="width: 18px; height: 18px; color: var(--neon-green);"></i>
-                    Updates & Changes
+                    Strategy
                 </button>
                 <button class="nav-tab" data-tab="tab-agents" style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: transparent; border: none; border-radius: 8px; color: var(--text-secondary); font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer; text-align: left; transition: all 0.2s ease;">
                     <i data-lucide="bot" style="width: 18px; height: 18px;"></i>
@@ -1249,70 +1249,87 @@
         </div>
 
         <!-- TAB CONTENT 3.5: LONG-TERM STRATEGY -->
-                                <div id="tab-longterm" class="tab-content">
+                                                <div id="tab-longterm" class="tab-content">
             <article class="glass-panel" style="padding: 28px;">
                 <h2 class="panel-title" style="display: flex; align-items: center; gap: 8px; font-size: 18px; margin-bottom: 20px;">
                     <i data-lucide="trending-up" style="color: var(--neon-green); width: 22px; height: 22px;"></i>
-                    What's Changed — Recent Updates
+                    How the Bot Trades
                 </h2>
                 
                 <div style="display: flex; flex-direction: column; gap: 16px;">
                     <div style="border-radius: 10px; border: 1px solid var(--border-color); padding: 16px;">
-                        <h3 style="font-size: 14px; font-weight: 600; margin: 0 0 8px 0; color: var(--neon-blue);">1. Experience Replay Buffer</h3>
+                        <h3 style="font-size: 14px; font-weight: 600; margin: 0 0 8px 0; color: var(--neon-blue);">Signal Generation</h3>
                         <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.5;">
-                            Stores past (state, signal, profit) tuples in a buffer (capacity=200).
-                            Every 5 trades, samples 32 random past experiences and trains on the batch.
-                            This smooths weight updates and keeps old patterns from being overwritten.
+                            12 individual strategies each produce a signal per tick (-1=short, 0=neutral, +1=long).
+                            Their outputs are combined into one weighted signal.
                         </p>
-                    </div>
-                    
-                    <div style="border-radius: 10px; border: 1px solid var(--border-color); padding: 16px;">
-                        <h3 style="font-size: 14px; font-weight: 600; margin: 0 0 8px 0; color: var(--neon-purple);">2. Performance-Biased Strategy Weights</h3>
-                        <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.5;">
-                            Each strategy tracks its own win rate over the last 20 trades.
-                            Strategies hitting >60% get boosted; ones below 35% get suppressed.
-                            This runs on top of the OU regime detector and Policy Network weights.
-                            Code in <code>strategy_engine.py, record_trade_outcome()</code>.
+                        <p style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+                            <strong>Strategies:</strong> EMA crossover, RSI reversal, Bollinger reversion, Kalman filter,
+                            stop hunt detector, random forest, momentum, volatility regime, mean reversion, trend follow, scalping, breakout
                         </p>
                     </div>
 
                     <div style="border-radius: 10px; border: 1px solid var(--border-color); padding: 16px;">
-                        <h3 style="font-size: 14px; font-weight: 600; margin: 0 0 8px 0; color: var(--neon-green);">3. Fractional Kelly + Drawdown-Aware Sizing</h3>
+                        <h3 style="font-size: 14px; font-weight: 600; margin: 0 0 8px 0; color: var(--neon-purple);">Weighting System</h3>
                         <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.5;">
-                            Three caps on position size:
-                            <ul style="margin: 4px 0 0 16px; padding: 0;">
-                                <li><strong>Calibration cap</strong> from Brier score: Brier &lt;0.25 → 2% max, &lt;0.20 → 5%, else 15%</li>
-                                <li><strong>Drawdown penalty</strong>: linearly tapers allowed risk from 50% drawdown → 100% of limit</li>
-                                <li><strong>Kelly fraction</strong>: computed from actual closed-trade win/loss stats</li>
-                            </ul>
-                            Formula in <code>evaluation/position_sizing.py</code>.
+                            Three layers determine which strategies matter most right now:
+                        </p>
+                        <ol style="margin: 4px 0 0 16px; padding: 0; font-size: 11px; color: var(--text-secondary); line-height: 1.6;">
+                            <li><strong>OU Regime Detection</strong> — estimates Ornstein-Uhlenbeck mean-reversion speed.
+                            Trending markets favor trend/breakout/momentum. Mean-reverting markets favor RSI/BB/kalman.</li>
+                            <li><strong>Performance Biasing</strong> — each strategy tracks its rolling win rate (last 20 trades).
+                            Above 60% gets boosted. Below 35% gets suppressed.</li>
+                            <li><strong>Policy Network</strong> — an 8x12x12x12 MLP takes the market state vector
+                            (RSI, MACD, BB distance, ATR ratio, OU theta, OU regime, sentiment, win trend)
+                            and outputs a softmax weight distribution. Trained via REINFORCE on trade PnL.</li>
+                        </ol>
+                        <p style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+                            Code: <code>strategy_engine.py</code> (ensemble + performance), <code>learning_engine.py</code> (policy network), <code>quant_utils.py</code> (OU estimation)
                         </p>
                     </div>
 
                     <div style="border-radius: 10px; border: 1px solid var(--border-color); padding: 16px;">
-                        <h3 style="font-size: 14px; font-weight: 600; margin: 0 0 8px 0; color: var(--neon-red);">4. Exchange Reconnection</h3>
+                        <h3 style="font-size: 14px; font-weight: 600; margin: 0 0 8px 0; color: var(--neon-green);">Entry / Exit Rules</h3>
                         <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.5;">
-                            The live polling loop counts exchange failures and reconnects with exponential
-                            backoff (5s → 10s → 20s → max 120s). Falls back to yfinance while reconnecting.
-                            Code in <code>data_ingestion.py</code>.
+                            A trade triggers when the weighted signal exceeds thresholds:
+                            <strong>>= +0.35 for long</strong>, <strong><= -0.35 for short</strong>.
+                            Once in a trade, stop-loss and take-profit are set per tick.
+                            SL = entry +/- ATR * sl_multiplier. TP = entry +/- ATR * tp_multiplier.
+                            Default multipliers: SL=1.5, TP=3.0 (configurable per ticker).
+                            Cooldown period after a losing trade prevents revenge trading.
+                        </p>
+                        <p style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+                            Code: <code>main.py process_tick()</code>, <code>probability_engine.py</code>
                         </p>
                     </div>
 
                     <div style="border-radius: 10px; border: 1px solid var(--border-color); padding: 16px;">
-                        <h3 style="font-size: 14px; font-weight: 600; margin: 0 0 8px 0; color: var(--neon-orange);">5. Backtest API</h3>
+                        <h3 style="font-size: 14px; font-weight: 600; margin: 0 0 8px 0; color: var(--neon-red);">Position Sizing</h3>
                         <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.5;">
-                            Callable via <code>POST /api/system/backtest</code>. Runs buy-and-hold, EMA crossover,
-                            random entry, and Nexus ensemble on the same historical data.
-                            Returns Sharpe, drawdown, win rate, and "tradable" (beats all baselines).
+                            Three caps applied in order. The tightest one wins:
+                        </p>
+                        <ol style="margin: 4px 0 0 16px; padding: 0; font-size: 11px; color: var(--text-secondary); line-height: 1.6;">
+                            <li><strong>Calibration cap</strong> — Brier score of recent probability predictions.
+                            Well-calibrated (Brier <0.20) => 5% of cash max. Poor (Brier >0.25) => 2% max.</li>
+                            <li><strong>Drawdown penalty</strong> — linear taper. At 0% drawdown => full cap. At 50%+ drawdown => 0% of cap.</li>
+                            <li><strong>Kelly fraction</strong> — estimated from actual closed-trade win/loss distribution. Usually 0.1–0.25.</li>
+                        </ol>
+                        <p style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+                            Formula: <code>evaluation/position_sizing.py</code>. Risk mode is "aggressive" or "conservative" (halves all sizes).
                         </p>
                     </div>
 
                     <div style="border-radius: 10px; border: 1px solid var(--border-color); padding: 16px;">
-                        <h3 style="font-size: 14px; font-weight: 600; margin: 0 0 8px 0; color: var(--neon-blue);">6. Optimizations Manager</h3>
+                        <h3 style="font-size: 14px; font-weight: 600; margin: 0 0 8px 0; color: var(--neon-orange);">Safety System</h3>
                         <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.5;">
-                            Full management UI for the agent_optimizations table. View all suggested parameter
-                            changes, apply them directly (bypasses MutationFreeze), or ask OpenClaw to review
-                            them via <code>POST /api/optimizations/review</code>.
+                            <strong>KillSwitch</strong> — monitors daily PnL, position count, and total exposure.
+                            Trips and blocks all trading if any limit is exceeded. State persists across restarts.<br>
+                            <strong>DrawdownTracker</strong> — tracks peak-to-trough equity. Adjusts risk as drawdown grows.<br>
+                            <strong>MutationFreeze</strong> — agent-suggested parameter changes log for review but are not applied automatically.
+                            Human approval required via the Optimizations Manager tab.
+                        </p>
+                        <p style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+                            Code: <code>evaluation/safety.py</code>. Status endpoint: <code>/api/safety/status</code>.
                         </p>
                     </div>
                 </div>
