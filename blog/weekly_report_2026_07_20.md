@@ -49,13 +49,13 @@ Current baseline weights computed by the neural network:
 
 | Strategy | Allocation Weight | Visual Distribution |
 | :--- | :--- | :--- |
-| **EMA Crossover** | 6.5% | `█████████░░░░░░` |
+| **EMA Crossover** | 6.5% | `████████░░░░░░░` |
 | **RSI Reversion** | 7.7% | `██████████░░░░░` |
-| **BB Breakout** | 9.1% | `████████████░░░` |
-| **ML Random Forest** | 10.2% | `██████████████░` |
+| **BB Breakout** | 9.1% | `███████████░░░░` |
+| **ML Random Forest** | 10.2% | `█████████████░░` |
 | **Kalman Trend** | 10.1% | `█████████████░░` |
-| **Psych Sweep** | 9.7% | `█████████████░░` |
-| **News Sentiment** | 6.0% | `████████░░░░░░░` |
+| **Psych Sweep** | 9.7% | `████████████░░░` |
+| **News Sentiment** | 6.0% | `███████░░░░░░░░` |
 
 
 ---
