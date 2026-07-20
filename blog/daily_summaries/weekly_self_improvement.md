@@ -1,233 +1,215 @@
 ## Weekly Hyperparameter Backtest Optimization & Self-Improvement
-Optimizations run over a window of **100** historical price ticks.
+Optimizations run over a window of **575** historical price ticks.
 
 ### Optimized Strategy Parameters:
-* **RSI Reversion Strategy**: Oversold Threshold = `25.0`, Overbought Threshold = `75.0` (Backtest PnL: `€0.0000`)
-* **Kalman Filter Trend Strategy**: Trigger Filter Threshold = `0.0005` / `0.05%` (Backtest PnL: `€0.0000`)
-* **Volatility ATR Risk Strategy**: Take Profit Multiplier = `2.0x ATR`, Stop Loss Multiplier = `1.0x ATR` (Backtest PnL: `€0.0000`)
+* **RSI Reversion Strategy**: Oversold Threshold = `30.0`, Overbought Threshold = `70.0` (Backtest PnL: `€62.5025`)
+* **Kalman Filter Trend Strategy**: Trigger Filter Threshold = `0.0005` / `0.05%` (Backtest PnL: `€-5569.0344`)
+* **Volatility ATR Risk Strategy**: Take Profit Multiplier = `3.5x ATR`, Stop Loss Multiplier = `1.0x ATR` (Backtest PnL: `€7.7777`)
 
 ### Policy Gradient Neural Network Evaluation:
 Evaluating neural network weights update records...
-* Recent 20 Trades Win Rate: **100.0%** | Average Trade PnL: **€+10.00**
-* Policy Gradient NN backpropagation gradient steps verified: **Stable**.
+* No completed trades recorded yet. Neural network policy is currently in exploration mode.
 
 ### 💡 AI Parameter Optimizer Evaluation:
 [OpenClawBridge ERROR] Failed after 3 retries for Parameter Optimizer Agent
+
+🧠 **AI Prompt Meta-Optimization**: Successfully analyzed agent outputs and evolved prompt template.
+
+
+## 🧠 Neural Network Policy Self-Improvement Report
+This is a cold-start situation — zero trades, no training signal, and a network so small (hidden dim 12) it can barely model a single mean-reverting spread, let alone $1K/day. Let's fix that systematically.
+
+---
+
+## NexusTrader Neural Network Optimization Report
+
+### 1. Current State Assessment
+
+| Parameter | Current | Problem |
+|---|---|---|
+| Hidden Dim | **12** | Catastrophically undersized for any policy gradient task. You'll get mode collapse, not convergence. |
+| Learning Rate | **0.005** | Marginal with Adam; lethal with SGD. No adaptive optimizer specified. |
+| Weight Floor | **0.005** | Harmful. A hard floor prevents weights from ever going to zero, forcing all features to matter equally. This destroys sparsity, hurts generalization, and wastes capacity. |
+| Recent Trades | **None** | Network has never seen a reward signal. No gradient has been computed. |
+
+### 2. Architectural Recommendations
+
+**Hidden Dimension → 64 (minimum), 128 (target)**
+With 12 hidden units, the network has ~12² = 144 weights in one layer — you can't represent the state-action manifold of a multi-asset FX/crypto market. 64 units gives ~4,096 weights, which is still modest but sufficient for a small portfolio.
+
+**Optimizer → Adam (β₁=0.9, β₂=0.999, ε=1e-8)**
+Replace whatever optimizer you're using (likely vanilla SGD or RMSprop) with Adam. The adaptive per-parameter learning rate is essential when rewards are sparse and noisy.
+
+**Learning Rate → 1e-4 (0.0001) initial, with ReduceLROnPlateau**
+At 0.005 with no trades, the first batch of gradients will either explode or wash out. Start at 1e-4 and halve when loss plateaus for 20 consecutive steps.
+
+**Weight Floor → Remove entirely, add L2 weight decay (1e-5)**
+The weight floor constraint of 0.005 is actively destructive. It means no feature can ever be fully ignored. Replace with L2 regularization (weight decay) so the network can learn which market features matter and which are noise.
+
+### 3. Policy Gradient Framework
+
+**Algorithm: PPO-Clip with Generalized Advantage Estimation (GAE)**
+
+Pure REINFORCE (Monte Carlo policy gradient) has too high variance for daily trading with sparse rewards. Switch to PPO with:
+
+| Component | Recommendation | Rationale |
+|---|---|---|
+| Clip epsilon (ε) | 0.2 | Standard; prevents destructive policy updates |
+| GAE lambda (λ) | 0.95 | Smooths advantage estimates across time steps |
+| Discount factor (γ) | 0.99 | Long-horizon — a trade may take days to close |
+| Entropy bonus coefficient | 0.01 → decay to 0.001 | Encourage exploration early, exploitation late |
+| Update epochs per batch | 3 | Avoid overfitting to one batch |
+| Mini-batch size | 32 | Enough for gradient stability with small portfolio |
+
+### 4. Exploration / Exploitation Decay Schedule
+
+Since you have **zero trades**, the network must explore aggressively first:
+
+```python
+# Scheduled entropy coefficient
+entropy_coef_start = 0.05   # Very exploratory
+entropy_coef_end   = 0.001  # Nearly deterministic
+decay_steps        = 1000   # Trades, not batches
+entropy_coef = entropy_coef_end + (entropy_coef_start - entropy_coef_end) * \
+               exp(-trade_count / decay_steps)
+```
+
+Also implement **Boltzmann (softmax) action noise** on the policy output, decaying temperature:
+- `tau_start = 1.0` → `tau_end = 0.1` over 500 trades
+
+### 5. Volatility Regime Detection
+
+This is critical for dynamic adaptation. Implement a **rolling window regime classifier**:
+
+```
+Regime = f(ATR(14), HV(20), VIX-equivalent)
+
+Three regimes:
+  LOW_VOL  — ATR < 20-period SMA(ATR) × 0.7
+  NORMAL   — 0.7× to 1.3× SMA(ATR)
+  HIGH_VOL — > 1.3× SMA(ATR)
+```
+
+For each regime, scale position sizing and TP/SL:
+
+| Regime | Kelly Fraction | TP Multiplier | SL Multiplier | LR Scale |
+|---|---|---|---|---|
+| LOW_VOL | 0.25 × Kelly | 2.5 | 1.0 | ×0.5 |
+| NORMAL | 1.0 × Kelly | 2.0 | 1.0 | ×1.0 |
+| HIGH_VOL | 0.10 × Kelly | 1.5 | 1.5 | ×0.3 |
+
+### 6. Kelly Criterion Position Sizing
+
+For trading with limited history:
+
+```
+Kelly Fraction = max(0, min(0.25, (win_rate * avg_win - (1-win_rate) * avg_loss) / avg_win))
+```
+
+**Conservative Kelly with fractional scaling:**
+- Recommended: `kelly_fraction = 0.15` (15% of Kelly-optimal)
+- Safety cap: never allocate >5% of capital to a single position
+- Maximum daily drawdown trigger: if P&L < -$500 in a day, reduce all positions by 50%
+
+### 7. Dynamic Stop-Loss & Take-Profit
+
+Replace static TP/SL with ATR-based dynamic levels:
+
+```
+SL_price = entry_price - ATR(14) × sl_multiplier
+TP_price = entry_price + ATR(14) × tp_multiplier
+```
+
+Where `sl_multiplier` and `tp_multiplier` adjust by regime (see table in §5).
+
+**Trailing stop**: Once position achieves 50% of TP, convert SL to a trailing stop at 1× ATR.
+
+### 8. Neural Consensus Gating
+
+Use a **confidence threshold** gating mechanism:
+
+```
+action = policy_network(state)
+confidence = softmax(logits).max()
+
+if confidence > threshold (start: 0.6, end: 0.9):
+    take_action(action)
+else:
+    skip_trade / take_no_action
+```
+
+This naturally prevents the network from trading when it's unsure, reducing noise early in training.
+
+### 9. Neural Performance Checks
+
+| Check | Threshold | Action if Failed |
+|---|---|---|
+| Loss convergence | Last 50 losses: coefficient of variation < 0.1 | Reduce LR ×0.5, reset entropy to 0.03 |
+| Gradient stability | Gradient norm < 10.0 || > 1e-4 | Clip to 1.0, reduce LR ×0.5 |
+| Policy improvement rate | Rolling 20-trade win rate > 0.35 in last 100 | If below, increase exploration; if above 0.6, reduce |
+| Value function error | Value loss < 0.5 × policy loss | If too high, increase GAE λ or reduce γ |
+
+### 10. Cold-Start Plan (Zero Trades)
+
+1. **Seed dataset**: Run 200 paper trades with random actions to bootstrap the replay buffer and compute first advantage estimates
+2. **Pre-train**: 50 gradient steps on this seed data with LR=1e-3 before going live
+3. **Linear warmup**: LR ramps from 0 to 1e-4 over first 100 live trades
+4. **Min trade count for convergence**: Require at least 50 closed trades before trusting any metric
+
+---
+
+### Recommended Settings (JSON)
+
+
+
+📊 **Auto-Applied Setting**: NN Learning Rate adjusted to `0.0001`
+
+🧠 **AI Prompt Meta-Optimization**: Successfully evolved NN Optimizer prompt template closer to $1,000/day target.
+
+
+## ⚖️ Ensemble Asset Allocator Report
+## Portfolio Allocation Analysis
+
+**Data quality assessment:** We're working with exactly 1 trade across 1 asset. That's not a dataset — it's a datapoint. Any "analysis" here is educated guesswork, but I'll give you sensible defaults for the scaling target.
+
+---
+
+### Performance Review
+
+| Ticker | Trades | Wins | Win% | PnL | Ceiling | TP/SL |
+|--------|--------|------|------|-----|---------|-------|
+| BTC-USD | 1 | 1 | 100% | $15.00 | 0.20 | 2.5x / 1.5x |
+
+### Critical Observations
+
+1. **Sample size = 1**: Cannot compute Sharpe, drawdown, or any meaningful stat. This is a single observation.
+2. **$15 on one trade**: To reach $1K/day, you'd need ~67 winning trades like this daily. That's not sustainable on BTC alone.
+3. **No losing data**: Can't size Kelly exposure properly without loss data. The 0.20 ceiling is a placeholder until we have ~30+ trades.
+4. **Multi-asset gap**: Only BTC-USD is configured. $1K/day diversification requires multiple uncorrelated assets (ETH, altcoin futures, forex pairs).
+
+### Recommendations
+
+**Asset Status** — Keep BTC active. It printed profit. But we need a broader roster before we can talk about deactivation.
+
+**Kelly Ceiling** — 0.20 is actually reasonable for a starting point on BTC. The full-Kelly for a single profitable trade is undefined (no loss data), so 0.20 (fractional Kelly / 5x safety) is prudent. I'd hold here until we have 30+ trade history to compute actual edge.
+
+**Volatility Multipliers** — BTC daily ATR is wide. 2.5x TP / 1.5x SL is a 1.67:1 reward-to-risk ratio, which is okay for trending regimes. However with only 1 trade, I'd actually tighten the SL multiplier slightly (1.3x) to protect the single open position from outsized BTC wick-outs until the sample grows. The TP can stay at 2.5x since we have no evidence it's been hit or missed yet.
+
+### Path to $1K/Day
+
+At this rate: 67 BTC trades/day at $15 each. Unrealistic.
+- **Add more tickers**: ETH-USD, SOL-USD, MATIC-USD, and at least 2 forex pairs
+- **Scale position sizing**: With a 0.20 Kelly ceiling and growing account, per-trade $ exposure grows
+- **Target 15-20 trades/day across 5-8 assets** hitting 60-70% win rate at ~$70-100 avg win
+
+---
+
+
+
+📊 **Auto-Applied Asset Setting**: `BTC-USD` -> Active: `True`, TP: `2.5x`, SL: `1.3x`, Kelly Cap: `0.2`
 
 
 ## 📡 News Sentiment Feeds Sentinel report
 [OpenClawBridge ERROR] Failed after 3 retries for Sentiment Feeds Agent
 
-
-## ⚖️ Ensemble Asset Allocator Report
-## Analysis
-
-We have a single data point here: BTC-USD, 1 trade, 1 win, +$15. That's not enough for statistical significance — but there are still real problems visible.
-
-### The Core Issue
-**$1,000/day requires scaling way beyond what one asset can deliver.** At $15/trade win, you'd need ~67 winning trades per day. Even with position scaling, a single-asset strategy is fragile — one bad day wipes out a week.
-
-### What Little We Can Infer
-
-| Metric | BTC-USD | Notes |
-|---|---|---|
-| Win Rate | 100% | n=1, meaningless |
-| Avg Win | $15 | Tiny relative to $1K target |
-| R:R | ~1.67:1 | TP 2.5 / SL 1.5 = standard |
-| Kelly | 0.20 | Safe-ish for crypto |
-
-### Recommendations
-
-**1. BTC-USD — Keep active, don't over-optimize.** One trade tells us nothing. Leave TP/SL/Kelly where they are. The only real change: bump the Kelly ceiling slightly to 0.25 since we're underallocated — we have zero diversification to lean on, so we need BTC working hard while we add more assets.
-
-**2. The real work is adding assets.** $1K/day with one ticker means extreme leverage or frequency. Neither is sustainable. You need 5-10 uncorrelated assets to safely scale.
-
-**3. Collect more data.** Lock current params for BTC-USD until you have at least 20-30 trades per asset. Premature optimization here is cargo-culting.
-
-
-
-📊 **Auto-Applied Asset Setting**: `BTC-USD` -> Active: `True`, TP: `2.5x`, SL: `1.5x`, Kelly Cap: `0.25`
-
-📡 **AI Prompt Meta-Optimization**: Evolved Ensemble Allocator prompt template closer to target.
-
-
-## ⚖️ Ensemble Asset Allocator Report
-This is a **one-trade dataset** on a single ticker. There's nothing to analyze here — no consecutive loss streaks, no volatility distributions, no Kelly-optimal edge calculations, no correlation matrix between assets. Recommending adjustments off one data point would be cargo-cult optimization.
-
-Here's what I *can* tell you:
-
-**BTC-USD**: 1 trade, 1 win, $15 PnL. That's a 100% win rate on a sample size of 1. Meaningless. You can't differentiate signal from noise.
-
-### What we actually need before tuning:
-
-| Metric | Minimum Sample | Why |
-|---|---|---|
-| TP/SL multiplier calibration | 30-50 trades/asset | Need enough exits to measure ATR fit vs actual wicks |
-| Kelly ceiling | 50+ trades | Estimate edge (win rate × avg win / avg loss - loss rate) — 1 trade gives zero confidence |
-| Activation/deactivation | 15-20 consecutive losses or deep DD | One loss isn't a trend; you'd overtrade the deactivation |
-| Volatility regime ATR tuning | Continuous | Works from day 1 — but we need the actual ATR values per asset, not just trade PnL |
-
-### Honest recommendation for right now:
-
-Since you only have BTC-USD with a single win, **do nothing**. The defaults are conservative by design:
-- `kelly_ceiling: 0.2` — caps at 20% of allocated capital
-- `tp_multiplier: 2.5`, `sl_multiplier: 1.5` — standard 1:1.5+ risk-reward range
-
-If you want me to do real work here, I need: full trade log (timestamps, entry/exit prices, ATR at entry, SL hit or TP hit), at least a few dozen trades across multiple assets, and current ATR values for volatility regime assessment.
-
-In the meantime, I'd suggest adding more tickers to the roster so you can actually start collecting comparative performance data. The allocator can't spread risk across one asset.
-
-
-
-📊 **Auto-Applied Asset Setting**: `BTC-USD` -> Active: `True`, TP: `2.5x`, SL: `1.5x`, Kelly Cap: `0.2`
-
-📡 **AI Prompt Meta-Optimization**: Evolved Ensemble Allocator prompt template closer to target.
-
-
-## 🧠 Neural Network Policy Self-Improvement Report
-## Policy Gradient Optimization Analysis — NexusTrader NN
-
-### 1. Learning Rate (current: **0.15**)
-
-This is dangerously high for any policy gradient method. Here's why:
-
-- **Policy gradient variance**: REINFORCE/A2C/PPO gradients already have high variance. A step size of 0.15 means each mini-batch update jolts the full weight matrix by ~15% of the gradient magnitude. For a **hidden dim of 12**, the parameter space is small enough that this will cause chaotic oscillations.
-
-- **Catastrophic forgetting**: With one winning trade in the buffer, LR=0.15 will aggressively overfit to that single trajectory. The policy will anchor to the "take profit" pattern and fail to generalize to sideways or losing regimes.
-
-- **Convergence impossibility**: Using the standard policy gradient update rule θ ← θ + α∇J(θ), alpha=0.15 puts you firmly in the divergent regime. Even with gradient clipping, the effective step will bounce between extreme policies.
-
-**Reference LR range for small policy networks**: 1×10⁻⁴ to 1×10⁻² (Adam optimizer) or 1×10⁻³ to 5×10⁻³ (SGD with momentum). Your current value is **15–1500× too high**.
-
-### 2. Weight Floor (current: **0.05**)
-
-A weight floor clips the absolute value of every parameter to ≥ 0.05. For a 12-dim hidden layer with maybe ~12×features + 12×output weights, here's what that means:
-
-- **Forces all neurons active**: No neuron can specialize or shut off for irrelevant features. With ~O(12×12)=O(144) parameters, a floor of 0.05 imposes a minimum L₂ norm of √(144×0.05²) ≈ **0.6** even when the optimal solution wants near-zero weights.
-
-- **L-infinity constraint**: Acts as an aggressive regularizer that prevents feature discrimination — a weight that should be 0.001 is forced to 0.05, injecting noise into every forward pass.
-
-- **Single trade analysis**: BTC moved 2% and the network correctly predicted BUY → TP. But with weight floor=0.05, the network cannot learn *how much* conviction to assign. Every feature gets ~equal baseline activation, so position sizing signals will be flat.
-
-### 3. Convergence Assessment
-
-With these parameters on the provided single trade:
-
-| Metric | Assessment |
-|--------|-----------|
-| **Gradient stability** | ❌ Divergent — LR causes overshoot on every update |
-| **Feature sparsity** | ❌ Weight floor prevents meaningful feature selection |
-| **Sample efficiency** | ❌ Single trade provides ~1 bit of signal; LR amplifies noise |
-| **Scaling to $1K/day** | 🚫 Not achievable — the network cannot learn market regime shifts |
-
-The network may sporadically hit TP on trending assets, but it will **perform like random walk** across a portfolio of uncorrelated assets. Scaling to consistent $1K/day requires adaptive learning dynamics; these parameters produce the opposite.
-
-### 4. Recommended Settings
-
-
-
-📊 **Auto-Applied Setting**: NN Learning Rate adjusted to `0.001`
-
-📊 **Auto-Applied Setting**: NN Weight Floor adjusted to `0.01`
-
-
-## ⚖️ Ensemble Asset Allocator Report
-Alright, let's be real: the data you've given me is **way too thin** to make statistically significant adjustments.
-
-**One asset. One trade. One win.**
-
-That's an anecdote, not a track record. Pulling aggressive levers on this would be overfitting to noise.
-
-### What I can tell you:
-
-**Assets:**
-- BTC-USD is 1/1 and +$15. No reason to deactivate.
-- But we need **at least 20–30 trades per asset** before we can meaningfully estimate win rate or edge.
-
-**Kelly Ceiling:**
-- With a 100% win rate (on 1 trade), naive Kelly would say bet the farm. That's dangerous.
-- Until we have more data, keep the 0.2 ceiling as a hard cap. 20% of allocated capital per trade on a $1,000/day target is actually reasonable leverage.
-
-**TP/SL Multipliers:**
-- No volatility data was provided (no ATR, no recent price action).
-- Default 2.5 TP / 1.5 SL is a 1.67:1 R:R. That's fine as a starting point for BTC — it trends well.
-- Without ATR values and recent range data, I can't recommend asset-specific multiplier tuning.
-
-### What I need for a real analysis:
-
-| Data | Why |
-|---|---|
-| Per-trade records (entry, exit, PnL, ATR at entry) | Win rate, R:R distribution, Sharpe |
-| Asset volatility / ATR history | Tune TP/SL multipliers to actual swings |
-| Trade count ≥ 30 per asset | Statistical significance |
-| Correlation matrix (if multi-asset) | Diversification, hedging |
-| Drawdown series | Risk of ruin, max acceptable DD |
-| Current portfolio equity curve | Kelly calibration to total equity |
-
-### Honest recommendation: collect data first
-
-Keep the current config as-is. Let BTC accumulate at least 20–30 trades. Once you have a meaningful sample, I can run a proper Kelly optimization, volatility regime analysis, and asset-level tuning.
-
-Here's the JSON output as requested — it reflects that nothing meaningful has changed from current config:
-
-
-
-📊 **Auto-Applied Asset Setting**: `BTC-USD` -> Active: `True`, TP: `2.5x`, SL: `1.5x`, Kelly Cap: `0.2`
-
-
-## ⚖️ Ensemble Asset Allocator Report
-[OpenClawBridge ERROR] Failed after 3 retries for Allocation Check Agent
-
-
-## 🛡️ Portfolio Risk Audit Report
-**Risk Audit Report**
-
----
-
-**1. Single-Trade Limit Breach Analysis**
-
-The sole telemetry entry shows a SOL-USD BUY stopped out at exactly **-5.0%** — which already equals the **entire daily loss budget**. This is a critical red flag:
-
-- **Position sizing is wrong.** If one trade can consume 100% of the daily risk budget, the system has no tolerance for multiple signals turning sour, spread losses, or slippage.
-- **Stop placement vs daily limit mismatch.** A stop that triggers exactly at the daily limit means the stop is either too wide relative to capital, or the daily limit is too tight relative to position size. Neither is acceptable.
-- **Sample size concern.** One trade isn't statistical significance — but as a first data point, it's the worst possible signal. Correlation metrics cannot be assessed until we have at least 30–100 trades.
-
-**2. Leverage & Drawdown Limits**
-
-| Metric | Current | Assessment |
-|---|---|---|
-| Max Daily Loss | 5.0% | **Too high for conservative profile.** 5%/day compounds to ~75% monthly loss if maxed repeatedly. For a $1,000/day target, this implies $20k capital at most — dangerously undercapitalized for the target. |
-| Cooldown Hold | 4.0 hours | **Too short for 24/7 markets.** In crypto, 4 hours is barely two candles on the 2H chart. Emotional tilt + revenge trading window is wide open. |
-
-**3. Correlation & Diversification Concerns**
-
-With only SOL-USD in the telemetry, we have **single-asset exposure**. If this is representative of the full portfolio:
-- No cross-asset hedge
-- **100% crypto-beta concentration** — correlated to a single narrative (Solana ecosystem)
-- A SOL-specific black swan (validator issue, exploit, L1 competitor migration) would gap the stop and exceed the daily limit instantly
-
-**4. Capital Adequacy Check**
-
-Target: **$1,000/day** (≈ $30,000/month)
-
-| Assumed Capital | Daily 5% Loss | Daily 2% Loss | R/R at $1k target |
-|---|---|---|---|
-| $20,000 | $1,000 | $400 | 1:1 at 5% (unacceptable) |
-| $50,000 | $2,500 | $1,000 | 1:0.4 at 5% (worse) |
-| $100,000 | $5,000 | $2,000 | 1:0.2 at 5% (insane) |
-
-$30k/month requires a 150% monthly return on $20k capital. That is **not conservative**. Either the target needs to be reduced, or capital must be much higher, or the daily loss limit must drop sharply.
-
-**5. Recommendations**
-
-- **Reduce max daily loss to 2.0%** — gives room for ~3–5 losing trades before halting, while capping monthly ruin risk at ~33% in worst-case streaks.
-- **Extend cooldown to 12 hours** — forces at least one full market session away from the terminal. Covers 2 full 4H candle rotations in crypto. Prevents revenge trading. Still allows re-entry the same calendar day if the halt triggered early.
-- **Implement a trailing daily loss limit** — if 1.5% is hit within the first 4 hours, reduce remaining headroom. Tighter stop-loss as the day progresses.
-- **Diversification mandate** — until the portfolio holds at least 3 uncorrelated assets, cap single-asset allocation to 33%.
-- **Capital review** — if actual capital < $50k, the $1,000/day target is incompatible with a conservative profile.
-
-
-
-📊 **Auto-Applied Setting**: Max Daily Drawdown adjusted to `2.0%`
-
-📊 **Auto-Applied Setting**: Loss Cooldown adjusted to `12.0 hours`
+📡 **AI Prompt Meta-Optimization**: Evolved Sentiment Sentinel prompt template closer to target.
