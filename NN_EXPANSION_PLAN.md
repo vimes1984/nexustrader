@@ -493,3 +493,90 @@ async def reload_nn_weights():
    - TinyLlama 1.1B Q4: ~700MB (bare minimum, fast but dumb)
    - LLaMA 3 8B Q4: ~5GB (sweet spot for trading analysis)
    - LLaMA 3 70B Q4: ~40GB (128GB machine only, overkill for this use case)
+
+---
+
+## Supplement A: Live Hardware Inventory (as of 2026-07-20 23:45 UTC)
+
+### Proxmox Host (192.168.0.166)
+| Spec | Value |
+|------|-------|
+| **CPU** | Intel Core i5-6600 @ 3.30GHz (4 cores, 3.9GHz turbo) |
+| **RAM** | 8GB total (5.1GB used by running VMs/CTs, ~2.2GB available) |
+| **Swap** | 7GB (5.1GB used — swapping heavily) |
+| **Disk** | 59GB root (8.3GB used, 47GB free) + 1.8TB HDD (`hhd1`, 420GB used) |
+| **GPU** | Intel HD Graphics 530 (integrated — no CUDA/ROCm) |
+| **Network** | 1x Intel I219-LM Ethernet, 1x Intel Wireless 7265 (WiFi card available) |
+| **PVE Version** | 7.4-3 (kernel 5.15.104) |
+| **SSH** | Key auth now configured from OpenClaw server |
+
+### Running VMs/CTs
+| ID | Name | Type | RAM | Cores | Disk | Status |
+|----|------|------|-----|-------|------|--------|
+| 100 | haos9.3 | VM | 4GB | 2 | 32GB | Running (Home Assistant) |
+| 112 | OwntoneVM | VM | 4GB | 4 | 400GB | Running |
+| 113 | openclaw-server | CT | 4GB | 2 | 13GB | Running (us!) |
+| 114 | launchforge-server | CT | 1GB | 2 | 13GB | Running |
+| 200 | nexustrader | CT | 2GB | 2 | 19GB | Running (bot) |
+| 101 | CT101 | CT | 1.5GB | 2 | 983GB | Running |
+| 102 | plex | CT | 1GB | 3 | 155GB | Running |
+| 104 | WPsite | CT | 512MB | 1 | 7GB | Running |
+| 108 | ubuntu | VM | 4GB | 4 | 500GB | Stopped |
+| Several others | Kasm, Kodi, Owntune, Webtop, etc. | CT/VM | ~1-6GB | 2-4 | various | Stopped |
+
+### Key Finding: RAM is TIGHT
+- 8GB total, 7.6GB used — only ~386MB free, 2.2GB available
+- 5.1GB in swap — the system is already overcommitted
+- **Cannot run LLaMA on Proxmox** without shutting down VMs or adding RAM
+
+### Path Forward
+
+**Option A: Upgrade Proxmox RAM (recommended)**
+- i5-6600 supports up to 64GB DDR4
+- Add 2×16GB sticks (~$50-60) → 32-40GB total
+- Run LLaMA 3 8B Q4 (~5GB) comfortably on Proxmox alongside existing VMs
+- Simplest — one box, no network bridging
+
+**Option B: Use the 128GB Ubuntu workstation**
+- Already has 128GB RAM — can run LLaMA 3 70B Q4 (~40GB) if desired
+- Needs network bridging: WiFi adapter available on both machines (Intel Wireless 7265)
+  - OR add a second Ethernet card to the workstation and hardwire to this LAN
+  - OR route between LANs via the router (if both networks share the same physical router)
+- More powerful but adds network latency (~1-5ms on LAN)
+
+**Option C: Hybrid (best of both)**
+- Upgrade Proxmox RAM to 32GB anyway (the swap situation is already painful)
+- Run training pipeline + smaller LLaMA 3 8B on Proxmox
+- Optional: bridge the 128GB machine for LLaMA 3 70B when quality matters
+- Training uses CPU only (Transformer trains fine on CPU at 1h candle scale)
+
+### VPN Note for Antigravity
+The WiFi card (Intel Wireless 7265) is currently DOWN on Proxmox. It could be repurposed as a dedicated bridge to the workstation's network, or the workstation can connect to this LAN's WiFi SSID. Either way — no extra hardware needed.
+
+### Recommended Architecture (Option C)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ Proxmox Host (192.168.0.166) — 8GB → 32GB after upgrade    │
+│                                                             │
+│  ┌──────────────────┐  ┌──────────────────┐                │
+│  │ NexusTrader Bot  │  │ Training VM/CT   │  NEW           │
+│  │ (CT 200, 2GB)    │  │ (2-4GB)          │                │
+│  │ - Live trading   │  │ - Kraken fetch   │                │
+│  │ - Inference only │  │ - Offline epochs │                │
+│  │ - Tokenizer      │  │ - Weight export  │                │
+│  └────────┬─────────┘  └────────┬─────────┘                │
+│           │                     │                           │
+│  ┌────────┴─────────────────────┴──────────┐               │
+│  │         llama.cpp Server                 │  NEW          │
+│  │         LLaMA 3 8B Q4_K_M (~5GB)        │               │
+│  │         Port 8080                        │               │
+│  │         - Sentiment analysis             │               │
+│  │         - Regime detection               │               │
+│  │         - Trade explanations             │               │
+│  └──────────────────────────────────────────┘               │
+│                                                             │
+│  Optional: 128GB Workstation via WiFi/ETH bridge            │
+│  └─ LLaMA 3 70B Q4 (~40GB) for higher quality inference    │
+└─────────────────────────────────────────────────────────────┘
+```
