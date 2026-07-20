@@ -1888,7 +1888,7 @@ const elOptParamsBtn = document.getElementById("trigger-opt-params-btn-tab");
 if (elOptParamsBtn) {
     elOptParamsBtn.addEventListener("click", () => {
         elOptParamsBtn.disabled = true;
-        showToast("PhD Quant Agent optimizing ATR multipliers...", "info");
+        showToast("Parameter Optimizer adjusting ATR multipliers...", "info");
         fetch("/api/system/optimize/parameters", { method: 'POST' })
             .then(res => res.json())
             .then(data => {
@@ -1936,7 +1936,7 @@ const elOptNnBtn = document.getElementById("trigger-opt-nn-btn-tab");
 if (elOptNnBtn) {
     elOptNnBtn.addEventListener("click", () => {
         elOptNnBtn.disabled = true;
-        showToast("NeuralCore tuning learning rate & bounds...", "info");
+        showToast("Network Optimizer tuning learning rate & bounds...", "info");
         fetch("/api/system/optimize/nn", { method: 'POST' })
             .then(res => res.json())
             .then(data => {
@@ -1959,7 +1959,7 @@ if (elOptNnBtn) {
 document.querySelectorAll(".trigger-opt-sentiment-btn").forEach(btn => {
     btn.addEventListener("click", () => {
         btn.disabled = true;
-        showToast("Sentinel monitoring web feeds & sentiment...", "info");
+        showToast("Sentiment Agent monitoring web feeds & sentiment...", "info");
         fetch("/api/system/optimize/sentiment", { method: 'POST' })
             .then(res => res.json())
             .then(data => {
@@ -1982,7 +1982,7 @@ document.querySelectorAll(".trigger-opt-sentiment-btn").forEach(btn => {
 document.querySelectorAll(".trigger-risk-audit-btn").forEach(btn => {
     btn.addEventListener("click", () => {
         btn.disabled = true;
-        showToast("Risk Auditor evaluating drawdowns...", "info");
+        showToast("Risk Check Agent evaluating drawdowns...", "info");
         fetch("/api/system/optimize/risk_audit", { method: 'POST' })
             .then(res => res.json())
             .then(data => {
@@ -2032,15 +2032,15 @@ if (elRunAllBtn) {
                 
                 <div style="display: flex; flex-direction: column; gap: 15px; margin-bottom: 25px;">
                     <div id="status-agent-quant" style="display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--text-primary);">
-                        <span style="display: flex; align-items: center; gap: 10px;">📊 <strong>PhD Quant Agent:</strong> <span style="font-size: 11px; color: var(--text-secondary);">Tuning bounds...</span></span>
+                        <span style="display: flex; align-items: center; gap: 10px;">📊 <strong>Parameter Optimizer:</strong> <span style="font-size: 11px; color: var(--text-secondary);">Tuning bounds...</span></span>
                         <span class="agent-spinner animate-pulse" style="color: var(--neon-purple); font-size: 11px; font-weight: bold; font-family: monospace;">RUNNING</span>
                     </div>
                     <div id="status-agent-nn" style="display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--text-primary);">
-                        <span style="display: flex; align-items: center; gap: 10px;">🎓 <strong>NeuralCore Optimizer:</strong> <span style="font-size: 11px; color: var(--text-secondary);">Calibrating LR...</span></span>
+                        <span style="display: flex; align-items: center; gap: 10px;">🎓 <strong>Network Optimizer:</strong> <span style="font-size: 11px; color: var(--text-secondary);">Calibrating LR...</span></span>
                         <span class="agent-spinner animate-pulse" style="color: var(--neon-orange); font-size: 11px; font-weight: bold; font-family: monospace;">RUNNING</span>
                     </div>
                     <div id="status-agent-sent" style="display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--text-primary);">
-                        <span style="display: flex; align-items: center; gap: 10px;">📡 <strong>NexusSentinel:</strong> <span style="font-size: 11px; color: var(--text-secondary);">Filtering news...</span></span>
+                        <span style="display: flex; align-items: center; gap: 10px;">📡 <strong>Sentiment Agent:</strong> <span style="font-size: 11px; color: var(--text-secondary);">Filtering news...</span></span>
                         <span class="agent-spinner animate-pulse" style="color: var(--neon-purple); font-size: 11px; font-weight: bold; font-family: monospace;">RUNNING</span>
                     </div>
                     <div id="status-agent-dev" style="display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--text-primary);">
@@ -2052,7 +2052,7 @@ if (elRunAllBtn) {
                         <span class="agent-spinner animate-pulse" style="color: var(--neon-green); font-size: 11px; font-weight: bold; font-family: monospace;">RUNNING</span>
                     </div>
                     <div id="status-agent-allocator" style="display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--text-primary);">
-                        <span style="display: flex; align-items: center; gap: 10px;">⚖️ <strong>Asset Allocator:</strong> <span style="font-size: 11px; color: var(--text-secondary);">Balancing portfolio...</span></span>
+                        <span style="display: flex; align-items: center; gap: 10px;">⚖️ <strong>Allocation Check:</strong> <span style="font-size: 11px; color: var(--text-secondary);">Balancing portfolio...</span></span>
                         <span class="agent-spinner animate-pulse" style="color: var(--neon-blue); font-size: 11px; font-weight: bold; font-family: monospace;">RUNNING</span>
                     </div>
                 </div>

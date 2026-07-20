@@ -11,7 +11,7 @@
     <link rel="apple-touch-icon" href="/dashboard/icon-192.png">
     <!-- Chart.js for visualization -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- Lucide Icons for beautiful iconography -->
+    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         /* Custom Hover Tooltips */
@@ -183,7 +183,7 @@
                 </button>
                 <button class="nav-tab" data-tab="tab-neural" style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: transparent; border: none; border-radius: 8px; color: var(--text-secondary); font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer; text-align: left; transition: all 0.2s ease;">
                     <i data-lucide="brain-circuit" style="width: 18px; height: 18px;"></i>
-                    Neural Core
+                    Neural Weights
                 </button>
                 <button class="nav-tab" data-tab="tab-assets" style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: transparent; border: none; border-radius: 8px; color: var(--text-secondary); font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer; text-align: left; transition: all 0.2s ease;">
                     <i data-lucide="coins" style="width: 18px; height: 18px; color: var(--neon-blue);"></i>
@@ -195,7 +195,7 @@
                 </button>
                 <button class="nav-tab" data-tab="tab-longterm" style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: transparent; border: none; border-radius: 8px; color: var(--text-secondary); font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer; text-align: left; transition: all 0.2s ease;">
                     <i data-lucide="trending-up" style="width: 18px; height: 18px; color: var(--neon-green);"></i>
-                    Long-Term Strategy
+                    Updates & Changes
                 </button>
                 <button class="nav-tab" data-tab="tab-agents" style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: transparent; border: none; border-radius: 8px; color: var(--text-secondary); font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer; text-align: left; transition: all 0.2s ease;">
                     <i data-lucide="bot" style="width: 18px; height: 18px;"></i>
@@ -415,7 +415,7 @@
                             Strategy Weight Allocation (Active Policy)
                         </h2>
                         <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 24px; line-height: 1.4;">
-                            NeuralCore dynamically allocates trust weights among the strategies based on backpropagation reinforcement feedback.
+                            Policy network maps the 8D state vector to 12 strategy weights. Trained via REINFORCE-style backprop on trade PnL.
                         </p>
                         <div id="weights-container" style="margin-bottom: 30px;">
                             <!-- Dynamic weight bars go here -->
@@ -439,7 +439,7 @@
                             Live Neural Input Vector
                         </h3>
                         <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 20px; line-height: 1.4;">
-                            Real-time 7D mathematical state vector processed by the policy gradient network to adjust strategy allocations.
+                            8D state vector [RSI, MACD, BB, ATR, OU theta, OU regime, sentiment, win trend] fed into the policy network each tick.
                         </p>
                         
                         <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
@@ -472,7 +472,7 @@
                                     <span style="display: block; color: var(--text-muted); font-size: 9px; text-transform: uppercase;">Recent 10-Trade Win Trend</span>
                                     <strong id="neural-val-wintrend" style="color: var(--neon-green); font-size: 14px;">0.0%</strong>
                                 </div>
-                                <span style="font-size: 10px; color: var(--text-secondary);">Reinforcement signal strength</span>
+                                <span style="font-size: 10px; color: var(--text-secondary);">Win rate (last 10 trades)</span>
                             </div>
                         </div>
                     </article>
@@ -521,11 +521,11 @@
                     <article class="glass-panel persona-card persona-bot" style="padding: 24px; flex-direction: column; text-align: center; gap: 12px; margin-bottom: 20px;">
                         <div class="persona-avatar" style="width: 64px; height: 64px; font-size: 24px;">🧠</div>
                         <div>
-                            <h3 style="font-size: 18px; font-weight: 700; color: var(--text-primary);">NeuralCore Engine</h3>
-                            <span style="font-size: 11px; color: var(--neon-red); text-transform: uppercase; font-weight: 600; letter-spacing: 1px;">Policy Gradient Engine</span>
+                            <h3 style="font-size: 18px; font-weight: 700; color: var(--text-primary);">Learning Engine</h3>
+                            <span style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 600; letter-spacing: 1px;">Policy Network (learning_engine.py)</span>
                         </div>
                         <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.4; margin-top: 5px;">
-                            "I am the central synthetic nervous system. By analyzing multi-dimensional market inputs, I continually adjust our allocation policy. Every closed trade updates my weights dynamically, ensuring our systems stay aligned with current market structures."
+                            "Policy network that maps market state to 12 strategy weights. Backpropagates profit/loss after each trade to adjust future allocations."
                         </p>
                         <div style="width: 100%; border-top: 1px solid var(--border-color); margin-top: 10px; padding-top: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 12px;">
                             <div style="background: rgba(255,255,255,0.01); padding: 8px; border-radius: 8px; border: 1px solid var(--border-color);">
@@ -949,12 +949,12 @@
                                     <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap;">
                                         <div>
                                             <h3 style="font-size: 15px; font-weight: 600; color: var(--text-primary);">NexusQuant PhD</h3>
-                                            <span style="font-size: 10px; color: var(--neon-purple); text-transform: uppercase; font-weight: 600;">Ensemble Risk & Parameter Optimizer</span>
+                                            <span style="font-size: 10px; color: var(--neon-purple); text-transform: uppercase; font-weight: 600;">Parameter Optimizer</span>
                                         </div>
                                         <button class="btn" id="trigger-opt-params-btn-tab" style="padding: 4px 8px; font-size: 10px; border-color: rgba(168,85,247,0.3); color: var(--neon-purple);">Optimize Quant</button>
                                     </div>
                                     <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.4; margin-top: 6px;">
-                                        "I evaluate trades, win rates, and profit volatility. Leveraging optimal stopping theory, I refine ATR multipliers and risk limits daily."
+                                        "Analyses trade outcomes and win rates. Suggests adjustments to ATR multipliers and risk limits."
                                     </p>
                                 </div>
                             </div>
@@ -971,7 +971,7 @@
                                          <button class="btn" id="trigger-self-dev-btn-tab" style="padding: 4px 8px; font-size: 10px; border-color: rgba(0,240,255,0.3); color: var(--neon-blue);">Run Self-Dev</button>
                                     </div>
                                     <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.4; margin-top: 6px;">
-                                        "I optimize code structure, develop interface diagnostic assets, and write visual analytics components, running build tests prior to deploy."
+                                        "I am a frontend developer. I update HTML/JS/CSS files in the dashboard/ directory."
                                     </p>
                                 </div>
                             </div>
@@ -988,58 +988,58 @@
                                          <button class="btn" id="trigger-blog-btn-tab" style="padding: 4px 8px; font-size: 10px; border-color: rgba(16,185,129,0.3); color: var(--neon-green);">Blog Reports</button>
                                     </div>
                                     <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.4; margin-top: 6px;">
-                                        "I compile trading telemetry, model evolution weights, and portfolio scaling paths into premium quantitative commentary."
+                                        "Generates periodic reports on trade stats, weight changes, and portfolio health."
                                     </p>
                                 </div>
                             </div>
 
-                            <!-- Persona 4: NN Optimizer -->
+                            <!-- Persona 4: Network Optimizer -->
                             <div class="persona-card persona-nn">
                                 <div class="persona-avatar">🎓</div>
                                 <div style="flex: 1;">
                                     <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap;">
                                          <div>
-                                             <h3 style="font-size: 15px; font-weight: 600; color: var(--text-primary);">NeuralCore Optimizer</h3>
+                                             <h3 style="font-size: 15px; font-weight: 600; color: var(--text-primary);">Network Optimizer Agent</h3>
                                              <span style="font-size: 10px; color: var(--neon-orange); text-transform: uppercase; font-weight: 600;">Deep Learning Tuner</span>
                                          </div>
                                          <button class="btn" id="trigger-opt-nn-btn-tab" style="padding: 4px 8px; font-size: 10px; border-color: rgba(245,158,11,0.3); color: var(--neon-orange);">Optimize Neural</button>
                                     </div>
                                     <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.4; margin-top: 6px;">
-                                        "I evaluate gradient parameters, steps, and weights convergence to tune learning rates and explore strategy allocation floors."
+                                        "Checks PolicyNetwork gradient stats. Suggests learning rate and weight floor changes."
                                     </p>
                                 </div>
                             </div>
 
-                            <!-- Persona 5: Sentiment Sentinel -->
+                            <!-- Persona 5: Sentiment Feeds Agent -->
                             <div class="persona-card persona-sent" style="border-left: 3px solid var(--neon-purple); background: rgba(168,85,247,0.02);">
                                 <div class="persona-avatar">📡</div>
                                 <div style="flex: 1;">
                                     <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap;">
                                          <div>
-                                             <h3 style="font-size: 15px; font-weight: 600; color: var(--text-primary);">NexusSentinel</h3>
+                                             <h3 style="font-size: 15px; font-weight: 600; color: var(--text-primary);">Sentiment Agent</h3>
                                              <span style="font-size: 10px; color: var(--neon-purple); text-transform: uppercase; font-weight: 600;">Sentiment Feeds Tuner</span>
                                          </div>
                                          <button class="btn trigger-opt-sentiment-btn" id="trigger-opt-sentiment-btn-tab" style="padding: 4px 8px; font-size: 10px; border-color: rgba(168,85,247,0.3); color: var(--neon-purple);">Optimize Feeds</button>
                                     </div>
                                     <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.4; margin-top: 6px;">
-                                        "I monitor crypto news channels and web feeds, adjusting NLP sentiment weights to filter noise during rapid market transitions."
+                                        "Polls crypto news feeds, computes sentiment scores, feeds them into the state vector."
                                     </p>
                                 </div>
                             </div>
 
-                            <!-- Persona 6: Portfolio Risk Auditor -->
+                            <!-- Persona 6: Portfolio Risk Check Agent -->
                             <div class="persona-card persona-risk" style="border-left: 3px solid var(--neon-red); background: rgba(244,63,94,0.02);">
                                 <div class="persona-avatar">🛡️</div>
                                 <div style="flex: 1;">
                                     <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap;">
                                          <div>
                                              <h3 style="font-size: 15px; font-weight: 600; color: var(--text-primary);">NexusAuditor</h3>
-                                             <span style="font-size: 10px; color: var(--neon-red); text-transform: uppercase; font-weight: 600;">Portfolio Risk Auditor</span>
+                                             <span style="font-size: 10px; color: var(--neon-red); text-transform: uppercase; font-weight: 600;">Portfolio Risk Check Agent</span>
                                          </div>
                                          <button class="btn trigger-risk-audit-btn" id="trigger-risk-audit-btn-tab" style="padding: 4px 8px; font-size: 10px; border-color: rgba(244,63,94,0.3); color: var(--neon-red);">Audit Risk</button>
                                     </div>
                                     <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.4; margin-top: 6px;">
-                                        "I audit portfolio leverage exposure, trade correlation matrices, and daily drawdowns to safeguard capital against tail risks."
+                                        "I check drawdown, position sizes, and correlation between open trades to flag risk issues."
                                     </p>
                                 </div>
                             </div>
@@ -1054,7 +1054,7 @@
                         </h2>
                         <div style="display: flex; flex-direction: column; gap: 15px;">
                             <label style="display: flex; flex-direction: column; gap: 5px;">
-                                <span style="font-size: 12px; font-weight: 600; color: var(--neon-purple);">PhD Quant Optimizer Prompt:</span>
+                                <span style="font-size: 12px; font-weight: 600; color: var(--neon-purple);">Parameter Optimizer Prompt:</span>
                                 <textarea id="prompt-quant-text" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 8px; padding: 10px; font-family: monospace; font-size: 11px; height: 70px; resize: vertical; outline: none;"></textarea>
                             </label>
                             <label style="display: flex; flex-direction: column; gap: 5px;">
@@ -1066,19 +1066,19 @@
                                 <textarea id="prompt-blog-text" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 8px; padding: 10px; font-family: monospace; font-size: 11px; height: 70px; resize: vertical; outline: none;"></textarea>
                             </label>
                             <label style="display: flex; flex-direction: column; gap: 5px;">
-                                <span style="font-size: 12px; font-weight: 600; color: var(--neon-orange);">NN Optimizer Prompt:</span>
+                                <span style="font-size: 12px; font-weight: 600; color: var(--neon-orange);">Network Optimizer Prompt:</span>
                                 <textarea id="prompt-nn-text" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 8px; padding: 10px; font-family: monospace; font-size: 11px; height: 70px; resize: vertical; outline: none;"></textarea>
                             </label>
                             <label style="display: flex; flex-direction: column; gap: 5px;">
-                                <span style="font-size: 12px; font-weight: 600; color: var(--neon-purple);">Sentiment Sentinel Prompt:</span>
+                                <span style="font-size: 12px; font-weight: 600; color: var(--neon-purple);">Sentiment Feeds Agent Prompt:</span>
                                 <textarea id="prompt-sentiment-text" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 8px; padding: 10px; font-family: monospace; font-size: 11px; height: 70px; resize: vertical; outline: none;"></textarea>
                             </label>
                             <label style="display: flex; flex-direction: column; gap: 5px;">
-                                <span style="font-size: 12px; font-weight: 600; color: var(--neon-red);">Risk Auditor Prompt:</span>
+                                <span style="font-size: 12px; font-weight: 600; color: var(--neon-red);">Risk Check Agent Prompt:</span>
                                 <textarea id="prompt-risk-text" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 8px; padding: 10px; font-family: monospace; font-size: 11px; height: 70px; resize: vertical; outline: none;"></textarea>
                             </label>
                             <label style="display: flex; flex-direction: column; gap: 5px;">
-                                <span style="font-size: 12px; font-weight: 600; color: var(--neon-blue);">Ensemble Asset Allocator Prompt:</span>
+                                <span style="font-size: 12px; font-weight: 600; color: var(--neon-blue);">Allocation Check Agent Prompt:</span>
                                 <textarea id="prompt-allocator-text" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 8px; padding: 10px; font-family: monospace; font-size: 11px; height: 70px; resize: vertical; outline: none;"></textarea>
                             </label>
                             <button class="btn btn-primary" id="save-prompts-btn" style="width: 100%; justify-content: center; padding: 10px; font-size: 12px;">
@@ -1110,7 +1110,7 @@
                                 <input type="number" id="sched-weekly-hour" min="0" max="23" style="width: 60px; background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 6px; padding: 4px; text-align: center;">
                             </label>
                             <label style="display: flex; justify-content: space-between; align-items: center;">
-                                <span>NN Optimizer Hour (0-23):</span>
+                                <span>Network Optimizer Hour (0-23):</span>
                                 <input type="number" id="sched-nn-hour" min="0" max="23" style="width: 60px; background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 6px; padding: 4px; text-align: center;">
                             </label>
                             <label style="display: flex; justify-content: space-between; align-items: center;">
@@ -1185,11 +1185,11 @@
                                     <option value="default">Global Default (All Agents)</option>
                                     <option value="quant">NexusQuant PhD (Risk/Params)</option>
                                     <option value="dev">NexusDev Architect (Self-Dev)</option>
-                                    <option value="sentiment">Sentiment Sentinel</option>
-                                    <option value="nn">NN Optimizer</option>
-                                    <option value="risk">Risk Auditor</option>
+                                    <option value="sentiment">Sentiment Feeds Agent</option>
+                                    <option value="nn">Network Optimizer</option>
+                                    <option value="risk">Risk Check Agent</option>
                                     <option value="reporter">Reporter AI (Weekly Blog)</option>
-                                    <option value="allocator">Ensemble Asset Allocator</option>
+                                    <option value="allocator">Allocation Check Agent</option>
                                 </select>
                             </label>
 
@@ -1249,73 +1249,70 @@
         </div>
 
         <!-- TAB CONTENT 3.5: LONG-TERM STRATEGY -->
-                <div id="tab-longterm" class="tab-content">
+                                <div id="tab-longterm" class="tab-content">
             <article class="glass-panel" style="padding: 28px;">
                 <h2 class="panel-title" style="display: flex; align-items: center; gap: 8px; font-size: 18px; margin-bottom: 20px;">
                     <i data-lucide="trending-up" style="color: var(--neon-green); width: 22px; height: 22px;"></i>
-                    Long-Term Strategy — What's Changed
+                    What's Changed — Recent Updates
                 </h2>
                 
                 <div style="display: flex; flex-direction: column; gap: 16px;">
                     <div style="border-radius: 10px; border: 1px solid var(--border-color); padding: 16px;">
-                        <h3 style="font-size: 14px; font-weight: 600; margin: 0 0 8px 0; color: var(--neon-blue);">1. Experience Replay Buffer (Deep RL)</h3>
+                        <h3 style="font-size: 14px; font-weight: 600; margin: 0 0 8px 0; color: var(--neon-blue);">1. Experience Replay Buffer</h3>
                         <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.5;">
-                            The Policy Network now stores past (state, alignment, advantage) tuples in a replay buffer (capacity=200).
-                            Every 5 trades, a minibatch of 32 past experiences is sampled for batch gradient updates.
-                            This replaces single-trade REINFORCE with actual batch RL, smoothing weight changes and
-                            preventing catastrophic forgetting of profitable patterns.
+                            Stores past (state, signal, profit) tuples in a buffer (capacity=200).
+                            Every 5 trades, samples 32 random past experiences and trains on the batch.
+                            This smooths weight updates and keeps old patterns from being overwritten.
                         </p>
                     </div>
                     
                     <div style="border-radius: 10px; border: 1px solid var(--border-color); padding: 16px;">
-                        <h3 style="font-size: 14px; font-weight: 600; margin: 0 0 8px 0; color: var(--neon-purple);">2. Performance-Biased Ensemble Weights</h3>
+                        <h3 style="font-size: 14px; font-weight: 600; margin: 0 0 8px 0; color: var(--neon-purple);">2. Performance-Biased Strategy Weights</h3>
                         <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.5;">
-                            Each strategy now tracks its rolling win rate over the last 20 trades.
-                            Strategies with >60% accuracy get boosted; those below 35% get suppressed.
-                            This runs on top of OU regime detection and Policy Network weights.
+                            Each strategy tracks its own win rate over the last 20 trades.
+                            Strategies hitting >60% get boosted; ones below 35% get suppressed.
+                            This runs on top of the OU regime detector and Policy Network weights.
+                            Code in <code>strategy_engine.py, record_trade_outcome()</code>.
                         </p>
                     </div>
 
                     <div style="border-radius: 10px; border: 1px solid var(--border-color); padding: 16px;">
                         <h3 style="font-size: 14px; font-weight: 600; margin: 0 0 8px 0; color: var(--neon-green);">3. Fractional Kelly + Drawdown-Aware Sizing</h3>
                         <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.5;">
-                            Position sizing now uses:
+                            Three caps on position size:
                             <ul style="margin: 4px 0 0 16px; padding: 0;">
-                                <li>Calibration cap from Brier score (&lt;0.25 Brier = 2% max, &lt;0.20 = 5%, else 15%)</li>
-                                <li>Drawdown penalty (linear taper from 50-100% of limit)</li>
-                                <li>Historical Kelly computed from actual closed-trade stats</li>
+                                <li><strong>Calibration cap</strong> from Brier score: Brier &lt;0.25 → 2% max, &lt;0.20 → 5%, else 15%</li>
+                                <li><strong>Drawdown penalty</strong>: linearly tapers allowed risk from 50% drawdown → 100% of limit</li>
+                                <li><strong>Kelly fraction</strong>: computed from actual closed-trade win/loss stats</li>
                             </ul>
-                            See <code>evaluation/position_sizing.py</code> for the formula.
+                            Formula in <code>evaluation/position_sizing.py</code>.
                         </p>
                     </div>
 
                     <div style="border-radius: 10px; border: 1px solid var(--border-color); padding: 16px;">
-                        <h3 style="font-size: 14px; font-weight: 600; margin: 0 0 8px 0; color: var(--neon-red);">4. Exchange Reconnection & Robustness</h3>
+                        <h3 style="font-size: 14px; font-weight: 600; margin: 0 0 8px 0; color: var(--neon-red);">4. Exchange Reconnection</h3>
                         <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.5;">
-                            The live polling loop now tracks exchange failures and triggers automatic
-                            reconnection with exponential backoff (5s → 10s → 20s → capped at 120s).
-                            Falls back to yfinance when exchange is down.
+                            The live polling loop counts exchange failures and reconnects with exponential
+                            backoff (5s → 10s → 20s → max 120s). Falls back to yfinance while reconnecting.
+                            Code in <code>data_ingestion.py</code>.
                         </p>
                     </div>
 
                     <div style="border-radius: 10px; border: 1px solid var(--border-color); padding: 16px;">
-                        <h3 style="font-size: 14px; font-weight: 600; margin: 0 0 8px 0; color: var(--neon-orange);">5. Backtest Integration</h3>
+                        <h3 style="font-size: 14px; font-weight: 600; margin: 0 0 8px 0; color: var(--neon-orange);">5. Backtest API</h3>
                         <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.5;">
-                            Backtest engine is now callable via <code>POST /api/system/backtest</code>.
-                            Uses <code>backtest_engine.py</code> to run buy-and-hold, EMA crossover, random,
-                            and Nexus ensemble baselines and compare them. Results include Sharpe, drawdown,
-                            win rate, and a "tradable" verdict.
+                            Callable via <code>POST /api/system/backtest</code>. Runs buy-and-hold, EMA crossover,
+                            random entry, and Nexus ensemble on the same historical data.
+                            Returns Sharpe, drawdown, win rate, and "tradable" (beats all baselines).
                         </p>
                     </div>
 
                     <div style="border-radius: 10px; border: 1px solid var(--border-color); padding: 16px;">
-                        <h3 style="font-size: 14px; font-weight: 600; margin: 0 0 8px 0; color: var(--neon-blue);">6. Optimizations Management</h3>
+                        <h3 style="font-size: 14px; font-weight: 600; margin: 0 0 8px 0; color: var(--neon-blue);">6. Optimizations Manager</h3>
                         <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.5;">
-                            The <code>agent_optimizations</code> table now has a full management UI.
-                            View all suggested parameter changes, apply them directly (bypasses MutationFreeze
-                            for human-approved changes), or ask OpenClaw to review them via the
-                            <code>POST /api/optimizations/review</code> endpoint which calls this OpenClaw gateway
-                            for LLM-based evaluation.
+                            Full management UI for the agent_optimizations table. View all suggested parameter
+                            changes, apply them directly (bypasses MutationFreeze), or ask OpenClaw to review
+                            them via <code>POST /api/optimizations/review</code>.
                         </p>
                     </div>
                 </div>
@@ -1631,23 +1628,23 @@
                     </h3>
                     <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; font-size: 11px;">
                         <div style="padding: 8px; border-radius: 6px; background: rgba(0,240,255,0.02);">
-                            <span style="color: var(--neon-blue); font-weight: 600;">PhD Quant Agent</span><br>
-                            <span style="color: var(--text-secondary);">Reads trades + metrics logs, suggests parameter optimizations via agent_runs table.</span>
+                            <span style="color: var(--neon-blue); font-weight: 600;">Parameter Optimizer Agent</span><br>
+                            <span style="color: var(--text-secondary);">Reads trade and metric logs, writes parameter change suggestions to agent_runs table.</span>
                         </div>
                         <div style="padding: 8px; border-radius: 6px; background: rgba(168,85,247,0.02);">
-                            <span style="color: var(--neon-purple); font-weight: 600;">NeuralCore Optimizer</span><br>
-                            <span style="color: var(--text-secondary);">Reads policy weight performance, suggests brain config changes.</span>
+                            <span style="color: var(--neon-purple); font-weight: 600;">Network Optimizer Agent</span><br>
+                            <span style="color: var(--text-secondary);">Reads PolicyNetwork weight performance, proposes brain config tweaks.</span>
                         </div>
                         <div style="padding: 8px; border-radius: 6px; background: rgba(16,185,129,0.02);">
-                            <span style="color: var(--neon-green); font-weight: 600;">Sentiment Sentinel</span><br>
-                            <span style="color: var(--text-secondary);">Fetches crypto news, computes sentiment correlation with prices.</span>
+                            <span style="color: var(--neon-green); font-weight: 600;">Sentiment Feeds Agent</span><br>
+                            <span style="color: var(--text-secondary);">Fetches crypto news feeds, correlates sentiment scores with price movement.</span>
                         </div>
                         <div style="padding: 8px; border-radius: 6px; background: rgba(244,63,94,0.02);">
-                            <span style="color: var(--neon-red); font-weight: 600;">Risk Auditor</span><br>
-                            <span style="color: var(--text-secondary);">Checks drawdown, sets cooldowns, adjusts risk mode.</span>
+                            <span style="color: var(--neon-red); font-weight: 600;">Risk Check Agent</span><br>
+                            <span style="color: var(--text-secondary);">Monitors drawdown, sets cooldown periods, toggles risk mode between normal and conservative.</span>
                         </div>
                         <div style="padding: 8px; border-radius: 6px; background: rgba(255,159,67,0.02);">
-                            <span style="color: var(--neon-orange); font-weight: 600;">Ensemble Allocator</span><br>
+                            <span style="color: var(--neon-orange); font-weight: 600;">Allocation Check Agent</span><br>
                             <span style="color: var(--text-secondary);">Suggests asset allocation rebalancing.</span>
                         </div>
                     </div>
@@ -1728,7 +1725,7 @@
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
                         <h2 class="panel-title" style="display: flex; align-items: center; gap: 8px; margin: 0;">
                             <i data-lucide="sliders" style="color: var(--neon-blue); width: 20px; height: 20px;"></i>
-                            Agent Optimization Manager
+                            Suggested Changes
                         </h2>
                         <div style="display: flex; gap: 8px;">
                             <button class="btn btn-primary" id="btn-review-optimizations" style="font-size: 11px; padding: 6px 12px;">
@@ -1785,10 +1782,10 @@
                                 <select id="log-stream-select" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 6px; padding: 4px 8px; font-size: 11px; cursor: pointer; outline: none;">
                                     <option value="systemd">System Journal (journalctl)</option>
                                     <option value="app">Application Output (nexustrader_log.txt)</option>
-                                    <option value="nn">NeuralCore Trainer (nn_agent.log)</option>
+                                    <option value="nn">Network Trainer (nn_agent.log)</option>
                                     <option value="daily">Blogger Agent (daily_agent.log)</option>
                                     <option value="weekly">Weekly Self-Improvement (weekly_self_improvement.md)</option>
-                                    <option value="sentiment">Sentiment Optimization (weekly_sentiment_optimization.md)</option>
+                                    <option value="sentiment">Sentiment Feeds (weekly_sentiment_optimization.md)</option>
                                 </select>
                             </label>
                             <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); cursor: pointer;">
@@ -1819,11 +1816,11 @@
                                     <span>Filter by Quant:</span>
                                     <select id="optimizations-agent-filter" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 6px; padding: 4px 8px; font-size: 11px; cursor: pointer; outline: none;">
                                         <option value="all">All Quants</option>
-                                        <option value="PhD Quant Agent">PhD Quant Agent</option>
-                                        <option value="NeuralCore Optimizer">NeuralCore Optimizer</option>
-                                        <option value="Sentiment Sentinel">Sentiment Sentinel</option>
-                                        <option value="Risk Auditor">Risk Auditor</option>
-                                        <option value="Ensemble Asset Allocator">Ensemble Asset Allocator</option>
+                                        <option value="Parameter Optimizer Agent">Parameter Optimizer Agent</option>
+                                        <option value="Network Optimizer Agent">Network Optimizer Agent</option>
+                                        <option value="Sentiment Feeds Agent">Sentiment Feeds Agent</option>
+                                        <option value="Risk Check Agent">Risk Check Agent</option>
+                                        <option value="Allocation Check Agent">Allocation Check Agent</option>
                                     </select>
                                 </label>
                                 <input type="text" id="optimizations-search" placeholder="Search parameters..." style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 6px; padding: 4px 8px; font-size: 11px; width: 140px; outline: none;">
@@ -1861,11 +1858,11 @@
                                     <span>Filter by Quant:</span>
                                     <select id="agent-runs-filter" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 6px; padding: 4px 8px; font-size: 11px; cursor: pointer; outline: none;">
                                         <option value="all">All Quants</option>
-                                        <option value="PhD Quant Agent">PhD Quant Agent</option>
-                                        <option value="NeuralCore Optimizer">NeuralCore Optimizer</option>
-                                        <option value="Sentiment Sentinel">Sentiment Sentinel</option>
-                                        <option value="Risk Auditor">Risk Auditor</option>
-                                        <option value="Ensemble Asset Allocator">Ensemble Asset Allocator</option>
+                                        <option value="Parameter Optimizer Agent">Parameter Optimizer Agent</option>
+                                        <option value="Network Optimizer Agent">Network Optimizer Agent</option>
+                                        <option value="Sentiment Feeds Agent">Sentiment Feeds Agent</option>
+                                        <option value="Risk Check Agent">Risk Check Agent</option>
+                                        <option value="Allocation Check Agent">Allocation Check Agent</option>
                                     </select>
                                 </label>
                                 <input type="text" id="agent-runs-search" placeholder="Search prompts..." style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 6px; padding: 4px 8px; font-size: 11px; width: 140px; outline: none;">
