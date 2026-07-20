@@ -67,14 +67,8 @@ def load_performance_summary():
     return summary
 
 def run_allocator_self_improvement(trigger_deploy: bool = False):
-    logging.info("Starting Ensemble Asset Allocator self-improvement session...")
+    logging.info("Starting Allocation Check self-improvement session...")
     settings = load_settings()
-    gemini_api_key = settings.get("blog_gemini_api_key", "").strip()
-    ai_enabled = settings.get("blog_ai_enabled", "false") == "true"
-    
-    if not gemini_api_key or not ai_enabled:
-        logging.warning("Gemini API key is not configured or AI is disabled. Cannot run Allocator agent.")
-        return "Gemini API key is not configured or AI is disabled."
         
     active_assets = load_active_assets()
     perf_summary = load_performance_summary()

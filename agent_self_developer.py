@@ -83,8 +83,13 @@ The "find" blocks MUST MATCH EXACTLY (whitespace, newlines, etc.) to the existin
             "You are an autonomous AI software engineer. "
             "Analyze the provided codebase and return ONLY valid JSON — no markdown, no commentary."
         ))
-        raw_text = extract_json_block(raw_text)
-        response_data = json.loads(raw_text)
+        # Try extracting from code fence first, then fall back to raw JSON
+        response_data = extract_json_block(raw_text)
+        if response_data is None:
+            try:
+                response_data = json.loads(raw_text)
+            except json.JSONDecodeError:
+                raise ValueError("No valid JSON found in LLM response")
     except Exception as e:
         logging.error(f"OpenClaw call failed: {e}")
         return f"OpenClaw call failed: {e}"

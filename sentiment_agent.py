@@ -27,12 +27,6 @@ def save_setting(key, value):
 def run_sentiment_self_improvement(trigger_deploy: bool = False):
     logging.info("Starting Sentiment Engine self-improvement session...")
     settings = load_settings()
-    gemini_api_key = settings.get("blog_gemini_api_key", "").strip()
-    ai_enabled = settings.get("blog_ai_enabled", "false") == "true"
-    
-    if not gemini_api_key or not ai_enabled:
-        logging.warning("Gemini API key is not configured or AI is disabled. Cannot run Sentiment self-improvement.")
-        return "Gemini API key is not configured or AI is disabled."
         
     db_prompt = settings.get("prompt_sentiment_agent")
     if not db_prompt:
