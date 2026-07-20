@@ -223,7 +223,23 @@ class PolicyNetwork:
             self._apply_gradients(dW_acc, db_acc)
 
     def to_json(self):
-        
+        """Serialize network weights to JSON string."""
+        data = {
+            "W": [w.tolist() for w in self.W],
+            "b": [b.tolist() for b in self.b],
+            "hidden_layers": self.hidden_layers,
+            "dropout": self.dropout,
+            "optimizer": self.optimizer,
+            "m_W": [mw.tolist() for mw in self.m_W],
+            "m_b": [mb.tolist() for mb in self.m_b],
+            "v_W": [vw.tolist() for vw in self.v_W],
+            "v_b": [vb.tolist() for vb in self.v_b],
+            "t": self.t,
+        }
+        return json.dumps(data)
+
+    def from_json(self, json_str):
+        """Load network weights from JSON string in-place, with automatic weight migration."""
         data = json.loads(json_str)
         if "W" in data:
             self.W = [np.array(w) for w in data["W"]]
@@ -258,7 +274,8 @@ class PolicyNetwork:
             new_b_out = np.zeros((1, 12))
             new_b_out[:, :7] = self.b[-1]
             self.b[-1] = new_b_out
-            
+
+        # Init optimizer momentum/velocity if missing
         self.m_W = [np.zeros_like(w) for w in self.W]
         self.m_b = [np.zeros_like(b) for b in self.b]
         self.v_W = [np.zeros_like(w) for w in self.W]
