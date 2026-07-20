@@ -183,16 +183,13 @@
                 </button>
                 <button class="nav-tab" data-tab="tab-neural" style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: transparent; border: none; border-radius: 8px; color: var(--text-secondary); font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer; text-align: left; transition: all 0.2s ease;">
                     <i data-lucide="brain-circuit" style="width: 18px; height: 18px;"></i>
-                    Neural Weights
+                    Training
                 </button>
                 <button class="nav-tab" data-tab="tab-assets" style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: transparent; border: none; border-radius: 8px; color: var(--text-secondary); font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer; text-align: left; transition: all 0.2s ease;">
                     <i data-lucide="coins" style="width: 18px; height: 18px; color: var(--neon-blue);"></i>
                     Assets Manager
                 </button>
-                <button class="nav-tab" data-tab="tab-simulator" style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: transparent; border: none; border-radius: 8px; color: var(--text-secondary); font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer; text-align: left; transition: all 0.2s ease;">
-                    <i data-lucide="play-circle" style="width: 18px; height: 18px; color: var(--neon-purple);"></i>
-                    Training Simulator
-                </button>
+
                 <button class="nav-tab" data-tab="tab-longterm" style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: transparent; border: none; border-radius: 8px; color: var(--text-secondary); font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer; text-align: left; transition: all 0.2s ease;">
                     <i data-lucide="trending-up" style="width: 18px; height: 18px; color: var(--neon-green);"></i>
                     Strategy
@@ -405,270 +402,356 @@
         </div>
 
         <!-- TAB CONTENT 2: NEURAL CORE -->
-        <div id="tab-neural" class="tab-content">
-            <main class="main-content">
-                <div class="main-left-column">
-                    <!-- Policy net popularity weights -->
-                    <article class="glass-panel weights-panel" style="padding: 24px;">
+                <div id="tab-neural" class="tab-content">
+            <main class="main-content" style="grid-template-columns: 2fr 1fr; gap: 20px; align-items: start;">
+                <!-- LEFT COLUMN: Training state & controls -->
+                <div style="display: flex; flex-direction: column; gap: 20px;">
+                    <!-- How the NN Fits Into the Strategy -->
+                    <article class="glass-panel" style="padding: 20px;">
+                        <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                            <i data-lucide="info" style="width: 15px; height: 15px; color: var(--neon-blue);"></i>
+                            How the Policy Network Fits In
+                        </h3>
+                        <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.5; display: flex; flex-direction: column; gap: 6px;">
+                            <p style="margin: 0;">The 8D state vector (RSI, MACD, BB, ATR, OU regime, OU theta, sentiment, 10-trade win rate) is fed into a small MLP. It outputs <strong>12 strategy weights</strong> — one per strategy in the ensemble. After each trade closes, the realized PnL backpropagates through the network (REINFORCE + replay buffer).</p>
+                            <p style="margin: 0;">The network <strong>does not predict prices</strong>. It learns <em>which strategies to trust</em> in the current market regime. This is layered on top of OU regime detection and performance biasing.</p>
+                        </div>
+                    </article>
+
+                    <!-- Live Neural State & Weights -->
+                    <article class="glass-panel" style="padding: 24px;">
                         <h2 class="panel-title" style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
-                            <i data-lucide="brain-circuit" style="color: var(--neon-purple)"></i>
-                            Strategy Weight Allocation (Active Policy)
+                            <i data-lucide="cpu" style="color: var(--neon-blue);"></i>
+                            Live Neural State &amp; Strategy Weights
                         </h2>
-                        <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 24px; line-height: 1.4;">
-                            Policy network maps the 8D state vector to 12 strategy weights. Trained via REINFORCE-style backprop on trade PnL.
+                        <p style="font-size: 11px; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.4;">
+                            8D state &#8594; policy network &#8594; 12 weights. Live values update each tick via WebSocket.
                         </p>
-                        <div id="weights-container" style="margin-bottom: 30px;">
+                        
+                        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 20px;">
+                            <div style="background: rgba(255,255,255,0.01); padding: 8px; border-radius: 6px; border: 1px solid var(--border-color);">
+                                <span style="display: block; color: var(--text-muted); font-size: 8px; text-transform: uppercase;">Regime</span>
+                                <strong id="neural-val-regime" style="color: var(--neon-purple); font-size: 11px;">Mean Rev</strong>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.01); padding: 8px; border-radius: 6px; border: 1px solid var(--border-color);">
+                                <span style="display: block; color: var(--text-muted); font-size: 8px; text-transform: uppercase;">Theta</span>
+                                <strong id="neural-val-theta" style="color: var(--text-primary); font-family: monospace; font-size: 11px;">0.00</strong>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.01); padding: 8px; border-radius: 6px; border: 1px solid var(--border-color);">
+                                <span style="display: block; color: var(--text-muted); font-size: 8px; text-transform: uppercase;">RSI</span>
+                                <strong id="neural-val-rsi" style="color: var(--text-primary); font-family: monospace; font-size: 11px;">50</strong>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.01); padding: 8px; border-radius: 6px; border: 1px solid var(--border-color);">
+                                <span style="display: block; color: var(--text-muted); font-size: 8px; text-transform: uppercase;">MACD</span>
+                                <strong id="neural-val-macd" style="color: var(--text-primary); font-family: monospace; font-size: 11px;">0.00</strong>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.01); padding: 8px; border-radius: 6px; border: 1px solid var(--border-color);">
+                                <span style="display: block; color: var(--text-muted); font-size: 8px; text-transform: uppercase;">BB Dist</span>
+                                <strong id="neural-val-bb" style="color: var(--text-primary); font-family: monospace; font-size: 11px;">0.00</strong>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.01); padding: 8px; border-radius: 6px; border: 1px solid var(--border-color);">
+                                <span style="display: block; color: var(--text-muted); font-size: 8px; text-transform: uppercase;">ATR Ratio</span>
+                                <strong id="neural-val-atr" style="color: var(--text-primary); font-family: monospace; font-size: 11px;">0.00</strong>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.01); padding: 8px; border-radius: 6px; border: 1px solid var(--border-color);">
+                                <span style="display: block; color: var(--text-muted); font-size: 8px; text-transform: uppercase;">Sentiment</span>
+                                <strong id="neural-val-sentiment" style="color: var(--text-primary); font-family: monospace; font-size: 11px;">0</strong>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.01); padding: 8px; border-radius: 6px; border: 1px solid var(--border-color);">
+                                <span style="display: block; color: var(--text-muted); font-size: 8px; text-transform: uppercase;">Win %</span>
+                                <strong id="neural-val-wintrend" style="color: var(--neon-green); font-size: 11px;">0%</strong>
+                            </div>
+                        </div>
+
+                        <div id="weights-container" style="margin-bottom: 24px;">
                             <!-- Dynamic weight bars go here -->
                         </div>
 
-                        <div style="border-top: 1px solid var(--border-color); padding-top: 20px;">
-                            <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
-                                <i data-lucide="line-chart" style="width: 14px; height: 14px; color: var(--neon-purple);"></i>
-                                Policy Weight Convergence History
+                        <div style="border-top: 1px solid var(--border-color); padding-top: 16px;">
+                            <h3 style="font-size: 12px; font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+                                <i data-lucide="line-chart" style="width: 13px; height: 13px; color: var(--neon-purple);"></i>
+                                Weight Convergence History
                             </h3>
-                            <div style="position: relative; height: 260px; width: 100%;">
+                            <div style="position: relative; height: 200px; width: 100%;">
                                 <canvas id="weights-history-chart"></canvas>
                             </div>
                         </div>
                     </article>
 
-                    <!-- Policy Gradient Neural Inputs -->
-                    <article class="glass-panel" style="padding: 24px; margin-top: 20px;">
+                    <!-- Saved Neural Brains + Backtest -->
+                    <article class="glass-panel" style="padding: 24px;">
                         <h3 style="font-size: 15px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
-                            <i data-lucide="cpu" style="width: 16px; height: 16px; color: var(--neon-blue);"></i>
-                            Live Neural Input Vector
+                            <i data-lucide="folders" style="width: 16px; height: 16px; color: var(--neon-purple);"></i>
+                            Saved Neural Brains &amp; Backtest
                         </h3>
-                        <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 20px; line-height: 1.4;">
-                            8D state vector [RSI, MACD, BB, ATR, OU theta, OU regime, sentiment, win trend] fed into the policy network each tick.
+                        <p style="font-size: 11px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.4;">
+                            Each brain is a full policy network weight set. Select one to view specs, then backtest it against historical data.
                         </p>
                         
-                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
-                            <div style="background: rgba(255,255,255,0.01); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
-                                <span style="display: block; color: var(--text-muted); font-size: 9px; text-transform: uppercase;">Market Regime</span>
-                                <strong id="neural-val-regime" style="color: var(--neon-purple); font-size: 14px;">Mean Reverting</strong>
+                        <!-- Brain List -->
+                        <div id="neural-brains-list" style="display: flex; flex-direction: column; gap: 6px; max-height: 180px; overflow-y: auto; margin-bottom: 12px; padding-right: 2px;">
+                            <!-- Loaded dynamically -->
+                        </div>
+                        
+                        <!-- Brain Controls -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
+                            <button class="btn" id="btn-save-brain-snapshot" style="font-size: 10px; padding: 5px 8px; justify-content: center; gap: 4px; border-color: rgba(168,85,247,0.3); color: var(--neon-purple);">
+                                <i data-lucide="camera" style="width: 11px; height: 11px;"></i>
+                                Snapshot Current
+                            </button>
+                            <button class="btn btn-primary" id="btn-train-new-brain" style="font-size: 10px; padding: 5px 8px; justify-content: center; gap: 4px;">
+                                <i data-lucide="plus" style="width: 11px; height: 11px;"></i>
+                                Train New Brain
+                            </button>
+                        </div>
+                        
+                        <!-- Brain Details Panel -->
+                        <div id="brain-details-panel" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-color); display: none; text-align: left;">
+                            <h4 style="font-size: 11px; font-weight: 700; color: var(--neon-blue); margin: 0 0 6px 0; display: flex; align-items: center; gap: 4px;">
+                                <i data-lucide="info" style="width: 11px; height: 11px;"></i>
+                                <span id="details-brain-name">Brain Specs</span>
+                            </h4>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; font-size: 10px; color: var(--text-secondary); margin-bottom: 8px; font-family: monospace;">
+                                <div>DNA: <span id="details-brain-dna" style="color: var(--text-primary); font-weight: bold;">NN-ARCH-UNKNOWN</span></div>
+                                <div>Size: <span id="details-brain-size" style="color: var(--text-primary);">0 B</span></div>
+                                <div>W1: <span id="details-brain-w1" style="color: var(--text-primary);">8x12</span></div>
+                                <div>W2: <span id="details-brain-w2" style="color: var(--text-primary);">12x12</span></div>
+                                <div>Params: <span id="details-brain-params" style="color: var(--text-primary);">199</span></div>
+                                <div>LR/Floor: <span id="details-brain-lr" style="color: var(--text-primary);">0.05/0.05</span></div>
+                                <div style="grid-column: span 2;">Epochs: <span id="details-brain-steps" style="color: var(--neon-purple); font-weight: bold;">0</span></div>
                             </div>
-                            <div style="background: rgba(255,255,255,0.01); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
-                                <span style="display: block; color: var(--text-muted); font-size: 9px; text-transform: uppercase;">Mean-Reversion Speed (θ)</span>
-                                <strong id="neural-val-theta" style="color: var(--text-primary); font-family: monospace; font-size: 14px;">0.0000</strong>
-                            </div>
-                            <div style="background: rgba(255,255,255,0.01); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
-                                <span style="display: block; color: var(--text-muted); font-size: 9px; text-transform: uppercase;">Relative Strength (RSI)</span>
-                                <strong id="neural-val-rsi" style="color: var(--text-primary); font-family: monospace; font-size: 14px;">50.0000</strong>
-                            </div>
-                            <div style="background: rgba(255,255,255,0.01); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
-                                <span style="display: block; color: var(--text-muted); font-size: 9px; text-transform: uppercase;">MACD Normalized Histogram</span>
-                                <strong id="neural-val-macd" style="color: var(--text-primary); font-family: monospace; font-size: 14px;">0.0000</strong>
-                            </div>
-                            <div style="background: rgba(255,255,255,0.01); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
-                                <span style="display: block; color: var(--text-muted); font-size: 9px; text-transform: uppercase;">BB Distance Position</span>
-                                <strong id="neural-val-bb" style="color: var(--text-primary); font-family: monospace; font-size: 14px;">0.0000</strong>
-                            </div>
-                            <div style="background: rgba(255,255,255,0.01); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
-                                <span style="display: block; color: var(--text-muted); font-size: 9px; text-transform: uppercase;">ATR Volatility Ratio</span>
-                                <strong id="neural-val-atr" style="color: var(--text-primary); font-family: monospace; font-size: 14px;">0.0000</strong>
-                            </div>
-                            <div style="grid-column: span 2; background: rgba(255,255,255,0.01); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
-                                <div>
-                                    <span style="display: block; color: var(--text-muted); font-size: 9px; text-transform: uppercase;">Recent 10-Trade Win Trend</span>
-                                    <strong id="neural-val-wintrend" style="color: var(--neon-green); font-size: 14px;">0.0%</strong>
+                            <div style="background: rgba(255,255,255,0.02); padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border-color); font-size: 10px; margin-bottom: 8px;">
+                                <strong style="color: var(--text-primary); display: block; margin-bottom: 4px; font-size: 10px;">Attributed Trade Efficacy:</strong>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+                                    <div>Trades: <span id="stats-brain-trades" style="font-weight: bold; color: var(--text-primary);">0</span></div>
+                                    <div>Win%: <span id="stats-brain-winrate" style="font-weight: bold; color: var(--text-primary);">0%</span></div>
+                                    <div style="grid-column: span 2;">PnL: <span id="stats-brain-pnl" style="font-weight: bold; color: var(--text-primary);">$0.00</span></div>
                                 </div>
-                                <span style="font-size: 10px; color: var(--text-secondary);">Win rate (last 10 trades)</span>
                             </div>
+                            <button class="btn btn-primary" id="btn-run-brain-sim" style="width: 100%; justify-content: center; font-size: 10px; padding: 6px; background: var(--neon-purple); border-color: rgba(168,85,247,0.4);">
+                                <i data-lucide="play" style="width: 11px; height: 11px;"></i>
+                                Run Backtest on This Brain
+                            </button>
+                        </div>
+                        
+                        <!-- Backtest Controls -->
+                        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-color);">
+                            <h4 style="font-size: 11px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 4px;">
+                                <i data-lucide="play-circle" style="width: 12px; height: 12px; color: var(--neon-purple);"></i>
+                                Backtest Session
+                            </h4>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;">
+                                <label style="display: flex; flex-direction: column; gap: 3px;">
+                                    <span style="color: var(--text-muted); font-size: 9px; text-transform: uppercase;">Start Date</span>
+                                    <input type="date" id="sim-start-date" value="2026-06-01" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 5px 8px; border-radius: 6px; font-family: inherit; font-size: 10px;">
+                                </label>
+                                <label style="display: flex; flex-direction: column; gap: 3px;">
+                                    <span style="color: var(--text-muted); font-size: 9px; text-transform: uppercase;">End Date</span>
+                                    <input type="date" id="sim-end-date" value="2026-07-18" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 5px 8px; border-radius: 6px; font-family: inherit; font-size: 10px;">
+                                </label>
+                            </div>
+                            <label style="display: flex; flex-direction: column; gap: 3px; margin-bottom: 10px;">
+                                <span style="display: flex; justify-content: space-between; font-size: 10px;">
+                                    <span style="color: var(--text-muted);">Speed</span>
+                                    <span style="color: var(--neon-purple);"><span id="sim-speed-val">0.20</span>s / tick</span>
+                                </span>
+                                <input type="range" id="sim-speed-range" min="0.05" max="2.00" step="0.05" value="0.20" style="width: 100%; height: 5px; accent-color: var(--neon-purple);">
+                            </label>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                                <button class="btn btn-primary" id="btn-sim-play" style="justify-content: center; font-size: 10px; padding: 6px;">
+                                    <i data-lucide="play" style="width: 11px; height: 11px;"></i>
+                                    Run Backtest
+                                </button>
+                                <button class="btn" id="btn-sim-stop" style="justify-content: center; font-size: 10px; padding: 6px; border-color: rgba(244,63,94,0.3); color: var(--neon-red);">
+                                    <i data-lucide="square" style="width: 11px; height: 11px;"></i>
+                                    Reset
+                                </button>
+                            </div>
+                        </div>
+                    </article>
+
+                    <!-- Simulation Results -->
+                    <article class="glass-panel" style="padding: 24px;">
+                        <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="trending-up" style="width: 15px; height: 15px; color: var(--neon-purple);"></i>
+                            Backtest Results
+                        </h3>
+                        <section style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 15px;">
+                            <div style="background: rgba(168,85,247,0.02); padding: 12px; border-radius: 8px; border: 1px solid rgba(168,85,247,0.2);">
+                                <div style="font-size: 9px; color: var(--text-muted); text-transform: uppercase;">Simulated Equity</div>
+                                <div id="val-sim-equity" style="font-size: 18px; font-weight: bold; margin-top: 3px; color: var(--neon-purple);">$100.00</div>
+                                <div id="val-sim-unrealized-pnl" style="font-size: 9px; color: var(--text-secondary);">Active: $0.00</div>
+                            </div>
+                            <div style="padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
+                                <div style="font-size: 9px; color: var(--text-muted); text-transform: uppercase;">Win Rate</div>
+                                <div id="val-sim-winrate" style="font-size: 18px; font-weight: bold; margin-top: 3px; color: var(--text-primary);">0.0%</div>
+                                <div id="val-sim-trade-count" style="font-size: 9px; color: var(--text-secondary);">0 trades</div>
+                            </div>
+                            <div style="padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
+                                <div style="font-size: 9px; color: var(--text-muted); text-transform: uppercase;">Total PnL</div>
+                                <div id="val-sim-total-pnl" style="font-size: 18px; font-weight: bold; margin-top: 3px; color: var(--text-primary);">$0.00</div>
+                                <div id="val-sim-total-pnl-percent" style="font-size: 9px; color: var(--text-secondary);">0.00%</div>
+                            </div>
+                        </section>
+
+                        <div style="height: 180px; position: relative; margin-bottom: 15px;">
+                            <canvas id="simChart"></canvas>
+                        </div>
+
+                        <div style="max-height: 200px; overflow-y: auto;">
+                            <table style="width: 100%; border-collapse: collapse; font-size: 10px; text-align: left;">
+                                <thead>
+                                    <tr style="border-bottom: 1px solid var(--border-color); color: var(--text-muted);">
+                                        <th style="padding: 5px 4px;">Time</th>
+                                        <th style="padding: 5px 4px;">Asset</th>
+                                        <th style="padding: 5px 4px;">Side</th>
+                                        <th style="padding: 5px 4px;">Entry</th>
+                                        <th style="padding: 5px 4px;">Exit</th>
+                                        <th style="padding: 5px 4px; text-align: right;">PnL</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="sim-trade-log-body">
+                                    <tr><td colspan="6" style="text-align: center; color: var(--text-secondary); padding: 15px;">No backtest results yet.</td></tr>
+                                </tbody>
+                            </table>
                         </div>
                     </article>
                 </div>
 
-                <div class="main-right-column">
-                    <!-- Active Policy Brain Selector -->
-                    <article class="glass-panel" style="padding: 24px; margin-bottom: 20px; position: relative;">
-                        <h3 style="font-size: 15px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
-                            <i data-lucide="brain" style="width: 16px; height: 16px; color: var(--neon-purple);"></i>
-                            Active Policy Brain Selector
+                <!-- RIGHT COLUMN: Settings & management -->
+                <div style="display: flex; flex-direction: column; gap: 20px;">
+                    <!-- Active Brain Selector -->
+                    <article class="glass-panel" style="padding: 24px;">
+                        <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+                            <i data-lucide="brain" style="width: 15px; height: 15px; color: var(--neon-purple);"></i>
+                            Active Policy Brain
                         </h3>
-                        <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.4; margin-bottom: 15px;">
-                            Select which neural model controls allocation weights for <strong class="active-ticker-display-neural" style="color: var(--neon-purple);">ETH-USD</strong> on live/paper trades.
+                        <p style="font-size: 10px; color: var(--text-secondary); line-height: 1.4; margin-bottom: 12px;">
+                            Brain controls allocation weights for <strong class="active-ticker-display-neural" style="color: var(--neon-purple);">ETH-USD</strong>
                         </p>
-                        
-                        <div style="background: rgba(255,255,255,0.01); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <div style="background: rgba(255,255,255,0.01); padding: 10px; border-radius: 6px; border: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                             <div>
                                 <span style="display: block; color: var(--text-muted); font-size: 9px; text-transform: uppercase;">Current Live Brain</span>
-                                <strong id="kpi-neural-active-brain" style="color: var(--neon-green); font-size: 13px;">Default Brain</strong>
+                                <strong id="kpi-neural-active-brain" style="color: var(--neon-green); font-size: 12px;">Default Brain</strong>
                             </div>
                             <span class="status-badge live" style="font-size: 9px;">ACTIVE</span>
                         </div>
-
-                        <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px;">
-                            <label style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Choose Policy Brain:</label>
-                            <select id="select-active-brain-neural" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 12px; border-radius: 6px; font-family: inherit; font-size: 12px; width: 100%; cursor: pointer;">
+                        <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px;">
+                            <label style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">Choose Policy Brain:</label>
+                            <select id="select-active-brain-neural" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 6px 10px; border-radius: 6px; font-family: inherit; font-size: 11px; width: 100%;">
                                 <!-- Dynamically populated -->
                             </select>
                         </div>
-
-                        <button class="btn btn-primary" id="btn-apply-active-brain-neural" style="width: 100%; justify-content: center; font-size: 12px; padding: 8px; cursor: pointer; transition: var(--transition);">
-                            Switch Live Brain Model
+                        <button class="btn btn-primary" id="btn-apply-active-brain-neural" style="width: 100%; justify-content: center; font-size: 11px; padding: 6px;">
+                            Switch Live Brain
                         </button>
-                        
-                        <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 15px; padding-top: 15px; border-top: 1px dashed var(--border-color);">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border-color);">
                             <div>
-                                <span style="display: block; font-size: 11px; font-weight: 600; color: var(--text-primary); text-align: left;">Auto-Select Best Brain</span>
-                                <span style="display: block; font-size: 9px; color: var(--text-muted); text-align: left;">Auto-switches to the model with highest historical profit</span>
+                                <span style="display: block; font-size: 10px; font-weight: 600; color: var(--text-primary); text-align: left;">Auto-Select Best Brain</span>
+                                <span style="display: block; font-size: 9px; color: var(--text-muted); text-align: left;">Switch to highest-profit model</span>
                             </div>
-                            <input type="checkbox" id="toggle-auto-switch-brain" style="accent-color: var(--neon-blue); cursor: pointer; width: 16px; height: 16px;">
+                            <input type="checkbox" id="toggle-auto-switch-brain" style="accent-color: var(--neon-blue); cursor: pointer; width: 15px; height: 15px;">
                         </div>
                     </article>
 
-                    <!-- Policy Net Persona / Profile Card -->
-                    <article class="glass-panel persona-card persona-bot" style="padding: 24px; flex-direction: column; text-align: center; gap: 12px; margin-bottom: 20px;">
-                        <div class="persona-avatar" style="width: 64px; height: 64px; font-size: 24px;">🧠</div>
-                        <div>
-                            <h3 style="font-size: 18px; font-weight: 700; color: var(--text-primary);">Learning Engine</h3>
-                            <span style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 600; letter-spacing: 1px;">Policy Network (learning_engine.py)</span>
-                        </div>
-                        <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.4; margin-top: 5px;">
-                            "Policy network that maps market state to 12 strategy weights. Backpropagates profit/loss after each trade to adjust future allocations."
+                    <!-- Learning Engine Profile -->
+                    <article class="glass-panel" style="padding: 20px; text-align: center;">
+                        <div style="font-size: 28px; margin-bottom: 6px;">🧠</div>
+                        <h3 style="font-size: 16px; font-weight: 700; color: var(--text-primary); margin: 0;">Learning Engine</h3>
+                        <span style="font-size: 10px; color: var(--text-muted); letter-spacing: 1px;">Policy Network (learning_engine.py)</span>
+                        <p style="font-size: 11px; color: var(--text-secondary); line-height: 1.4; margin: 8px 0;">
+                            8&#8594;12 MLP with REINFORCE + replay buffer (minibatch=32, train every 5 trades).
                         </p>
-                        <div style="width: 100%; border-top: 1px solid var(--border-color); margin-top: 10px; padding-top: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 12px;">
-                            <div style="background: rgba(255,255,255,0.01); padding: 8px; border-radius: 8px; border: 1px solid var(--border-color);">
-                                <span style="display: block; color: var(--text-muted); font-size: 10px;">MODEL SIGNATURE</span>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 11px;">
+                            <div style="background: rgba(255,255,255,0.01); padding: 6px; border-radius: 6px; border: 1px solid var(--border-color);">
+                                <span style="display: block; color: var(--text-muted); font-size: 9px;">SIGNATURE</span>
                                 <strong id="val-model-dna" style="color: var(--neon-blue); font-family: monospace;">NN-ARCH-E5C7D9</strong>
                             </div>
-                            <div style="background: rgba(255,255,255,0.01); padding: 8px; border-radius: 8px; border: 1px solid var(--border-color);">
-                                <span style="display: block; color: var(--text-muted); font-size: 10px;">LIFETIME LEARNING STEPS</span>
+                            <div style="background: rgba(255,255,255,0.01); padding: 6px; border-radius: 6px; border: 1px solid var(--border-color);">
+                                <span style="display: block; color: var(--text-muted); font-size: 9px;">STEPS</span>
                                 <strong id="val-lifetime-steps" style="color: var(--neon-green);">0</strong>
                             </div>
                         </div>
                     </article>
 
-                    <!-- Neural Network Parameters -->
+                    <!-- Neural Hyperparameters -->
                     <article class="glass-panel" style="padding: 24px;">
-                        <h3 style="font-size: 15px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
-                            <i data-lucide="sliders" style="width: 16px; height: 16px; color: var(--neon-blue);"></i>
+                        <h3 style="font-size: 13px; font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+                            <i data-lucide="sliders" style="width: 14px; height: 14px; color: var(--neon-blue);"></i>
                             Neural Hyperparameters
                         </h3>
-                        <div style="display: flex; flex-direction: column; gap: 12px; font-size: 13px;">
+                        <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12px;">
                             <label style="display: flex; justify-content: space-between; align-items: center;">
-                                <span>Hidden Layers Count</span>
-                                <input type="number" id="setting-nn-layers-tab" min="1" max="5" step="1" value="1" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 12px; width: 65px; text-align: center;">
+                                <span>Hidden Layers</span>
+                                <input type="number" id="setting-nn-layers-tab" min="1" max="5" step="1" value="1" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 3px 6px; border-radius: 5px; font-family: inherit; font-size: 11px; width: 55px; text-align: center;">
                             </label>
                             <label style="display: flex; justify-content: space-between; align-items: center;">
-                                <span>Neurons per Layer</span>
-                                <input type="number" id="setting-nn-dim-tab" min="8" max="512" step="4" value="12" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 12px; width: 65px; text-align: center;">
+                                <span>Neurons/Layer</span>
+                                <input type="number" id="setting-nn-dim-tab" min="8" max="512" step="4" value="12" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 3px 6px; border-radius: 5px; font-family: inherit; font-size: 11px; width: 55px; text-align: center;">
                             </label>
                             <label style="display: flex; justify-content: space-between; align-items: center;">
-                                <span>NN Learning Rate</span>
-                                <input type="number" id="setting-nn-lr-tab" min="0.01" max="0.99" step="0.01" value="0.15" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 12px; width: 65px; text-align: center;">
+                                <span>Learning Rate</span>
+                                <input type="number" id="setting-nn-lr-tab" min="0.01" max="0.99" step="0.01" value="0.15" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 3px 6px; border-radius: 5px; font-family: inherit; font-size: 11px; width: 55px; text-align: center;">
                             </label>
                             <label style="display: flex; justify-content: space-between; align-items: center;">
-                                <span>Dropout Rate</span>
-                                <input type="number" id="setting-nn-dropout-tab" min="0.00" max="0.50" step="0.05" value="0.00" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 12px; width: 65px; text-align: center;">
+                                <span>Dropout</span>
+                                <input type="number" id="setting-nn-dropout-tab" min="0.00" max="0.50" step="0.05" value="0.00" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 3px 6px; border-radius: 5px; font-family: inherit; font-size: 11px; width: 55px; text-align: center;">
                             </label>
                             <label style="display: flex; justify-content: space-between; align-items: center;">
                                 <span>Optimizer</span>
-                                <select id="setting-nn-optimizer-tab" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 12px; width: 85px; text-align: center;">
+                                <select id="setting-nn-optimizer-tab" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 3px 6px; border-radius: 5px; font-family: inherit; font-size: 11px; width: 72px; text-align: center;">
                                     <option value="Adam">Adam</option>
                                     <option value="RMSprop">RMSprop</option>
                                     <option value="SGD">SGD</option>
                                 </select>
                             </label>
                             <label style="display: flex; justify-content: space-between; align-items: center;">
-                                <span>Training Epochs</span>
-                                <input type="number" id="setting-nn-epochs-tab" min="10" max="2000" step="10" value="250" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 12px; width: 65px; text-align: center;">
+                                <span>Epochs</span>
+                                <input type="number" id="setting-nn-epochs-tab" min="10" max="2000" step="10" value="250" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 3px 6px; border-radius: 5px; font-family: inherit; font-size: 11px; width: 55px; text-align: center;">
                             </label>
                             <label style="display: flex; justify-content: space-between; align-items: center;">
-                                <span>NN Weight Floor</span>
-                                <input type="number" id="setting-nn-floor-tab" min="0.01" max="0.25" step="0.01" value="0.05" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 12px; width: 65px; text-align: center;">
+                                <span>Weight Floor</span>
+                                <input type="number" id="setting-nn-floor-tab" min="0.01" max="0.25" step="0.01" value="0.05" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 3px 6px; border-radius: 5px; font-family: inherit; font-size: 11px; width: 55px; text-align: center;">
                             </label>
                             <label style="display: flex; justify-content: space-between; align-items: center;">
-                                <span>Policy Discount Factor (γ)</span>
-                                <input type="number" id="setting-nn-discount-tab" min="0.50" max="0.99" step="0.01" value="0.95" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 12px; width: 65px; text-align: center;">
+                                <span>Discount gamma</span>
+                                <input type="number" id="setting-nn-discount-tab" min="0.50" max="0.99" step="0.01" value="0.95" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 3px 6px; border-radius: 5px; font-family: inherit; font-size: 11px; width: 55px; text-align: center;">
                             </label>
                             <label style="display: flex; justify-content: space-between; align-items: center;">
-                                <span>Exploration Rate (ε)</span>
-                                <input type="number" id="setting-nn-exploration-tab" min="0.01" max="0.50" step="0.01" value="0.10" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 12px; width: 65px; text-align: center;">
+                                <span>Exploration epsilon</span>
+                                <input type="number" id="setting-nn-exploration-tab" min="0.01" max="0.50" step="0.01" value="0.10" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 3px 6px; border-radius: 5px; font-family: inherit; font-size: 11px; width: 55px; text-align: center;">
                             </label>
-                            <button class="btn btn-primary" id="save-nn-params-btn" style="width: 100%; justify-content: center; font-size: 12px; padding: 8px; margin-top: 5px;">
-                                Apply Neural Settings
+                            <button class="btn btn-primary" id="save-nn-params-btn" style="width: 100%; justify-content: center; font-size: 11px; padding: 6px; margin-top: 2px;">
+                                Apply Settings
                             </button>
                         </div>
                     </article>
- 
 
                     <!-- Brain Profiles Reference -->
-                    <article class="glass-panel" style="padding: 24px; margin-top: 20px;">
-                        <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
-                            <i data-lucide="info" style="width: 15px; height: 15px; color: var(--neon-blue);"></i>
-                            Brain Profiles Reference
+                    <article class="glass-panel" style="padding: 20px;">
+                        <h3 style="font-size: 12px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                            <i data-lucide="info" style="width: 13px; height: 13px; color: var(--neon-blue);"></i>
+                            Brain Profiles
                         </h3>
-                        <div style="display: flex; flex-direction: column; gap: 10px; font-size: 11px; line-height: 1.4;">
+                        <div style="display: flex; flex-direction: column; gap: 8px; font-size: 10px; line-height: 1.4;">
                             <div style="border-left: 2px solid var(--neon-blue); padding-left: 8px;">
-                                <strong style="color: var(--neon-blue);">🧠 Default Brain (Multi-Regime)</strong>
-                                <p style="color: var(--text-secondary); font-size: 10px; margin-top: 2px;">
-                                    Balanced allocator. Adapts weights dynamically using continuous Policy Gradient adjustments across all inputs (O-U process regime shifts, RSI momentum, news sentiment).
-                                </p>
+                                <strong style="color: var(--neon-blue);">Default Brain (Multi-Regime)</strong>
+                                <p style="color: var(--text-secondary); font-size: 10px; margin: 2px 0 0 0;">Balanced allocator. Adapts weights across all inputs &#8212; OU regime, RSI momentum, sentiment.</p>
                             </div>
                             <div style="border-left: 2px solid var(--neon-green); padding-left: 8px;">
-                                <strong style="color: var(--neon-green);">⚡ High-Freq Scalper (Volatile range)</strong>
-                                <p style="color: var(--text-secondary); font-size: 10px; margin-top: 2px;">
-                                    Optimized for ranges and high-noise volatility. Focuses allocations on fast Bollinger sweep reversions under high ATR, tight stops (lower profit targets) and fast entry cooldowns.
-                                </p>
+                                <strong style="color: var(--neon-green);">High-Freq Scalper</strong>
+                                <p style="color: var(--text-secondary); font-size: 10px; margin: 2px 0 0 0;">For range-bound high-volatility. Favors fast Bollinger reversions, tight stops, short cooldowns.</p>
                             </div>
                             <div style="border-left: 2px solid var(--neon-purple); padding-left: 8px;">
-                                <strong style="color: var(--neon-purple);">📈 Trend Follower (Structural drift)</strong>
-                                <p style="color: var(--text-secondary); font-size: 10px; margin-top: 2px;">
-                                    Regime bias for low reversion speed ($\theta < 0.05$). Routes resources to Bollinger/Kalman-filter trend riders. Uses wider ATR limits to capture major breakouts.
-                                </p>
+                                <strong style="color: var(--neon-purple);">Trend Follower</strong>
+                                <p style="color: var(--text-secondary); font-size: 10px; margin: 2px 0 0 0;">For drifting markets (low theta). Routes weight to Kalman/EMA trend riders, wider stops for breakouts.</p>
                             </div>
-                        </div>
-                    </article>
- 
-                    <!-- Neural Network DNA Topology Matrix Visualization -->
-                    <article class="glass-panel" style="padding: 24px; margin-top: 20px;">
-                        <h3 style="font-size: 15px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
-                            <i data-lucide="network" style="width: 16px; height: 16px; color: var(--neon-purple);"></i>
-                            Policy Net Connection Matrix
-                        </h3>
-                        <p style="font-size: 11px; color: var(--text-secondary); margin-bottom: 15px; line-height: 1.4;">
-                            Shows the current reinforcement learning synapse mapping from inputs to allocations.
-                        </p>
-                        <div style="display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 8px; border: 1px solid var(--border-color); font-family: monospace; font-size: 9px; text-align: center;">
-                            <!-- Header Row -->
-                            <div style="grid-column: span 8; display: grid; grid-template-columns: repeat(8, 1fr); border-bottom: 1px solid var(--border-color); padding-bottom: 4px; color: var(--text-muted); font-weight: bold;">
-                                <span>MR</span><span>TH</span><span>RSI</span><span>MC</span><span>BB</span><span>ATR</span><span>WN</span><span>SN</span>
-                            </div>
-                            <!-- Rows (mapping inputs to 7 allocations) -->
-                            <div style="grid-column: span 8; display: grid; grid-template-columns: repeat(8, 1fr); color: var(--neon-blue);">
-                                <span>●</span><span>○</span><span>●</span><span>○</span><span>●</span><span>○</span><span>○</span><span>●</span>
-                            </div>
-                            <div style="grid-column: span 8; display: grid; grid-template-columns: repeat(8, 1fr); color: var(--neon-purple);">
-                                <span>○</span><span>●</span><span>○</span><span>●</span><span>○</span><span>●</span><span>●</span><span>○</span>
-                            </div>
-                            <div style="grid-column: span 8; display: grid; grid-template-columns: repeat(8, 1fr); color: var(--neon-green);">
-                                <span>●</span><span>●</span><span>○</span><span>○</span><span>●</span><span>○</span><span>○</span><span>●</span>
-                            </div>
-                            <div style="grid-column: span 8; display: grid; grid-template-columns: repeat(8, 1fr); color: var(--neon-red);">
-                                <span>○</span><span>○</span><span>●</span><span>●</span><span>○</span><span>●</span><span>○</span><span>○</span>
-                            </div>
-                            <div style="grid-column: span 8; display: grid; grid-template-columns: repeat(8, 1fr); color: var(--neon-orange);">
-                                <span>●</span><span>○</span><span>○</span><span>○</span><span>○</span><span>○</span><span>●</span><span>●</span>
-                            </div>
-                            <div style="grid-column: span 8; display: grid; grid-template-columns: repeat(8, 1fr); color: var(--neon-blue);">
-                                <span>○</span><span>●</span><span>●</span><span>○</span><span>●</span><span>●</span><span>○</span><span>○</span>
-                            </div>
-                            <div style="grid-column: span 8; display: grid; grid-template-columns: repeat(8, 1fr); color: var(--neon-purple);">
-                                <span>●</span><span>○</span><span>●</span><span>●</span><span>○</span><span>○</span><span>●</span><span>●</span>
-                            </div>
-                        </div>
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px; font-size: 10px; color: var(--text-muted);">
-                            <span>● Synapse Engaged</span>
-                            <span>○ Inactive Pathway</span>
                         </div>
                     </article>
                 </div>
             </main>
         </div>
-
-        <!-- TAB CONTENT 2.3: ACTIVE ASSET MANAGER -->
-        <div id="tab-assets" class="tab-content">
+<div id="tab-assets" class="tab-content">
             <main class="main-content" style="grid-template-columns: 1fr; gap: 20px; display: grid;">
                 <div class="main-left-column">
                     <article class="glass-panel" style="padding: 24px; display: flex; flex-direction: column; gap: 15px;">
@@ -732,200 +815,18 @@
         </div>
 
         <!-- TAB CONTENT 2.5: TRAINING SIMULATOR -->
-        <div id="tab-simulator" class="tab-content">
-            <main class="main-content" style="grid-template-columns: 2fr 1fr; gap: 20px; align-items: start; display: grid;">
-                <!-- Left Column: Simulation Stats, Chart, Trade Logs -->
-                <div style="display: flex; flex-direction: column; gap: 20px;">
-                    <!-- Simulation KPIs -->
-                    <section style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
-                        <div class="glass-panel kpi-card" style="border-color: var(--neon-purple); background: rgba(168, 85, 247, 0.02); padding: 15px; border-radius: 8px;">
-                            <div class="kpi-title" style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">Simulated Equity</div>
-                            <div class="kpi-value" id="val-sim-equity" style="font-size: 20px; font-weight: bold; margin-top: 5px; color: var(--neon-purple);">$100.00</div>
-                            <div class="kpi-sub" id="val-sim-unrealized-pnl" style="font-size: 9px; color: var(--text-secondary); margin-top: 2px;">Sim Active PnL: $0.00 (0.00%)</div>
-                        </div>
-                        <div class="glass-panel kpi-card" style="padding: 15px; border-radius: 8px;">
-                            <div class="kpi-title" style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">Sim Success Rate (Wins)</div>
-                            <div class="kpi-value" id="val-sim-winrate" style="font-size: 20px; font-weight: bold; margin-top: 5px; color: var(--text-primary);">0.0%</div>
-                            <div class="kpi-sub" id="val-sim-trade-count" style="font-size: 9px; color: var(--text-secondary); margin-top: 2px;">0 trades completed</div>
-                        </div>
-                        <div class="glass-panel kpi-card" style="padding: 15px; border-radius: 8px;">
-                            <div class="kpi-title" style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">Sim Total Profit</div>
-                            <div class="kpi-value" id="val-sim-total-pnl" style="font-size: 20px; font-weight: bold; margin-top: 5px; color: var(--text-primary);">$0.00</div>
-                            <div class="kpi-sub" id="val-sim-total-pnl-percent" style="font-size: 9px; color: var(--text-secondary); margin-top: 2px;">0.00% growth</div>
-                        </div>
-                    </section>
-
-                    <!-- Simulation chart -->
-                    <article class="glass-panel" style="padding: 24px;">
-                        <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 15px; display: flex; align-items: center; justify-content: space-between;">
-                            <span style="display: flex; align-items: center; gap: 8px;">
-                                <i data-lucide="trending-up" style="width: 16px; height: 16px; color: var(--neon-purple);"></i>
-                                Simulation Training Equity Curve
-                            </span>
-                        </h3>
-                        <div style="height: 220px; position: relative;">
-                            <canvas id="simChart"></canvas>
-                        </div>
-                    </article>
-
-                    <!-- Simulation Trades table -->
-                    <article class="glass-panel" style="padding: 24px;">
-                        <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">
-                            <i data-lucide="history" style="width: 16px; height: 16px; color: var(--neon-purple);"></i>
-                            Simulation Closed Trades Log
-                        </h3>
-                        <div style="overflow-x: auto; max-height: 250px;">
-                            <table style="width: 100%; border-collapse: collapse; font-size: 11px; text-align: left;">
-                                <thead>
-                                    <tr style="border-bottom: 1px solid var(--border-color); color: var(--text-muted); font-weight: 600;">
-                                        <th style="padding: 8px 4px;">Time</th>
-                                        <th style="padding: 8px 4px;">Asset</th>
-                                        <th style="padding: 8px 4px;">Type</th>
-                                        <th style="padding: 8px 4px;">Entry</th>
-                                        <th style="padding: 8px 4px;">Exit</th>
-                                        <th style="padding: 8px 4px;">Qty</th>
-                                        <th style="padding: 8px 4px; text-align: right;">PnL ($)</th>
-                                        <th style="padding: 8px 4px; text-align: right;">PnL (%)</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="sim-trade-log-body">
-                                    <tr>
-                                        <td colspan="8" style="text-align: center; color: var(--text-secondary); padding: 20px;">No simulation trades run yet. Start the simulator below.</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </article>
-                </div>
-
-                <!-- Right Column: Brain Management and specs -->
-                <div style="display: flex; flex-direction: column; gap: 20px;">
-                    <!-- Backtest Session Controls -->
-                    <article class="glass-panel" style="padding: 24px;">
-                        <h3 style="font-size: 15px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
-                            <i data-lucide="play-circle" style="width: 16px; height: 16px; color: var(--neon-purple);"></i>
-                            Backtest Session Controls
-                        </h3>
-                        <p style="font-size: 11px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.4;">
-                            Configure boundaries and replay tick updates to validate policy allocations.
-                        </p>
-                        
-                        <div style="display: flex; flex-direction: column; gap: 12px; font-size: 12px; margin-bottom: 15px;">
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                                <label style="display: flex; flex-direction: column; gap: 4px;">
-                                    <span style="color: var(--text-muted); font-size: 10px; text-transform: uppercase;">Start Date</span>
-                                    <input type="date" id="sim-start-date" value="2026-06-01" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 6px 10px; border-radius: 6px; font-family: inherit; font-size: 11px;">
-                                </label>
-                                <label style="display: flex; flex-direction: column; gap: 4px;">
-                                    <span style="color: var(--text-muted); font-size: 10px; text-transform: uppercase;">End Date</span>
-                                    <input type="date" id="sim-end-date" value="2026-07-18" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 6px 10px; border-radius: 6px; font-family: inherit; font-size: 11px;">
-                                </label>
-                            </div>
-                            
-                            <label style="display: flex; flex-direction: column; gap: 4px;">
-                                <span style="display: flex; justify-content: space-between;">
-                                    <span style="color: var(--text-muted); font-size: 10px; text-transform: uppercase;">Simulation Speed</span>
-                                    <span style="color: var(--neon-purple); font-weight: bold;"><span id="sim-speed-val">0.20</span>s / tick</span>
-                                </span>
-                                <input type="range" id="sim-speed-range" min="0.05" max="2.00" step="0.05" value="0.20" style="width: 100%; height: 6px; background: var(--border-color); border-radius: 3px; cursor: pointer; accent-color: var(--neon-purple);">
-                            </label>
-                        </div>
-                        
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                            <button class="btn btn-primary" id="btn-sim-play" style="justify-content: center; font-size: 11px; padding: 8px;">
-                                <i data-lucide="play" style="width: 12px; height: 12px;"></i>
-                                Run Backtest
-                            </button>
-                            <button class="btn" id="btn-sim-stop" style="justify-content: center; font-size: 11px; padding: 8px; border-color: rgba(244,63,94,0.3); color: var(--neon-red);">
-                                <i data-lucide="square" style="width: 12px; height: 12px;"></i>
-                                Reset Backtest
-                            </button>
-                        </div>
-                    </article>
-
-                    <!-- Saved Neural Brains (Multi-Brain Selection & Custom Training) -->
-                    <article class="glass-panel" style="padding: 24px;">
-                        <h3 style="font-size: 15px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
-                            <i data-lucide="folders" style="width: 16px; height: 16px; color: var(--neon-purple);"></i>
-                            Saved Neural Brains
-                        </h3>
-                        <p style="font-size: 11px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.4;">
-                            Select which trained policy brain drives strategy allocations for <span id="brains-active-ticker" class="color-blue" style="font-weight: 700;">BTC-USD</span>.
-                        </p>
-                        
-                        <!-- List of Brains -->
-                        <div id="neural-brains-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 220px; overflow-y: auto; margin-bottom: 15px; padding-right: 2px;">
-                            <!-- Seeded and custom brains loaded here dynamically -->
-                        </div>
-                        
-                        <!-- Create New Brain / Snapshot Controls -->
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                            <button class="btn" id="btn-save-brain-snapshot" style="font-size: 11px; padding: 6px 8px; justify-content: center; gap: 4px; border-color: rgba(168,85,247,0.3); color: var(--neon-purple);">
-                                <i data-lucide="camera" style="width: 12px; height: 12px;"></i>
-                                Snapshot Current
-                            </button>
-                            <button class="btn btn-primary" id="btn-train-new-brain" style="font-size: 11px; padding: 6px 8px; justify-content: center; gap: 4px;">
-                                <i data-lucide="plus" style="width: 12px; height: 12px;"></i>
-                                Train New Brain
-                            </button>
-                        </div>
-                        
-                        <!-- Brain Detailed Specs & Analysis Panel -->
-                        <div id="brain-details-panel" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--border-color); display: none; text-align: left;">
-                            <h4 style="font-size: 12px; font-weight: 700; color: var(--neon-blue); margin: 0 0 8px 0; display: flex; align-items: center; gap: 4px;">
-                                <i data-lucide="info" style="width: 12px; height: 12px;"></i>
-                                <span id="details-brain-name">Brain Specs</span>
-                            </h4>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px 15px; font-size: 10px; color: var(--text-secondary); margin-bottom: 10px; font-family: monospace;">
-                                <div class="nt-tooltip">
-                                    DNA: <span id="details-brain-dna" style="color: var(--text-primary); font-weight: bold; margin-left: 4px;">NN-ARCH-UNKNOWN</span>
-                                    <span class="nt-tooltiptext">A unique 6-character hexadecimal signature representing the policy network's layer structure and topology configuration.</span>
-                                </div>
-                                <div class="nt-tooltip">
-                                    Disk Size: <span id="details-brain-size" style="color: var(--text-primary); margin-left: 4px;">0 B</span>
-                                    <span class="nt-tooltiptext">The serialized byte size of the network's float weight arrays stored in the database.</span>
-                                </div>
-                                <div>W1 Layer: <span id="details-brain-w1" style="color: var(--text-primary);">8x12</span></div>
-                                <div>W2 Layer: <span id="details-brain-w2" style="color: var(--text-primary);">12x7</span></div>
-                                <div class="nt-tooltip">
-                                    Params: <span id="details-brain-params" style="color: var(--text-primary); margin-left: 4px;">199</span>
-                                    <span class="nt-tooltiptext">The total count of active connections, weights, and biases inside the network.</span>
-                                </div>
-                                <div class="nt-tooltip">
-                                    LR / Floor: <span id="details-brain-lr" style="color: var(--text-primary); margin-left: 4px;">0.05 / 0.05</span>
-                                    <span class="nt-tooltiptext">Learning Rate (backprop multiplier) and Weight Floor (prevents strategy dropouts).</span>
-                                </div>
-                                <div style="grid-column: span 2;" class="nt-tooltip">
-                                    Training Epochs: <span id="details-brain-steps" style="color: var(--neon-purple); font-weight: bold; margin-left: 4px;">0</span>
-                                    <span class="nt-tooltiptext">An epoch represents one complete reinforcement learning backpropagation update cycle. Note: In financial modeling, more training epochs do not guarantee future accuracy and can lead to overfitting.</span>
-                                </div>
-                            </div>
-                            
-                            <!-- Attribution Analysis -->
-                            <div style="background: rgba(255,255,255,0.02); padding: 8px; border-radius: 6px; border: 1px solid var(--border-color); font-size: 10px; margin-bottom: 4px;">
-                                <strong style="color: var(--text-primary); display: block; margin-bottom: 6px; font-size: 11px;" class="nt-tooltip">
-                                    Attributed Trade Efficacy:
-                                    <span class="nt-tooltiptext">Historical performance statistics recorded in the database specifically under this active configuration.</span>
-                                </strong>
-                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
-                                    <div>Total Trades: <span id="stats-brain-trades" style="font-weight: bold; color: var(--text-primary);">0</span></div>
-                                    <div>Win Rate: <span id="stats-brain-winrate" style="font-weight: bold; color: var(--text-primary);">0%</span></div>
-                                    <div style="grid-column: span 2;">Net PnL: <span id="stats-brain-pnl" style="font-weight: bold; color: var(--text-primary);">$0.00</span></div>
-                                </div>
-                            </div>
-                            
-                            <button class="btn btn-primary" id="btn-run-brain-sim" style="width: 100%; justify-content: center; font-size: 11px; padding: 8px 16px; margin-top: 10px; background: var(--neon-purple); border-color: rgba(168,85,247,0.4); display: flex; align-items: center; gap: 6px;">
-                                <i data-lucide="play" style="width: 12px; height: 12px;"></i>
-                                Run Simulation on this Brain
-                            </button>
-                        </div>
-                    </article>
-                </div>
+                <div id="tab-simulator" class="tab-content" style="display: none;">
+            <main class="main-content" style="grid-template-columns: 1fr;">
+                <article class="glass-panel" style="padding: 40px; text-align: center;">
+                    <i data-lucide="brain-circuit" style="width: 48px; height: 48px; color: var(--neon-purple);"></i>
+                    <h2 style="margin: 16px 0 8px 0;">Training tab moved</h2>
+                    <p style="color: var(--text-secondary); font-size: 13px; margin: 0; line-height: 1.5;">
+                        The Training Simulator and Neural Weights have been merged into a single <strong>Training</strong> tab.<br>
+                        <a href="#" onclick="document.querySelector('[data-tab=tab-neural]').click(); return false;" style="color: var(--neon-blue);">Go to Training tab &rarr;</a>
+                    </p>
+                </article>
             </main>
-        </div>
-
-<!-- TAB CONTENT 3: AI AGENTS -->
-        <div id="tab-agents" class="tab-content">
+        </div><div id="tab-agents" class="tab-content">
             <main class="main-content" style="grid-template-columns: 2fr 1fr;">
                 <div class="main-left-column" style="display: flex; flex-direction: column; gap: 20px;">
                     <!-- Persona Panel Grid -->

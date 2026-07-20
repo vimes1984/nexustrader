@@ -2672,13 +2672,13 @@ elNavTabs.forEach(tab => {
             loadWeightsHistory(activeTicker);
             loadNeuralBrains(activeTicker);
             refreshNeuralCoreBrainSelector(activeTicker);
-        } else if (targetTabId === "tab-assets") {
-            loadAssetManager();
-        } else if (targetTabId === "tab-simulator") {
-            loadNeuralBrains(activeTicker);
             if (!simChart) {
                 initSimChart();
             }
+        } else if (targetTabId === "tab-assets") {
+            loadAssetManager();
+        } else if (targetTabId === "tab-simulator") {
+            document.querySelector('[data-tab="tab-neural"]').click();
         } else if (targetTabId === "tab-agents") {
             loadAgentLlmConfig();
         } else if (targetTabId === "tab-longterm") {
