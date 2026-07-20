@@ -1,6 +1,7 @@
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 import logging
+from collections import defaultdict
 
 class TradingStrategy:
     def __init__(self, name):
@@ -292,10 +293,37 @@ class StrategyEnsemble:
         # Keep track of recent close prices to estimate the Ornstein-Uhlenbeck process parameters
         self.price_history = []
         
+        # Performance tracker: each strategy's recent directional accuracy
+        self.strategy_performance = defaultdict(list)
+        
         # Train ML strategy if history is provided
         if history_df is not None:
             self.train_ml_strategy(history_df)
             self.price_history = list(history_df['close'].values[-60:])
+
+    def record_trade_outcome(self, strategy_signals, trade_direction, pnl_percent):
+        """Records trade outcome for each strategy's performance tracker.
+        
+        Called after a trade closes. Feeds back which strategies were right/wrong
+        so future weightings can favor winning strategies.
+        """
+        if not strategy_signals or not trade_direction:
+            return
+        dir_val = 1.0 if trade_direction == "BUY" else -1.0
+        for i, strat in enumerate(self.strategies):
+            if i < len(strategy_signals):
+                sig = strategy_signals[i]
+                # Strategy is "correct" if signal direction matches trade direction
+                correct = (sig * dir_val) > 0
+                self.strategy_performance[strat.name].append({
+                    'correct': bool(correct),
+                    'signal': float(sig),
+                    'direction': trade_direction,
+                    'pnl_pct': pnl_percent
+                })
+                # Keep rolling window of 50 trades
+                if len(self.strategy_performance[strat.name]) > 50:
+                    self.strategy_performance[strat.name].pop(0)
 
     def train_ml_strategy(self, history_df):
         for strat in self.strategies:
@@ -303,11 +331,12 @@ class StrategyEnsemble:
                 strat.train(history_df)
 
     def get_weighted_signal(self, row, history_df=None):
-        """Calculates the weighted ensemble signal and saves raw strategy decisions.
+        """Calculates the weighted ensemble signal with performance-biased weighting.
         
-        Utilizes an Ornstein-Uhlenbeck (OU) stochastic process parameter estimator
-        to identify whether the current market regime is trending or mean-reverting,
-        dynamically adjusting ensemble voting weights on each tick.
+        1. OU process regime detection (trending vs mean-reverting)
+        2. Base weights from policy network
+        3. Performance boost: strategies with >60% recent accuracy get boosted
+        4. Weighted average of signals
         """
         # Append current close to history
         close = row.get('close')
@@ -324,33 +353,49 @@ class StrategyEnsemble:
         
         signals = np.array(signals)
         
-        # Compute active weights using OU stochastic process parameters
+        # Compute active weights starting from policy network weights
         active_weights = np.array(self.weights)
         
+        # Layer 1: OU Regime Detection (trending vs mean-reverting)
         from quant_utils import estimate_ou_process
         if len(self.price_history) >= 20:
             theta, mu, is_mr = estimate_ou_process(self.price_history)
+            regime_strength = min(abs(theta) * 5.0, 1.5)
             
             if is_mr and theta > 0.05:
-                # Strong Mean-Reversion Regime: Boost mean reversion strategies, suppress trend strategies
+                # Mean-Reversion Regime: boost mean-reversion, suppress trend
                 for i, strat in enumerate(self.strategies):
                     regime = getattr(strat, 'regime', None)
                     if regime == 'mean_reversion':
-                        active_weights[i] *= 1.3
+                        active_weights[i] *= 1.0 + 0.3 * regime_strength
                     elif regime == 'trend':
-                        active_weights[i] *= 0.6
+                        active_weights[i] *= 1.0 - 0.4 * regime_strength
             else:
-                # Strong Trend Regime: Boost trend strategies, suppress mean reversion strategies
+                # Trend Regime: boost trend, suppress mean-reversion
                 for i, strat in enumerate(self.strategies):
                     regime = getattr(strat, 'regime', None)
                     if regime == 'trend':
-                        active_weights[i] *= 1.3
+                        active_weights[i] *= 1.0 + 0.3 * regime_strength
                     elif regime == 'mean_reversion':
-                        active_weights[i] *= 0.6
-                
-            # Normalize active weights
-            active_weights = active_weights / np.sum(active_weights)
-            
+                        active_weights[i] *= 1.0 - 0.4 * regime_strength
+        
+        # Layer 2: Recent Performance Biasing
+        for i, strat in enumerate(self.strategies):
+            perf = self.strategy_performance.get(strat.name, [])
+            if len(perf) >= 10:
+                recent = perf[-20:]
+                win_rate = sum(1 for r in recent if r['correct']) / len(recent)
+                if win_rate > 0.60:
+                    active_weights[i] *= 1.0 + (win_rate - 0.60) * 1.5
+                elif win_rate < 0.35 and len(perf) >= 20:
+                    active_weights[i] *= 1.0 - (0.35 - win_rate) * 2.0
+        
+        # Normalize
+        weight_sum = np.sum(active_weights)
+        if weight_sum > 0:
+            active_weights = active_weights / weight_sum
+        
+        # Weighted signal
         weighted_signal = np.dot(active_weights, signals)
         
         # Strategy breakdown for transparency/logging

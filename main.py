@@ -222,6 +222,10 @@ class NexusTraderOrchestrator:
                 [t for t in self.execution_engine.closed_trades if t['symbol'] == ticker]
             )
             
+        # Feed trade outcome to strategy performance tracker
+        if strategy_signals:
+            ensemble.record_trade_outcome(strategy_signals, direction, pnl_percent)
+        
         # Run backpropagation on neural network weights using PnL as reward
         new_weights = learner.learn_from_trade(
             state,

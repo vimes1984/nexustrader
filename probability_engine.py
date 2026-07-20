@@ -1,10 +1,13 @@
 import numpy as np
 import logging
+from evaluation.position_sizing import compute_safe_fraction, estimate_metrics_from_trades
 
 class ProbabilityEngine:
     def __init__(self, kelly_fraction=0.1, min_win_rate=0.45):
         self.min_win_rate = min_win_rate
         self.set_risk_mode("conservative")
+        # Cache for historical trade metrics (fetched once per risk mode change)
+        self._cached_metrics = None
 
     def set_risk_mode(self, mode):
         self.risk_mode = mode
@@ -150,8 +153,46 @@ class ProbabilityEngine:
                     max_cap = float(row[0])
             except Exception:
                 pass
-                
+        
         final_fraction = min(final_fraction, max_cap)
+        
+        # Layer 2: Drawdown-aware & calibration-aware safe fraction
+        # Uses historical trade metrics to cap position size when underwater
+        try:
+            import database as _db
+            trades = _db.load_trades()
+            if len(trades) >= 5:
+                metrics = estimate_metrics_from_trades(trades)
+                # Get calibration cap from evaluation singletons
+                try:
+                    from evaluation.singletons import kill_switch, drawdown_tracker
+                    calibration_cap = 0.15  # default
+                    if hasattr(kill_switch, 'calibration_brier') and kill_switch.calibration_brier is not None:
+                        brier = kill_switch.calibration_brier
+                        if brier > 0.25:
+                            calibration_cap = 0.02
+                        elif brier > 0.20:
+                            calibration_cap = 0.05
+                        else:
+                            calibration_cap = 0.15
+                    current_dd = drawdown_tracker.current_drawdown if hasattr(drawdown_tracker, 'current_drawdown') else 0.0
+                except Exception:
+                    calibration_cap = 0.15
+                    current_dd = 0.0
+                
+                sizing = compute_safe_fraction(
+                    win_rate=metrics['win_rate'],
+                    avg_win=metrics['avg_win'],
+                    avg_loss=metrics['avg_loss'],
+                    n_trades=metrics['count'],
+                    calibration_cap=calibration_cap,
+                    current_drawdown_pct=current_dd * 100.0,
+                    drawdown_limit_pct=15.0
+                )
+                # Cap position by safe fraction
+                final_fraction = min(final_fraction, sizing['safe_fraction'])
+        except Exception:
+            pass
         
         is_viable = (p_win >= self.min_win_rate) and (ev > 0) and (final_fraction > 0)
         
