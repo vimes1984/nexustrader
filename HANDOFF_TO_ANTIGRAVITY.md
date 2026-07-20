@@ -76,3 +76,36 @@ Key files:
 
 The deploy.sh is the right workflow — use it. It enforces TDD.
 ```
+
+## 2026-07-20 23:42 — NN Expansion Plan v2
+
+### What's new
+
+Full expansion plan written at `NN_EXPANSION_PLAN.md` (495 lines). Covers:
+
+**Phase 4: Transformer Policy Network** (multi-head self-attention)
+- Replaces/supplements LSTM with 4-head attention, 2 encoder layers
+- Same interface as PolicyNetwork — drop-in compatible
+- Attention weights visible for dashboard reasoning
+
+**Phase 5: LLaMA Integration** (3-role LLM)
+- llama.cpp server on Proxmox or 128GB machine
+- Sentiment/macro analysis: analyze headlines → sentiment score
+- Regime detection: classify market → risk mode recommendation
+- Trade explanation: natural language "why did we enter this trade?"
+- Single client module (`llm_client.py`), same bridge pattern
+
+**Phase 6: Historical Training Pipeline**
+- Kraken bulk data fetch (2 years, 1h candles)
+- Simulated trades using real ensemble (not random actions)
+- Epoch-based offline training with train/val/test split
+- Weight hot-swap without bot restart
+- New cron agent: Training Conductor (weekly)
+
+### What Chris needs to do next
+1. Check Proxmox host specs (192.168.0.166:8006 web UI)
+2. Details on the 128GB machine (OS, GPU, LAN bridge feasibility)
+3. Add OpenClaw's SSH key to Proxmox for deployment
+
+### GitHub
+Latest commit: `d00267f` — NN_EXPANSION_PLAN.md
