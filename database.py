@@ -4,6 +4,10 @@ import os
 import logging
 import time
 
+# Safety singletons (lightweight import, no circular deps)
+from evaluation.singletons import mutation_freeze
+from trading_modes import ns as ns_key, MODE_RESEARCH, MODE_LIVE
+
 def get_data_dir():
     home = os.path.expanduser("~")
     data_dir = os.path.join(home, ".nexustrader")
@@ -591,8 +595,41 @@ def load_shadow_trades(limit: int = 100):
         conn.close()
 
 def save_setting(key, value):
-    """Saves system setting (json string or float/int)."""
+    """Saves system setting (json string or float/int).
+
+    If mutation_freeze is active and the caller is an agent,
+    the change is logged as a suggestion and NOT applied.
+    """
     old_value = load_setting(key, "")
+
+    # Check mutation freeze for agent-originated changes
+    if mutation_freeze.frozen and not key.startswith("prompt_"):
+        import inspect
+        import os as _os
+        agent_name = None
+        for frame_info in inspect.stack():
+            filename = _os.path.basename(frame_info.filename)
+            if filename == "self_improvement_agent.py":
+                agent_name = "PhD Quant Agent"
+                break
+            elif filename == "nn_agent.py":
+                agent_name = "NeuralCore Optimizer"
+                break
+            elif filename == "sentiment_agent.py":
+                agent_name = "Sentiment Sentinel"
+                break
+            elif filename == "risk_auditor.py":
+                agent_name = "Risk Auditor"
+                break
+            elif filename == "allocator_agent.py":
+                agent_name = "Ensemble Asset Allocator"
+                break
+        if agent_name and str(old_value) != str(value):
+            mutation_freeze.suggest(agent_name, key, old_value, value,
+                                    reason="Automatic config change blocked by MutationFreeze")
+            logging.info("[MutationFreeze] Blocked {} change to {} = {} (was {})".format(
+                agent_name, key, value, old_value))
+            return  # Don't apply
     
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -600,17 +637,17 @@ def save_setting(key, value):
         cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
         conn.commit()
     except Exception as e:
-        logging.error(f"Error saving setting {key}: {e}")
+        logging.error("Error saving setting {}: {}".format(key, e))
     finally:
         conn.close()
         
     # Log optimization if changed by an agent
     if str(old_value) != str(value) and not key.startswith("prompt_"):
         import inspect
-        import os
+        import os as _os
         agent_name = None
         for frame_info in inspect.stack():
-            filename = os.path.basename(frame_info.filename)
+            filename = _os.path.basename(frame_info.filename)
             if filename == "self_improvement_agent.py":
                 agent_name = "PhD Quant Agent"
                 break
@@ -644,6 +681,34 @@ def load_setting(key, default=None):
     finally:
         conn.close()
     return val
+
+
+# -------------------------------------------------------------
+# Mode-aware wrappers (trading_modes isolation)
+# -------------------------------------------------------------
+
+def save_ns_setting(key, value, mode="paper"):
+    """Save a setting key namespaced by trading mode.
+
+    Does NOT trigger mutation freeze or agent logging (by design —
+    these are explicit integration calls, not agent-driven changes).
+    """
+    ns_key_str = ns_key(key, mode)
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (ns_key_str, str(value)))
+        conn.commit()
+    except Exception as e:
+        logging.error("Error saving namespaced setting {}: {}".format(ns_key_str, e))
+    finally:
+        conn.close()
+
+
+def load_ns_setting(key, mode="paper", default=None):
+    """Load a setting key namespaced by trading mode."""
+    return load_setting(ns_key(key, mode), default)
+
 
 # -------------------------------------------------------------
 # Neural Policy Brains Table Operations

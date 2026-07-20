@@ -530,6 +530,21 @@ function connectWebSocket() {
     };
 }
 
+// Poll safety status periodically
+function pollSafetyStatus() {
+    fetch('/api/safety/status')
+        .then(r => r.json())
+        .then(data => {
+            const badge = document.getElementById('safety-badge');
+            if (!badge) return;
+            const tripped = data.kill_switch && data.kill_switch.tripped;
+            badge.style.display = tripped ? 'inline-flex' : 'none';
+        })
+        .catch(() => {});
+}
+setInterval(pollSafetyStatus, 10000);
+pollSafetyStatus();
+
 // Message Router
 function handleSocketMessage(msg) {
     switch (msg.type) {
@@ -804,8 +819,31 @@ function handleTick(data) {
         return;
     }
     
+    // Track previous price before updating for movement coloring
+    const prevPrice = currentPrice;
     currentPrice = data.price;
-    if (elPrice) elPrice.textContent = `$${currentPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    if (elPrice) {
+        elPrice.textContent = `$${currentPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+        if (prevPrice > 0 && currentPrice !== prevPrice) {
+            const isUp = currentPrice > prevPrice;
+            elPrice.className = isUp ? 'price-up' : 'price-down';
+            elPrice.classList.add('price-flash');
+            setTimeout(() => {
+                elPrice.className = '';
+                elPrice.classList.remove('price-flash');
+            }, 600);
+        }
+    }
+    
+    // Update price change percentage display
+    const elChange = document.getElementById('ticker-change');
+    const firstKnown = tickerLatest[data.ticker]?.price || currentPrice;
+    if (elChange && prevPrice > 0) {
+        const changePct = ((currentPrice - prevPrice) / prevPrice) * 100;
+        const arrow = changePct >= 0 ? '▲' : '▼';
+        elChange.textContent = `${arrow} ${Math.abs(changePct).toFixed(2)}%`;
+        elChange.style.color = changePct >= 0 ? 'var(--neon-green)' : 'var(--neon-red)';
+    }
     
     // Update unrealized calculations
     activePosition = data.position;
@@ -4115,6 +4153,12 @@ function toggleAgentLlmInputs(provider) {
         if (inputUrl && !inputUrl.value) inputUrl.value = "https://api.anthropic.com/v1";
         if (inputModel && !inputModel.value) inputModel.value = "claude-3-5-sonnet-20241022";
         labelKey.textContent = "Anthropic API Secret Key";
+    } else if (provider === "openclaw") {
+        containerUrl.style.display = "flex";
+        containerModel.style.display = "flex";
+        if (inputUrl && !inputUrl.value) inputUrl.value = "http://192.168.0.197:18789/v1";
+        if (inputModel && !inputModel.value) inputModel.value = "google/gemini-3.5-flash";
+        labelKey.textContent = "OpenClaw Password (if authenticated)";
     }
 }
 

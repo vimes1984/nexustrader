@@ -137,6 +137,10 @@
                 </div>
 
                 <div class="status-badge" id="bot-status">
+                <div class="status-badge" id="safety-badge" style="display: none; background: rgba(244, 63, 94, 0.1); border-color: var(--neon-red); color: var(--neon-red);">
+                    <span class="dot"></span>
+                    <span id="safety-text">KillSwitch Active</span>
+                </div>
                     <span class="dot"></span>
                     <span id="status-text">Simulating</span>
                 </div>
@@ -256,11 +260,16 @@
                 <div class="main-left-column">
                     <!-- Live Chart Card -->
                     <article class="glass-panel chart-panel">
-                        <div class="panel-header" style="display: flex; justify-content: space-between; align-items: center; gap: 15px; flex-wrap: wrap; margin-bottom: 16px;">
+                        <div class="panel-header">
                             <h2 class="panel-title" style="margin: 0; display: flex; align-items: center; gap: 8px;">
                                 <i data-lucide="trending-up" style="color: var(--neon-blue)"></i>
                                 Live Trading Market (<span id="chart-ticker-title">-</span>)
                             </h2>
+                            <!-- Price display (missing — re-added) -->
+                            <div id="ticker-price-container" style="display: flex; align-items: baseline; gap: 10px;">
+                                <span id="ticker-price" style="font-size: 28px; font-weight: 700; font-family: monospace; color: var(--text-primary); transition: color 0.3s ease;">$0.00</span>
+                                <span id="ticker-change" style="font-size: 13px; font-weight: 600; font-family: monospace; color: var(--text-muted);">(0.00%)</span>
+                            </div>
                             <div class="ticker-selector" id="ticker-switcher-bar" style="display: flex; gap: 6px; flex-wrap: wrap;">
                                 <!-- Symbols are filled dynamically -->
                             </div>

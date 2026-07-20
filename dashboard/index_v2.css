@@ -66,6 +66,40 @@ body {
     box-shadow: 0 8px 32px 0 rgba(0, 240, 255, 0.05);
 }
 
+/* Price display */
+#ticker-price-container {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+}
+#ticker-price {
+    font-size: 28px;
+    font-weight: 700;
+    font-family: 'Space Grotesk', monospace;
+    color: var(--text-primary);
+    transition: color 0.2s ease;
+    letter-spacing: -0.5px;
+}
+#ticker-price.price-up {
+    color: var(--neon-green);
+}
+#ticker-price.price-down {
+    color: var(--neon-red);
+}
+#ticker-price.price-flash {
+    animation: price-flash 0.4s ease-out;
+}
+@keyframes price-flash {
+    0% { text-shadow: 0 0 8px currentColor; }
+    100% { text-shadow: 0 0 0 transparent; }
+}
+#ticker-change {
+    font-size: 13px;
+    font-weight: 600;
+    font-family: 'Space Grotesk', monospace;
+    transition: color 0.2s ease;
+}
+
 /* App Header */
 header {
     display: flex;
@@ -193,6 +227,34 @@ header {
     height: 480px;
     display: flex;
     flex-direction: column;
+}
+
+.chart-panel .panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+}
+
+.chart-panel .panel-title {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 18px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    white-space: nowrap;
+}
+
+.chart-panel #ticker-price-container {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 0 12px;
+    border-left: 1px solid var(--border-color);
+    border-right: 1px solid var(--border-color);
 }
 
 .panel-header {
