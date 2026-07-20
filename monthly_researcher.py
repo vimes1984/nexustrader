@@ -44,107 +44,55 @@ def run_monthly_researcher():
         for s in strategies_info:
             report_lines.append(f"* **{s['name']}** (Regime: `{s['regime']}`)")
             
-        gemini_api_key = settings.get("blog_gemini_api_key", "").strip()
-        ai_enabled = settings.get("blog_ai_enabled", "false") == "true"
-        
-        if ai_enabled and gemini_api_key:
-            report_lines.append("\n### 🧠 Senior Quant Strategy Researcher Evaluation & Mathematical Recommendations:")
-            
-            db_prompt = settings.get("prompt_monthly_researcher")
-            if not db_prompt:
-                db_prompt = """You are a senior Quantitative Strategy Researcher and PhD Mathematician.
-Our core objective is to research, propose, and refine algorithmic trading strategies to safely and consistently scale NexusTrader earnings to achieve our $1,000 USD/day target.
+        report_lines.append("\n### Monthly Strategy Researcher Evaluation (via OpenClaw Gateway):")
 
-Evaluate the current strategy roster and recent trade metrics. Propose 2-3 new alpha-generating strategies or improvements utilizing advanced mathematical tools (e.g. Ornstein-Uhlenbeck processes, Kalman filters, stochastic calculus, machine learning, fractional Kelly adjustments, cointegration).
+        db_prompt = settings.get("prompt_monthly_researcher")
+        if not db_prompt:
+            db_prompt = "You are a quantitative strategy researcher. Propose 2-3 new alpha-generating strategies or improvements for NexusTrader. Use advanced mathematical tools (OU processes, Kalman filters, fractional Kelly, cointegration). Output valid JSON with keys 'proposed_strategies' and 'parameter_tuning'."
+            c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", ("prompt_monthly_researcher", db_prompt))
+            conn.commit()
 
-At the very end of your response, output recommended strategy parameters and new strategy proposals strictly in a JSON block (wrapped in ```json):
-```json
-{
-  "proposed_strategies": [
-    {
-      "name": "string",
-      "regime": "trend" | "mean_reversion",
-      "mathematical_basis": "string"
-    }
-  ],
-  "parameter_tuning": {
-    "target_asset_kelly_multiplier": float,
-    "volatility_breakout_threshold": float
-  }
-}
-```"""
-                c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", ("prompt_monthly_researcher", db_prompt))
-                conn.commit()
-                
-            prompt = f"""{db_prompt}
+        prompt = db_prompt + "\n\nCurrent Strategy Roster:\n" + json.dumps(strategies_info, indent=2) + "\n\nRecent Trades:\n" + json.dumps(recent_trades, indent=2) + "\n\nTarget: $1,000/day profit."
 
-Current Strategy Roster:
-{json.dumps(strategies_info, indent=2)}
+        from openclaw_bridge import query_openclaw, extract_json_block
 
-Recent Live Trade Performance Analysis:
-{json.dumps(recent_trades, indent=2) if recent_trades else '[]'}
+        try:
+            raw_advice = query_openclaw(prompt, agent_name="quant", max_tokens=4096)
+        except Exception as e_ai:
+            logging.error(f"OpenClaw call failed for MonthlyResearcher: {e_ai}")
+            raise e_ai
 
-Core Target: $1,000 USD average daily profit.
-"""
-            from quant_utils import query_gemini_robust
-            
-            # Audit trail logger wrapper
+        advice_clean = raw_advice
+        json_block = ""
+        if "```json" in raw_advice:
+            parts = raw_advice.split("```json")
+            advice_clean = parts[0]
+            json_block = parts[1].split("```")[0].strip()
+        report_lines.append(advice_clean)
+
+        if json_block:
             try:
-                raw_advice = query_gemini_robust(gemini_api_key, prompt)
-                database.log_agent_run("MonthlyResearcher", "gemini", "gemini-1.5-flash", prompt, raw_advice, "success")
-            except Exception as e_ai:
-                database.log_agent_run("MonthlyResearcher", "gemini", "gemini-1.5-flash", prompt, str(e_ai), "failed")
-                raise e_ai
+                adjustments = json.loads(json_block)
+                tuning = adjustments.get("parameter_tuning", {})
+                for key, val in tuning.items():
+                    c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (f"quant_research_{key}", str(val)))
+                    report_lines.append(f"\nAuto-Applied: quant_research_{key} = {val}")
+            except Exception as e_json:
+                logging.error(f"Failed to parse JSON: {e_json}")
 
-            advice_clean = raw_advice
-            json_block = ""
-            if "```json" in raw_advice:
-                parts = raw_advice.split("```json")
-                advice_clean = parts[0]
-                json_block = parts[1].split("```")[0].strip()
-                
-            report_lines.append(advice_clean)
-            
-            if json_block:
-                try:
-                    adjustments = json.loads(json_block)
-                    # Auto-apply parameters or proposed strategy log updates
-                    tuning = adjustments.get("parameter_tuning", {})
-                    for key, val in tuning.items():
-                        c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (f"quant_research_{key}", str(val)))
-                        report_lines.append(f"\n📊 **Auto-Applied Parameter**: quant_research_{key} adjusted to `{val}`")
-                except Exception as e_json:
-                    logging.error(f"Failed to parse JSON adjustments: {e_json}")
-                    
-            # 6. Perform Meta-Prompt Optimization for Monthly Researcher
-            try:
-                meta_prompt = f"""You are the Monthly Strategy Researcher agent. Part of your meta-cognition routine is to evaluate your own prompt template and optimize it based on:
-1. Your current prompt template.
-2. The recent live trade performance.
-
-Our mission is to scale the bot to earn $1,000 USD a day.
-
-Current Prompt Template:
-\"\"\"{db_prompt}\"\"\"
-
-Critically analyze this context. Redesign your own prompt template to focus it even more tightly on achieving $1,000 USD/day and discovering new alpha models.
-Return ONLY a JSON block containing the key "revised_prompt_monthly_researcher" with your improved prompt template as the value (do not include markdown wrappers like ```json).
-"""
-                raw_text = query_gemini_robust(gemini_api_key, meta_prompt)
-                if raw_text.startswith("```json"):
-                    raw_text = raw_text[7:]
-                if raw_text.endswith("```"):
-                    raw_text = raw_text[:-3]
-                raw_text = raw_text.strip()
-                
-                res_data = json.loads(raw_text)
+        # Meta-prompt optimization via OpenClaw
+        try:
+            meta_prompt = f"Evaluate and rewrite your promoter prompt. Current: {db_prompt}. Return ONLY JSON with key 'revised_prompt_monthly_researcher' (no markdown)."
+            raw_text = query_openclaw(meta_prompt, agent_name="quant", max_tokens=2048)
+            res_data = extract_json_block(raw_text)
+            if res_data and isinstance(res_data, dict):
                 revised = res_data.get("revised_prompt_monthly_researcher")
                 if revised:
                     c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('prompt_monthly_researcher', ?)", (revised,))
-                    report_lines.append(f"\n🧠 **AI Prompt Meta-Optimization**: Successfully evolved Monthly Strategy Researcher prompt template.")
-            except Exception as e_meta:
-                logging.error(f"Failed to meta-optimize prompt_monthly_researcher: {e_meta}")
-                
+                    report_lines.append("\nMeta-Optimization: updated monthly researcher prompt.")
+        except Exception as e_meta:
+            logging.error(f"Failed to meta-optimize: {e_meta}")
+
         conn.commit()
         conn.close()
         

@@ -78,6 +78,7 @@ def query_openclaw(
     max_tokens=2048,
     max_retries=3,
     temperature=0.7,
+    system_prompt=None,
 ):
     """Send a prompt to the OpenClaw Gateway API and return the response text.
 
@@ -88,6 +89,7 @@ def query_openclaw(
         max_tokens: Max response tokens.
         max_retries: Number of retries on failure.
         temperature: Model temperature.
+        system_prompt: Optional system-level instruction prepended as a system message.
 
     Returns:
         Response text string, or error message string on failure.
@@ -100,9 +102,14 @@ def query_openclaw(
         "Authorization": f"Bearer {token}",
     }
 
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": prompt})
+
     payload = {
         "model": model,
-        "messages": [{"role": "user", "content": prompt}],
+        "messages": messages,
         "max_tokens": max_tokens,
         "temperature": temperature,
     }

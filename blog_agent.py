@@ -497,13 +497,13 @@ To optimize execution safety and target higher capital return frequencies, we ar
     return template
 
 def query_gemini_api(api_key, context_prompt):
-    """Queries Gemini 2.0 Flash API to write a witty, professional blog post."""
+    """Queries LLM via OpenClaw Gateway to write a blog post."""
     try:
-        logging.info("Sending request to Gemini API...")
-        from quant_utils import query_gemini_robust
-        return query_gemini_robust(api_key, context_prompt)
+        logging.info("Sending request to OpenClaw Gateway for blog generation...")
+        from openclaw_bridge import query_openclaw
+        return query_openclaw(context_prompt, agent_name="reporter", max_tokens=4096, temperature=0.5)
     except Exception as e:
-        logging.error(f"Error querying Gemini API: {e}")
+        logging.error(f"Error querying OpenClaw Gateway: {e}")
     return None
 
 def write_blog_post(markdown_content, date_str):
@@ -648,16 +648,12 @@ if __name__ == "__main__":
     # Generate baseline template containing all data tables
     base_markdown = generate_report_template(stats, settings, start_date, end_date, op_mode)
     
-    # Check if Gemini API key is available in DB or Environment
-    api_key = settings.get("blog_gemini_api_key", "").strip()
-    if not api_key:
-        api_key = os.environ.get("GEMINI_API_KEY", "").strip()
-        
-    ai_enabled = settings.get("blog_ai_enabled", "false") == "true"
+    # Check if AI blog generation is enabled
+    ai_enabled = settings.get("blog_ai_enabled", "true") == "true"
     
     blog_created = False
     
-    if ai_enabled and api_key:
+    if ai_enabled:
         db_prompt = settings.get("prompt_blog_agent")
         if not db_prompt:
             db_prompt = """You are an expert quantitative researcher, financial blogger, and algorithmic trading editor. 
@@ -682,7 +678,7 @@ Reporting Context:
             blog_created = True
             
             # Run meta-prompt optimization to evolve Blogger prompt
-            optimize_own_prompt(settings, api_key)
+            optimize_own_prompt(settings)
             
     if not blog_created:
         # Fallback to base markdown if API fails, key is missing, or AI is disabled
@@ -694,57 +690,37 @@ Reporting Context:
     if git_push_enabled:
         push_to_github()
 
-def optimize_own_prompt(settings, api_key):
+def optimize_own_prompt(settings):
+    """Meta-cognition: rewrite the Blogger prompt template via OpenClaw."""
     try:
         db_prompt = settings.get("prompt_blog_agent", "")
-        
-        # Read PhD Quant and Developer logs from weekly_self_improvement.md
-        quant_summary = ""
         base_dir = os.path.dirname(os.path.abspath(__file__))
         report_path = os.path.join(base_dir, "blog", "daily_summaries", "weekly_self_improvement.md")
+        quant_summary = ""
         if os.path.exists(report_path):
-            with open(report_path, "r") as f:
+            with open(report_path) as f:
                 quant_summary = f.read()[-4000:]
-                
-        prompt = f"""
-You are the Blogger agent for the NexusTrader self-learning trading bot system. 
-Part of your meta-cognition routine is to evaluate your own prompt template and optimize it based on:
-1. Your current prompt template.
-2. The outputs of the PhD Quant Optimizer agent (which optimizes parameters).
-3. The outputs of the AI Software Developer agent (which builds new features).
-
-Our mission is to make the bot consistently earn $1,000 USD a day.
-
-Current Prompt Template:
-\"\"\"{db_prompt}\"\"\"
-
-Recent Quant & Developer Logs:
-\"\"\"{quant_summary}\"\"\"
-
-Critically analyze this context. Redesign your own prompt template to focus it even more tightly on achieving $1,000 USD/day, ensuring it asks for engaging market commentary and keeps all tables intact.
-Return ONLY a JSON block containing the key "revised_prompt_blog_agent" with your improved prompt template as the value (do not include markdown wrappers like ```json).
-"""
-        from quant_utils import query_gemini_robust
-        raw_text = query_gemini_robust(api_key, prompt)
-        if raw_text.startswith("```json"):
-            raw_text = raw_text[7:]
-        if raw_text.endswith("```"):
-            raw_text = raw_text[:-3]
-        raw_text = raw_text.strip()
-        
-        res_data = json.loads(raw_text)
-        revised = res_data.get("revised_prompt_blog_agent")
-        if revised:
-            # Save setting helper
-            import sqlite3
-            conn = sqlite3.connect(os.path.expanduser("~/.nexustrader/nexustrader.db"))
-            c = conn.cursor()
-            c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", ("prompt_blog_agent", str(revised)))
-            conn.commit()
-            conn.close()
-            print("Meta-optimization: Successfully updated prompt_blog_agent in database settings.")
-            return revised
+        prompt = (
+            f"You are the Blogger agent for NexusTrader. "
+            f"Evaluate and rewrite your own prompt template.\n\n"
+            f"Current Prompt Template:\n{db_prompt}\n\n"
+            f"Recent Logs:\n{quant_summary}\n\n"
+            "Return ONLY JSON with key 'revised_prompt_blog_agent' (no markdown)."
+        )
+        from openclaw_bridge import query_openclaw, extract_json_block
+        raw_text = query_openclaw(prompt, agent_name="reporter", max_tokens=2048)
+        res_data = extract_json_block(raw_text)
+        if res_data and isinstance(res_data, dict):
+            revised = res_data.get("revised_prompt_blog_agent")
+            if revised:
+                import sqlite3
+                conn = sqlite3.connect(os.path.expanduser("~/.nexustrader/nexustrader.db"))
+                c = conn.cursor()
+                c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", ("prompt_blog_agent", str(revised)))
+                conn.commit()
+                conn.close()
+                logging.info("Meta-optimization: updated prompt_blog_agent.")
+                return revised
     except Exception as e:
-        print(f"Failed to meta-optimize prompt_blog_agent: {e}")
+        logging.error(f"Failed to meta-optimize prompt_blog_agent: {e}")
     return None
-
