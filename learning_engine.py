@@ -315,18 +315,30 @@ class PolicyNetwork:
 
 
 class LearningEngine:
-    def __init__(self, num_strategies=12, learning_rate=0.05, weight_floor=0.05, hidden_dim=12, hidden_layers=1, dropout=0.0, optimizer="Adam"):
+    def __init__(self, num_strategies=12, learning_rate=0.05, weight_floor=0.05, hidden_dim=12, hidden_layers=1, dropout=0.0, optimizer="Adam", nn_architecture="mlp"):
         self.num_strategies = num_strategies
         self.weight_floor = weight_floor
-        self.policy_net = PolicyNetwork(
-            state_dim=8, 
-            hidden_dim=hidden_dim, 
-            action_dim=num_strategies, 
-            learning_rate=learning_rate,
-            hidden_layers=hidden_layers,
-            dropout=dropout,
-            optimizer=optimizer
-        )
+        self.nn_architecture = nn_architecture
+        if nn_architecture == "lstm":
+            from sequential_policy_net import SequentialPolicyNetwork
+            self.policy_net = SequentialPolicyNetwork(
+                action_dim=num_strategies,
+                embedding_dim=hidden_dim,
+                hidden_dim=hidden_dim,
+                num_layers=hidden_layers,
+                learning_rate=learning_rate,
+                dropout=dropout,
+            )
+        else:
+            self.policy_net = PolicyNetwork(
+                state_dim=8,
+                hidden_dim=hidden_dim,
+                action_dim=num_strategies,
+                learning_rate=learning_rate,
+                hidden_layers=hidden_layers,
+                dropout=dropout,
+                optimizer=optimizer
+            )
         
     def get_state_vector(self, row, price_history, closed_trades):
         """Constructs a normalized state vector representing current market conditions."""
@@ -370,7 +382,13 @@ class LearningEngine:
         return [is_mr, theta, rsi, macd_norm, bb_pos, atr_ratio, win_trend, sentiment]
 
     def select_weights(self, state):
-        """Queries the Policy Network for optimal strategy weights given current state."""
+        """Queries the Policy Network for optimal strategy weights given current state.
+        
+        For MLP mode: state is an 8-element feature vector.
+        For LSTM mode: state is a (seq_len, max_tokens) token ID array.
+        """
+        if self.nn_architecture == "lstm" and hasattr(self.policy_net, 'select_weights'):
+            return self.policy_net.select_weights(state, weight_floor=self.weight_floor)
         raw_weights = self.policy_net.forward(state)
         
         # Apply weight floor to ensure all strategies keep active search-space exploration

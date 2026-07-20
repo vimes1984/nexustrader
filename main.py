@@ -56,6 +56,7 @@ def create_learning_engine(num_strategies):
     nn_dropout = float(database.load_setting("nn_dropout", "0.0"))
     nn_optimizer = database.load_setting("nn_optimizer", "Adam")
     
+    nn_architecture = database.load_setting("nn_architecture", "mlp")
     return LearningEngine(
         num_strategies=num_strategies,
         learning_rate=nn_lr,
@@ -63,7 +64,8 @@ def create_learning_engine(num_strategies):
         hidden_dim=nn_hidden_dim,
         hidden_layers=nn_hidden_layers,
         dropout=nn_dropout,
-        optimizer=nn_optimizer
+        optimizer=nn_optimizer,
+        nn_architecture=nn_architecture,
     )
 
 # Central orchestrator state supporting multi-asset portfolio operations
