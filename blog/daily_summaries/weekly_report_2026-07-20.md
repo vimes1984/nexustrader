@@ -1,0 +1,119 @@
+# NexusTrader Weekly Performance Report
+**Period:** July 13, 2026 — July 20, 2026  
+**Generated:** July 20, 2026 21:14 UTC  
+**Status:** Live Trading (Kraken) — Conservative Profile
+
+---
+
+## Executive Summary
+
+A rough week for the bot. 10 trades executed across 6 assets, with only 1 winner. All exits were stop-loss triggered, indicating the market moved against every position taken. The system remains within drawdown limits and has not breached safety thresholds.
+
+| Metric | Value |
+|--------|-------|
+| **Starting Balance** | ~$91.08 |
+| **Current Balance** | $90.84 |
+| **Net Weekly PnL** | **-$0.24** |
+| **Weekly Return** | **-0.26%** |
+| **Trades Executed** | 10 |
+| **Win Rate** | **10.0%** (1W / 9L) |
+| **Best Trade** | #687 DOT-USD BUY +$0.007 (+0.15%) |
+| **Worst Trade** | #689 DOT-USD BUY -$0.044 (-0.93%) |
+| **Biggest Loss (%)** | #688 ETH-USD SELL -1.71% |
+| **Open Positions** | 0 |
+| **Max Drawdown** | 0.11% (well below 5% limit) |
+
+---
+
+## Trade Log
+
+All times UTC. Every trade exited via Stop Loss.
+
+| # | Symbol | Dir | Entry | Exit | PnL | Return | Date/Time |
+|---|--------|-----|-------|------|-----|--------|-----------|
+| 682 | DOGE-USD | BUY | 0.07220 | 0.07201 | -$0.013 | -0.36% | Jul 19 18:04 |
+| 683 | ADA-USD | BUY | 0.16455 | 0.16389 | -$0.016 | -0.50% | Jul 19 18:08 |
+| 684 | ETH-USD | SELL | 1868.46 | 1883.16 | -$0.017 | -0.89% | Jul 20 00:11 |
+| 685 | ADA-USD | SELL | 0.16526 | 0.16715 | -$0.041 | -1.24% | Jul 20 01:10 |
+| 686 | DOGE-USD | SELL | 0.09856 | 0.09926 | -$0.040 | -0.81% | Jul 20 01:22 |
+| 687 | DOT-USD | BUY | 1.19800 | 1.20100 | +$0.007 | +0.15% | Jul 20 01:23 |
+| 688 | ETH-USD | SELL | 1996.36 | 2028.40 | -$0.034 | -1.71% | Jul 20 01:23 |
+| 689 | DOT-USD | BUY | 1.20100 | 1.19100 | -$0.044 | -0.93% | Jul 20 01:23 |
+| 690 | BTC-USD | SELL | 73835.14 | 73786.12 | -$0.001 | -0.03% | Jul 20 01:24 |
+| 691 | LINK-USD | BUY | 8.94500 | 8.87800 | -$0.042 | -0.85% | Jul 20 01:37 |
+
+**Observation:** Every single trade exited via stop loss — including the one winner that still managed +$0.007. 8 of 10 trades clustered within a ~90-minute window early on July 20. This suggests the bot was triggered by a volatile period and got whipsawed.
+
+---
+
+## Asset PnL Breakdown
+
+| Asset | Trades | Win Rate | Net PnL |
+|-------|--------|----------|---------|
+| ADA-USD | 2 | 0% | -$0.058 |
+| BTC-USD | 1 | 0% | -$0.001 |
+| DOGE-USD | 2 | 0% | -$0.053 |
+| DOT-USD | 2 | **50%** | -$0.037 |
+| ETH-USD | 2 | 0% | -$0.051 |
+| LINK-USD | 1 | 0% | -$0.042 |
+
+DOT-USD was the only asset with a positive trade. The bot tried both directions on ADA, DOGE, and DOT within minutes — classic whipsaw behavior in choppy conditions.
+
+---
+
+## Strategy Allocation (Neural Policy Network)
+
+Latest weights across 12 active strategies:
+
+| Strategy | Weight | Bar |
+|----------|--------|-----|
+| Stochastic Reversion | 12.4% | XXXXXXXXXXXX |
+| BB Breakout | 11.5% | XXXXXXXXXXX |
+| News Sentiment | 9.3% | XXXXXXXXX |
+| ML Random Forest | 9.1% | XXXXXXXX |
+| Mean Reversion Z-Score | 8.8% | XXXXXXXX |
+| MACD Histogram Crossover | 8.8% | XXXXXXXX |
+| ATR Breakout | 8.5% | XXXXXXXX |
+| Psych Liquidity Sweep | 7.6% | XXXXXXX |
+| VWAP Crossover | 7.4% | XXXXXXX |
+| RSI Reversion | 5.7% | XXXXX |
+| Kalman Filter Trend | 5.6% | XXXXX |
+| EMA Crossover | 5.2% | XXXXX |
+
+**Trending strategies (EMA, Kalman) are the lowest weighted** — the network has correctly identified mean-reversion / choppy conditions and allocated accordingly. Stochastic Reversion at the top is consistent with range-bound market behavior.
+
+---
+
+## Risk & System Health
+
+| Metric | Value | Status |
+|--------|-------|--------|
+| System Health | Good | OK |
+| Current Drawdown | 0.11% | OK (limit: 5%) |
+| Drawdown Limit | 5.0% | Safe |
+| Uptime | ~60 seconds | Reboot noted |
+| Open Risk | None | OK |
+| Equity | $199.25 | See note |
+| Balance | $90.84 | Base capital |
+
+**Note on Balance vs. Equity:** Equity ($199) is more than double balance ($91) with no open positions. This may indicate unsettled margin, a display artifact, or stale position data. Worth investigating during the week.
+
+---
+
+## Recommendations
+
+1. **Review stop-loss logic.** 10/10 trades hitting stops is abnormal. Consider ATR-based dynamic stops or widening by 1.5-2x to reduce noise-triggered exits.
+
+2. **Add entry confirmation filter.** Several trades entered and stopped out within seconds. A 1-2 candle confirmation delay could filter false signals.
+
+3. **Check equity/balance discrepancy.** $199 vs $91 with 0 positions open doesn't add up. Check if the API endpoint is reporting correctly.
+
+4. **Focus on DOT-USD.** It's the only asset where the bot showed any win rate. Consider increasing DOT allocation or aligning other assets to DOT's parameter profile.
+
+5. **Verify daemon stability.** The bot reported only 60s uptime. Check if it's restarting unexpectedly and investigate logs for crashes.
+
+---
+
+*Report generated by NexusTrader Weekly Reporter*  
+*Data: trades + API status as of 2026-07-20 21:14 UTC*  
+*Next report: July 27, 2026*

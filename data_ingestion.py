@@ -1,3 +1,4 @@
+import traceback
 import pandas as pd
 import numpy as np
 import yfinance as yf
@@ -341,7 +342,7 @@ class DataIngestion:
                         callback(updated_row)
                         
             except Exception as e:
-                logging.error(f"Error in live polling loop: {e}")
+                logging.error(f"Error in live polling loop: {e}\n{traceback.format_exc()}")
             time.sleep(interval)
 
     def stop_stream(self):

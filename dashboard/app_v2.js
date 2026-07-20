@@ -426,78 +426,10 @@ const elRiskSelect = document.getElementById("risk-mode-select");
 
 // Initialize Chart
 function initChart() {
-    const ctx = document.getElementById('main-chart').getContext('2d');
-    chart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: chartLabels,
-            datasets: [
-                {
-                    label: 'Close Price',
-                    data: priceData,
-                    borderColor: '#00f0ff',
-                    borderWidth: 2,
-                    tension: 0.15,
-                    pointRadius: 0,
-                    fill: false
-                },
-                {
-                    label: 'BB Upper',
-                    data: bbUpperData,
-                    borderColor: 'rgba(168, 85, 247, 0.3)',
-                    borderWidth: 1,
-                    borderDash: [5, 5],
-                    pointRadius: 0,
-                    fill: false
-                },
-                {
-                    label: 'BB Lower',
-                    data: bbLowerData,
-                    borderColor: 'rgba(168, 85, 247, 0.3)',
-                    borderWidth: 1,
-                    borderDash: [5, 5],
-                    pointRadius: 0,
-                    fill: false
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    display: true,
-                    position: 'top',
-                    labels: {
-                        color: '#94a3b8',
-                        font: {
-                            family: 'Space Grotesk',
-                            size: 11
-                        }
-                    }
-                }
-            },
-            scales: {
-                x: {
-                    grid: {
-                        color: 'rgba(255, 255, 255, 0.03)'
-                    },
-                    ticks: {
-                        color: '#64748b',
-                        maxTicksLimit: 6
-                    }
-                },
-                y: {
-                    grid: {
-                        color: 'rgba(255, 255, 255, 0.03)'
-                    },
-                    ticks: {
-                        color: '#64748b'
-                    }
-                }
-            }
-        }
-    });
+    // Chart.js line chart removed - LightweightCharts in enhancer.js handles charting
+    var canvas = document.getElementById("main-chart");
+    if (!canvas) return;
+    return;
 }
 
 // Connect WebSocket
@@ -520,7 +452,7 @@ function connectWebSocket() {
 
     socket.onclose = () => {
         console.log("WebSocket disconnected. Retrying in 3s...");
-        document.getElementById("status-text").textContent = "Disconnected";
+        if (typeof globalTradingMode === "undefined" || globalTradingMode !== "live") document.getElementById("status-text").textContent = "Disconnected";
         document.getElementById("bot-status").classList.add("stopped");
         setTimeout(connectWebSocket, 3000);
     };
@@ -686,7 +618,7 @@ function handleInitState(data) {
         globalBrokerName = data.broker || "kraken";
         updateStatusBadge();
 
-        currentWeights = data.weights;
+        currentWeights = data.weights || {};
         renderWeights(currentWeights);
         renderTradeLog(data.trades);
         updatePerformanceKPIs(data.trades, equity);
@@ -1242,6 +1174,7 @@ function handleLearningUpdate(data) {
 
 // UI Render Helpers
 function renderWeights(weights) {
+    if (!weights) return;
     elWeightsContainer.innerHTML = "";
     Object.keys(weights).forEach(name => {
         const wt = weights[name];
@@ -1336,37 +1269,35 @@ function updateEvaluationWidget(eval, signal) {
 function renderTradeLog(trades) {
     completedTrades = trades || [];
     if (!trades || trades.length === 0) {
-        elTradeLogBody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-muted); padding: 40px;">No trades completed yet. Watching the market for opportunities...</td></tr>`;
+        elTradeLogBody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: var(--text-muted); padding: 40px;">No trades completed yet. Watching the market for opportunities...</td></tr>`;
         return;
     }
     
     elTradeLogBody.innerHTML = "";
     
-    // Render in reverse chronological order (newest first)
-    [...trades].reverse().forEach(t => {
-        const timeStr = new Date(t.exit_time * 1000).toLocaleTimeString();
-        const pnlColor = t.pnl >= 0 ? "color-green" : "color-red";
-        const sign = t.pnl >= 0 ? "+" : "";
-        const outcomeBadge = t.pnl >= 0 ? "PROFIT" : "LOSS";
-        const outcomeColor = t.pnl >= 0 ? "rgba(16, 185, 129, 0.15)" : "rgba(244, 63, 94, 0.15)";
+    // Sort by exit_time descending (newest first)
+    [...trades].sort(function(a, b) { return b.exit_time - a.exit_time; }).forEach(function(t) {
+        var dt = new Date(t.exit_time * 1000);
+        var dateStr = dt.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+        var timeStr = dt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        var pnlColor = t.pnl >= 0 ? "color-green" : "color-red";
+        var sign = t.pnl >= 0 ? "+" : "";
+        var outcomeColor = t.pnl >= 0 ? "rgba(16, 185, 129, 0.15)" : "rgba(244, 63, 94, 0.15)";
         
-        // Sum the weights of strategies that had a matching signal at entry
-        // (Visual reference to show which strategies contributed to trade success)
-        
-        const row = document.createElement("tr");
+        var row = document.createElement("tr");
         row.style.cursor = "pointer";
-        row.innerHTML = `
-            <td>${timeStr}</td>
-            <td>${t.symbol}</td>
-            <td style="color: ${t.direction === 'BUY' ? 'var(--neon-green)' : 'var(--neon-red)'}; font-weight:600;">${t.direction}</td>
-            <td>${t.quantity.toFixed(4)}</td>
-            <td>$${t.entry_price.toFixed(2)}</td>
-            <td>$${t.exit_price.toFixed(2)}</td>
-            <td>72%</td> <!-- Estimated base -->
-            <td class="${pnlColor}" style="font-weight:600;">${sign}$${t.pnl.toFixed(2)} (${(t.pnl_percent*100).toFixed(2)}%)</td>
-            <td><span style="background: ${outcomeColor}; color: ${t.pnl >= 0 ? 'var(--neon-green)' : 'var(--neon-red)'}; padding: 4px 8px; border-radius: 4px; font-size:11px; font-weight:600;">${t.exit_reason.toUpperCase()}</span></td>
-        `;
-        row.addEventListener("click", () => {
+        row.innerHTML = [
+            '<td>', dateStr, '</td>',
+            '<td>', timeStr, '</td>',
+            '<td>', t.symbol, '</td>',
+            '<td style="color: ', t.direction === "BUY" ? "var(--neon-green)" : "var(--neon-red)", '; font-weight:600;">', t.direction, '</td>',
+            '<td>', t.quantity.toFixed(4), '</td>',
+            '<td>$', t.entry_price.toFixed(2), '</td>',
+            '<td>$', t.exit_price.toFixed(2), '</td>',
+            '<td class="', pnlColor, '" style="font-weight:600;">', sign, '$', t.pnl.toFixed(2), ' (', (t.pnl_percent*100).toFixed(2), '%)</td>',
+            '<td><span style="background: ', outcomeColor, '; color: ', t.pnl >= 0 ? "var(--neon-green)" : "var(--neon-red)", '; padding: 4px 8px; border-radius: 4px; font-size:11px; font-weight:600;">', (t.exit_reason || "UNKNOWN").toUpperCase(), '</span></td>',
+        ].join("");
+        row.addEventListener("click", function() {
             openTradeDetailsModal(t);
         });
         elTradeLogBody.appendChild(row);
@@ -1374,13 +1305,21 @@ function renderTradeLog(trades) {
 }
 
 function renderTradeClosedState(closedTrade) {
-    // Re-fetch all trades and update statistics
-    fetch(`/api/trades?t=${Date.now()}`)
-        .then(res => res.json())
-        .then(trades => {
-            renderTradeLog(trades);
-            updatePerformanceKPIs(trades, equity);
+    // Use WS-provided trade data directly (avoids slow /api/trades Kraken call)
+    if (closedTrade) {
+        // Deduplicate: check if trade already exists by id or symbol+entry_time
+        var alreadyExists = completedTrades.some(function(t) {
+            return (closedTrade.id && t.id === closedTrade.id) ||
+                   (t.symbol === closedTrade.symbol && t.entry_time === closedTrade.entry_time);
         });
+        if (!alreadyExists) {
+            completedTrades.unshift(closedTrade);
+        } else {
+            console.log("[TRADE] Skipping duplicate WS trade:", closedTrade.symbol, closedTrade.id);
+        }
+        renderTradeLog(completedTrades);
+        updatePerformanceKPIs(completedTrades, equity);
+    }
 }
 
 function updatePerformanceKPIs(trades, currentEquity) {
@@ -2463,7 +2402,7 @@ function loadWeightsHistory(ticker) {
 }
 
 // App Startup
-initChart();
+try { initChart(); } catch(e) { console.warn("Chart init error:", e.message); }
 initWeightsHistoryChart();
 connectWebSocket();
 loadBlogConfig();
@@ -4175,7 +4114,7 @@ function toggleAgentLlmInputs(provider) {
         containerUrl.style.display = "flex";
         containerModel.style.display = "flex";
         if (inputUrl && !inputUrl.value) inputUrl.value = "http://192.168.0.197:18789/v1";
-        if (inputModel && !inputModel.value) inputModel.value = "google/gemini-3.5-flash";
+        if (inputModel && !inputModel.value) inputModel.value = "openclaw";
         labelKey.textContent = "OpenClaw Password (if authenticated)";
     }
 }
@@ -4612,3 +4551,8 @@ if (agentTab) {
 // Also check on page load if agent tab is active
 setTimeout(checkGatewayStatus, 2000);
 
+
+// Export for enhancer.js
+window.handleInitState = handleInitState;
+window.handleSocketMessage = handleSocketMessage;
+window.renderTradeLog = renderTradeLog;

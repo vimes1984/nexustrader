@@ -30,7 +30,7 @@ def estimate_metrics_from_trades(trades: List[dict]) -> dict:
     if not trades:
         return {"win_rate": 0.5, "avg_win": 0.0, "avg_loss": 0.0, "count": 0}
 
-    pnls = [t.get('pnl_percent', t.get('pnl', 0.0)) or 0.0 for t in trades]
+    pnls = [abs(t.get('pnl_percent', t.get('pnl', 0.0))) for t in trades]
     wins = [p for p in pnls if p > 0]
     losses = [p for p in pnls if p < 0]
 
@@ -101,11 +101,6 @@ def compute_safe_fraction(
             "safe_fraction": 0.02,  # 2% default when cold-starting
             "signal": "cold_start_default"
         }
-    
-    # Minimum safe fraction when we have data but it's poor (prevent death spiral)
-    # If win rate is very low, still allow tiny positions to regain confidence
-    min_safe_fraction = 0.005
-    max_allocation = 0.15  # Hard cap: max 15% of portfolio per trade  # 0.5% minimum risk even with bad stats
 
     # Apply half-kelly for safety
     half_kelly = kelly_raw * HALF_KELLY
@@ -126,7 +121,6 @@ def compute_safe_fraction(
 
     # Hard cap
     safe_fraction = min(safe_fraction, ABSOLUTE_MAX_FRACTION)
-    safe_fraction = max(safe_fraction, min_safe_fraction)
 
     # Determine signal
     if safe_fraction <= 0:
@@ -146,7 +140,6 @@ def compute_safe_fraction(
         "drawdown_penalty": round(drawdown_penalty, 4),
         "calibration_cap": round(calibration_cap, 4),
         "safe_fraction": round(safe_fraction, 4),
-        'max_allocation': max_allocation,
         "signal": signal
     }
 

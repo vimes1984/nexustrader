@@ -15,7 +15,7 @@ import urllib.error
 logger = logging.getLogger(__name__)
 
 # Default OpenClaw Gateway endpoint (LAN). Override via DB setting 'openclaw_gateway_url'.
-DEFAULT_GATEWAY_URL = "http://192.168.0.197:18789/api/chat/completions"
+DEFAULT_GATEWAY_URL = "http://192.168.0.197:18789/v1/chat/completions"
 DEFAULT_GATEWAY_TOKEN = "c49d2de941b0ec6a93e2fd89bf293ee8cd9f8e805cdda2d6"
 
 # Agent name -> display string (mirrors agent_map in quant_utils.py)
@@ -74,7 +74,7 @@ def get_gateway_config():
 def query_openclaw(
     prompt,
     agent_name="default",
-    model="deepseek/deepseek-v4-flash",
+    model="openclaw",
     max_tokens=2048,
     max_retries=3,
     temperature=0.7,

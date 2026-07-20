@@ -181,7 +181,7 @@ class LongTermStrategyLayer:
         # Index 4 in strategies is KalmanTrendStrategy
         kalman_trend_val = 0.0
         try:
-            kalman_trend_val = ensemble.strategies[4].generate_signal(row, history_df)
+            kalman_trend_val = ensemble.strategies[2].generate_signal(row, history_df)
         except Exception:
             pass
 
