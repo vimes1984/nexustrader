@@ -30,6 +30,8 @@ from long_term_strategy import LongTermStrategyLayer
 import database
 from evaluation.singletons import kill_switch, drawdown_tracker, mutation_freeze
 from trading_modes import migrate_existing_settings as migrate_settings
+from replay_buffer import PrioritizedExperienceReplay
+from ppo_agent import PPOAgent
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -89,6 +91,15 @@ class NexusTraderOrchestrator:
         
         # Setup learning callback connection
         self.execution_engine.set_learning_callback(self.on_trade_closed)
+        
+        # PPO + replay buffer support
+        self.replay_buffers = {}
+        self.ppo_agents = {}
+        self.replay_capacity = int(database.load_setting("replay_capacity", "5000"))
+        self.ppo_update_interval = int(database.load_setting("ppo_update_interval", "5"))
+        self.ppo_batch_size = int(database.load_setting("ppo_batch_size", "64"))
+        self.ppo_epochs = int(database.load_setting("ppo_epochs", "4"))
+        self.ppo_minibatch_size = int(database.load_setting("ppo_minibatch_size", "32"))
 
     def init_ticker(self, ticker):
         """Dynamically initializes data streams, strategy ensemble, and neural weights for a new ticker."""
@@ -137,12 +148,30 @@ class NexusTraderOrchestrator:
                 # Point 2: Loaded weights now
                 start_weights = {
                     ensemble.strategies[i].name: float(ensemble.weights[i])
-                    for i in range(len(ensemble.weights))
+                    for i in range(min(len(ensemble.weights), len(ensemble.strategies)))
                 }
                 database.save_weights_history(time.time(), ticker, start_weights)
         except Exception as e:
             logging.error(f"Error pre-populating weights history: {e}")
             
+        # Create PPO agent wrapping the existing PolicyNetwork
+        ppo_agent = PPOAgent(learner.policy_net)
+        self.ppo_agents[ticker] = ppo_agent
+        
+        # Create or restore replay buffer
+        buf_blob = database.load_setting(f"replay_buffer_{ticker}")
+        if buf_blob:
+            try:
+                import base64
+                raw = base64.b64decode(buf_blob)
+                self.replay_buffers[ticker] = PrioritizedExperienceReplay.deserialize(raw)
+                logging.info(f"Restored replay buffer for {ticker} ({len(self.replay_buffers[ticker])} experiences)")
+            except Exception as e:
+                logging.error(f"Failed to restore replay buffer for {ticker}: {e}")
+                self.replay_buffers[ticker] = PrioritizedExperienceReplay(capacity=self.replay_capacity)
+        else:
+            self.replay_buffers[ticker] = PrioritizedExperienceReplay(capacity=self.replay_capacity)
+        
         self.data_ingestions[ticker] = ingestor
         self.strategy_ensembles[ticker] = ensemble
         self.learning_engines[ticker] = learner
@@ -278,7 +307,69 @@ class NexusTraderOrchestrator:
             ensemble.strategies[i].name: float(new_weights[i])
             for i in range(len(new_weights))
         }
-        database.save_weights_history(time.time(), ticker, weights_dict)
+        active_brain_wh = database.load_setting(f"active_policy_brain_{ticker}", "Default Brain")
+        database.save_weights_history(time.time(), ticker, weights_dict, brain_name=active_brain_wh)
+        
+        # ------------------------------------------------------------
+        # PPO + replay buffer integration
+        # ------------------------------------------------------------
+        replay = self.replay_buffers.get(ticker)
+        ppo = self.ppo_agents.get(ticker)
+        if replay is not None and ppo is not None:
+            # Construct next_state from current tick data
+            latest_tick = self.latest_ticks.get(ticker, {})
+            next_state = learner.get_state_vector(
+                latest_tick or {},
+                ensemble.price_history,
+                [t for t in self.execution_engine.closed_trades if t['symbol'] == ticker]
+            )
+            
+            # The action is the strategy signal ensemble that was used
+            action_vec = strategy_signals if strategy_signals else [0.0] * len(ensemble.strategies)
+            # Use weighted sum of signals as scalar action for replay
+            action_scalar = sum(action_vec) / (len(action_vec) + 1e-9)
+            
+            # Push experience with TD-error = |PnL| as initial priority
+            replay.add(state, action_scalar, pnl_percent, next_state, done=True, error=abs(pnl_percent))
+            
+            # Periodically sample and perform PPO update
+            if len(replay) >= self.ppo_batch_size and (
+                steps % self.ppo_update_interval == 0
+            ):
+                try:
+                    info = ppo.train_on_buffer(
+                        replay,
+                        batch_size=self.ppo_batch_size,
+                        ppo_epochs=self.ppo_epochs,
+                        minibatch_size=self.ppo_minibatch_size,
+                    )
+                    if info is not None:
+                        logging.info(
+                            "[PPO %s] actor_loss=%.4f entropy=%.4f kl=%.5f clip=%.2f%%",
+                            ticker,
+                            info.get('actor_loss', 0),
+                            info.get('entropy', 0),
+                            info.get('approx_kl', 0),
+                            info.get('clip_frac', 0) * 100,
+                        )
+                        
+                        # Persist updated PPO weights periodically
+                        if steps % (self.ppo_update_interval * 10) == 0:
+                            ppo_json = ppo.to_json()
+                            database.save_setting(f"ppo_agent_{ticker}", ppo_json)
+                            logging.info(f"Persisted PPO agent state for {ticker}")
+                except Exception as e:
+                    logging.error(f"[PPO TRAIN ERROR] {ticker}: {e}")
+            
+            # Persist replay buffer to DB every 25 trades
+            if steps % 25 == 0:
+                try:
+                    import base64
+                    blob = replay.serialize()
+                    b64_str = base64.b64encode(blob).decode('ascii')
+                    database.save_setting(f"replay_buffer_{ticker}", b64_str)
+                except Exception as e:
+                    logging.error(f"Failed to persist replay buffer for {ticker}: {e}")
         
         # Push update to WebSocket clients immediately
         self._run_async(self.broadcast_message({
@@ -741,6 +832,49 @@ async def shutdown_event():
 
 
 
+
+@app.get("/api/trading/reasoning")
+def get_trading_reasoning():
+    items = []
+    status = "active"
+    try:
+        ee = orchestrator.execution_engine
+        signals = getattr(orchestrator, "latest_signals", {}) or {}
+        tickers = getattr(orchestrator, "tickers", []) or []
+        prices = {}
+        stale = []
+        now = time.time()
+        for t in tickers:
+            ing = getattr(orchestrator, "data_ingestions", {}).get(t)
+            prices[t] = (getattr(ing, "live_price", 0.0) if ing else 0.0) or 0.0
+            ts = float((signals.get(t, {}) or {}).get("timestamp", 0) or 0)
+            if ts and now - ts > 600:
+                stale.append(t)
+        equity = ee.get_equity(prices)
+        balance = float(getattr(ee, "balance", 0.0) or 0.0)
+        open_pos = getattr(ee, "active_positions", {}) or {}
+        trades = database.load_trades()
+        wins = sum(1 for tr in trades if float(tr.get("pnl", 0) or 0) > 0)
+        losses = sum(1 for tr in trades if float(tr.get("pnl", 0) or 0) < 0)
+        wr = (wins / (wins + losses) * 100.0) if wins + losses else 0.0
+        bullish = sum(1 for x in signals.values() if x.get("direction") == "BULLISH")
+        bearish = sum(1 for x in signals.values() if x.get("direction") == "BEARISH")
+        neutral = max(0, len(signals) - bullish - bearish)
+        risk_mode = getattr(orchestrator.probability_engine, "risk_mode", "unknown")
+        items.append({"id":"mode", "severity":"info", "title":"Mode", "detail":f"Trading mode: {ee.trading_mode}. Risk mode: {risk_mode}."})
+        items.append({"id":"capital", "severity":"info", "title":"Capital", "detail":f"Cash ${balance:.2f}, equity ${equity:.2f}, open positions {len(open_pos)}."})
+        items.append({"id":"signals", "severity":"success" if signals else "warning", "title":"Live signals", "detail":f"{len(signals)}/{len(tickers)} tickers reporting. Bullish {bullish}, bearish {bearish}, neutral {neutral}."})
+        items.append({"id":"performance", "severity":"warning" if wr < 35 and wins + losses >= 5 else "info", "title":"Closed trade performance", "detail":f"DB has {len(trades)} closed trades: {wins}W/{losses}L, win rate {wr:.1f}%."})
+        if stale:
+            status = "idle"
+            items.append({"id":"stale", "severity":"warning", "title":"Stale signal data", "detail":"No fresh signal update for: " + ", ".join(stale[:8])})
+        if "SUI-USD" in tickers:
+            items.append({"id":"sui", "severity":"warning", "title":"SUI-USD data risk", "detail":"SUI-USD has had yfinance/delisting-style failures. Disable if live prices stay missing."})
+    except Exception as e:
+        status = "error"
+        items.append({"id":"reasoning-error", "severity":"error", "title":"Reasoning failed", "detail":str(e)})
+    return {"status": status, "items": items, "timestamp": time.time()}
+
 @app.get("/api/init")
 async def api_init_state(request: Request):
     """Dashboard init - mirrors /api/status + trades + brains."""
@@ -850,7 +984,7 @@ async def api_trades_all():
     """All completed trades."""
     import database as _db
     try:
-        trades = _db.get_trades(limit=100)
+        trades = _db.load_trades()
         return {"trades": trades}
     except Exception as e:
         return {"trades": [], "error": str(e)}
@@ -1348,7 +1482,7 @@ def get_weights(ticker: str = "ETH-USD"):
     return {
         "weights": {
             ensemble.strategies[i].name: float(ensemble.weights[i])
-            for i in range(len(ensemble.weights))
+            for i in range(min(len(ensemble.weights), len(ensemble.strategies)))
         },
         "lifetime_steps": steps,
         "model_dna": model_dna
@@ -2016,7 +2150,7 @@ def activate_neural_brain(name: str, ticker: str, is_manual: bool = False):
                     "ticker": ticker,
                     "weights": {
                         ensemble.strategies[i].name: float(ensemble.weights[i])
-                        for i in range(len(ensemble.weights))
+                        for i in range(min(len(ensemble.weights), len(ensemble.strategies)))
                     },
                     "pnl": 0.0,
                     "lifetime_steps": int(database.load_setting(f"lifetime_training_steps_{ticker}", "0")),
@@ -3202,7 +3336,7 @@ async def websocket_endpoint(websocket: WebSocket):
             "broker": orchestrator.execution_engine.config.get("broker", "kraken"),
             "weights": {
                 ensemble.strategies[i].name: float(ensemble.weights[i])
-                for i in range(len(ensemble.weights))
+                for i in range(min(len(ensemble.weights), len(ensemble.strategies)))
             } if ensemble else {},
             "risk_mode": orchestrator.probability_engine.risk_mode,
             "strategies": [s.name for s in ensemble.strategies] if ensemble else [],
