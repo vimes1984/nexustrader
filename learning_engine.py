@@ -174,6 +174,26 @@ class PolicyNetwork:
             self.hidden_layers = 1
             self.dropout = 0.0
             self.optimizer = "Adam"
+
+        # Migrate old state_dim=7 weights to new state_dim=8
+        if self.W[0].shape[0] == 7:
+            logging.info("[WEIGHT MIGRATION] Expanding state_dim 7→8 (adding sentiment input)")
+            new_w0 = np.random.randn(8, self.W[0].shape[1]) * np.sqrt(2.0 / 8)
+            new_w0[:7, :] = self.W[0]
+            self.W[0] = new_w0
+            new_b0 = self.b[0]
+            self.b[0] = new_b0
+
+        # Migrate old action_dim=7 weights to new action_dim=12
+        if self.W[-1].shape[1] == 7:
+            logging.info("[WEIGHT MIGRATION] Expanding action_dim 7→12 (adding 5 new strategies)")
+            hidden_dim = self.W[-1].shape[0]
+            new_w_out = np.random.randn(hidden_dim, 12) * np.sqrt(2.0 / hidden_dim)
+            new_w_out[:, :7] = self.W[-1]
+            self.W[-1] = new_w_out
+            new_b_out = np.zeros((1, 12))
+            new_b_out[:, :7] = self.b[-1]
+            self.b[-1] = new_b_out
             
         self.m_W = [np.zeros_like(w) for w in self.W]
         self.m_b = [np.zeros_like(b) for b in self.b]
@@ -215,7 +235,7 @@ class PolicyNetwork:
 
 
 class LearningEngine:
-    def __init__(self, num_strategies=7, learning_rate=0.05, weight_floor=0.05, hidden_dim=12, hidden_layers=1, dropout=0.0, optimizer="Adam"):
+    def __init__(self, num_strategies=12, learning_rate=0.05, weight_floor=0.05, hidden_dim=12, hidden_layers=1, dropout=0.0, optimizer="Adam"):
         self.num_strategies = num_strategies
         self.weight_floor = weight_floor
         self.policy_net = PolicyNetwork(
@@ -282,6 +302,12 @@ class LearningEngine:
         return raw_weights.tolist()
 
     def learn_from_trade(self, state, strategy_signals, trade_direction, pnl_percent):
+        # Ensure strategy_signals matches action_dim; pad/trim if needed
+        target_len = self.policy_net.action_dim
+        if len(strategy_signals) > target_len:
+            strategy_signals = strategy_signals[:target_len]
+        elif len(strategy_signals) < target_len:
+            strategy_signals = list(strategy_signals) + [0.0] * (target_len - len(strategy_signals))
         """Performs backward propagation on the Policy Network using the trade PnL as reward."""
         # Ensure forward activations are cached for this state before backpropagation
         self.policy_net.forward(state)

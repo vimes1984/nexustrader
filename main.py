@@ -4,7 +4,7 @@ import asyncio
 import sqlite3
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel
 import uvicorn
 import numpy as np
@@ -2736,6 +2736,14 @@ def get_manifest():
         "Expires": "0"
     }
     return FileResponse(get_resource_path("dashboard/manifest.json"), media_type="application/json", headers=headers)
+
+@app.get("/dashboard")
+async def redirect_dashboard():
+    return RedirectResponse(url="/")
+
+@app.get("/dashboard/")
+async def redirect_dashboard_trailing():
+    return RedirectResponse(url="/")
 
 app.mount("/dashboard", StaticFiles(directory=get_resource_path("dashboard")), name="dashboard")
 
