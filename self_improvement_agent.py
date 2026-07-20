@@ -226,16 +226,14 @@ def run_self_improvement():
         conn.close()
         
         # 5. AI PhD Quant & Mathematician Critical Analysis
-        gemini_api_key = settings.get("blog_gemini_api_key", "").strip()
-        ai_enabled = settings.get("blog_ai_enabled", "false") == "true"
+        # NOTE: LLM calls now route through openclaw_bridge.query_openclaw()
         
-        if ai_enabled and gemini_api_key:
-            report_lines.append("\n### 💡 AI PhD Quant & Mathematician Evaluation:")
-            try:
-                # Load prompt template from settings with default fallback
-                db_prompt = settings.get("prompt_self_improvement")
-                if not db_prompt:
-                    db_prompt = """You are a PhD Mathematician and world-class Quantitative Analyst critically evaluating the performance of the NexusTrader self-learning trading bot.
+        report_lines.append("\n### 💡 AI Parameter Optimizer Evaluation:")
+        try:
+            # Load prompt template from settings with default fallback
+            db_prompt = settings.get("prompt_self_improvement")
+            if not db_prompt:
+                db_prompt = """You are a PhD Mathematician and world-class Quantitative Analyst critically evaluating the performance of the NexusTrader self-learning trading bot.
 Our core mission is to optimize parameters to safely and consistently earn $1,000 USD a day.
 Analyze the trade details, win rates, and profit volatility. Critique the current strategy parameters and offer 2-3 mathematical recommendations. 
 Specify recommended setting adjustments strictly in a JSON block at the very end of your response (wrapped in ```json).
@@ -256,9 +254,9 @@ Recommended settings JSON format:
   }
 }
 ```"""
-                    save_setting("prompt_self_improvement", db_prompt)
-                
-                prompt = f"""{db_prompt}
+                save_setting("prompt_self_improvement", db_prompt)
+            
+            prompt = f"""{db_prompt}
 
 Current Session Data:
 - Recent trade details: {json.dumps(recent_trades, indent=2) if recent_trades else '[]'}
@@ -266,61 +264,58 @@ Current Session Data:
 - Kalman threshold: {best_threshold}
 - Volatility ATR multipliers: TP = {best_tp_mult}x, SL = {best_sl_mult}x
 """
-                from quant_utils import query_gemini_robust
-                advice_text = query_gemini_robust(gemini_api_key, prompt)
-                
-                # Separate the advice and the JSON block
-                advice_clean = advice_text
-                json_block = ""
-                if "```json" in advice_text:
-                    parts = advice_text.split("```json")
-                    advice_clean = parts[0]
-                    json_block = parts[1].split("```")[0].strip()
-                
-                report_lines.append(advice_clean)
-                
-                if json_block:
-                    adjustments = json.loads(json_block)
-                    r_risk = adjustments.get("recommended_risk_mode")
-                    r_tp = adjustments.get("recommended_tp_multiplier")
-                    r_sl = adjustments.get("recommended_sl_multiplier")
-                    asset_adjusts = adjustments.get("asset_adjustments", {})
-                    
-                    if r_risk:
-                        save_setting("risk_mode", r_risk)
-                        report_lines.append(f"\n📊 **Auto-Applied Setting**: Risk Mode adjusted to `{r_risk}`")
-                    if r_tp:
-                        save_setting("opt_tp_multiplier", str(r_tp))
-                        report_lines.append(f"\n📊 **Auto-Applied Setting**: Take Profit Multiplier adjusted to `{r_tp}x ATR`")
-                    if r_sl:
-                        save_setting("opt_sl_multiplier", str(r_sl))
-                        report_lines.append(f"\n📊 **Auto-Applied Setting**: Stop Loss Multiplier adjusted to `{r_sl}x ATR`")
-                    
-                    for ticker, params in asset_adjusts.items():
-                        is_active = params.get("is_active", True)
-                        tp_mult = params.get("tp_multiplier", 2.5)
-                        sl_mult = params.get("sl_multiplier", 1.5)
-                        kelly = params.get("kelly_ceiling", 0.2)
-                        
-                        conn_asset = sqlite3.connect(DB_PATH)
-                        c_asset = conn_asset.cursor()
-                        c_asset.execute(
-                            "INSERT OR REPLACE INTO active_assets (ticker, is_active, tp_multiplier, sl_multiplier, kelly_ceiling) VALUES (?, ?, ?, ?, ?)",
-                            (ticker, int(is_active), tp_mult, sl_mult, kelly)
-                        )
-                        conn_asset.commit()
-                        conn_asset.close()
-                        report_lines.append(f"\n📊 **Auto-Applied Asset Setting (PhD Quant)**: `{ticker}` -> Active: `{is_active}`, TP: `{tp_mult}x`, SL: `{sl_mult}x`, Kelly Cap: `{kelly}`")
-            except Exception as e:
-                report_lines.append(f"Error calling AI for PhD analysis: {e}")
-                
-            # Perform Meta-Prompt Optimization for PhD Quant
-            revised_prompt = optimize_own_prompt(settings, recent_trades, best_oversold, best_overbought, best_threshold, best_tp_mult, best_sl_mult, gemini_api_key)
-            if revised_prompt:
-                report_lines.append(f"\n🧠 **AI Prompt Meta-Optimization**: Successfully analyzed agent outputs and evolved PhD Quant prompt template to focus closer on the $1,000 USD/day mission.")
-        else:
-            report_lines.append("\n### 💡 AI Recommendations Status:")
-            report_lines.append("*AI recommendations disabled or API key not configured in settings.*")
+            from openclaw_bridge import query_openclaw
+            advice_text = query_openclaw(prompt, agent_name="quant")
+            
+            # Separate the advice and the JSON block
+            advice_clean = advice_text
+            json_block = ""
+            if "```json" in advice_text:
+                parts = advice_text.split("```json")
+                advice_clean = parts[0]
+                json_block = parts[1].split("```")[0].strip()
+            
+            report_lines.append(advice_clean)
+            
+            if json_block:
+                adjustments = json.loads(json_block)
+                r_risk = adjustments.get("recommended_risk_mode")
+                r_tp = adjustments.get("recommended_tp_multiplier")
+                r_sl = adjustments.get("recommended_sl_multiplier")
+                asset_adjusts = adjustments.get("asset_adjustments", {})
+
+                if r_risk:
+                    save_setting("risk_mode", r_risk)
+                    report_lines.append(f"\n📊 **Auto-Applied Setting**: Risk Mode adjusted to `{r_risk}`")
+                if r_tp:
+                    save_setting("opt_tp_multiplier", str(r_tp))
+                    report_lines.append(f"\n📊 **Auto-Applied Setting**: Take Profit Multiplier adjusted to `{r_tp}x ATR`")
+                if r_sl:
+                    save_setting("opt_sl_multiplier", str(r_sl))
+                    report_lines.append(f"\n📊 **Auto-Applied Setting**: Stop Loss Multiplier adjusted to `{r_sl}x ATR`")
+
+                for ticker, params in asset_adjusts.items():
+                    is_active = params.get("is_active", True)
+                    tp_mult = params.get("tp_multiplier", 2.5)
+                    sl_mult = params.get("sl_multiplier", 1.5)
+                    kelly = params.get("kelly_ceiling", 0.2)
+
+                    conn_asset = sqlite3.connect(DB_PATH)
+                    c_asset = conn_asset.cursor()
+                    c_asset.execute(
+                        "INSERT OR REPLACE INTO active_assets (ticker, is_active, tp_multiplier, sl_multiplier, kelly_ceiling) VALUES (?, ?, ?, ?, ?)",
+                        (ticker, int(is_active), tp_mult, sl_mult, kelly)
+                    )
+                    conn_asset.commit()
+                    conn_asset.close()
+                    report_lines.append(f"\n📊 **Auto-Applied Asset Setting**: `{ticker}` -> Active: `{is_active}`, TP: `{tp_mult}x`, SL: `{sl_mult}x`, Kelly Cap: `{kelly}`")
+        except Exception as e:
+            report_lines.append(f"Error calling AI for analysis: {e}")
+
+        # Perform Meta-Prompt Optimization
+        revised_prompt = optimize_own_prompt(settings, recent_trades, best_oversold, best_overbought, best_threshold, best_tp_mult, best_sl_mult)
+        if revised_prompt:
+            report_lines.append(f"\n🧠 **AI Prompt Meta-Optimization**: Successfully analyzed agent outputs and evolved prompt template.")
 
         report_content = "\n".join(report_lines)
         logging.info("Strategy parameters optimized successfully:\n" + report_content)
@@ -336,7 +331,7 @@ Current Session Data:
     except Exception as e:
         logging.error(f"Error in weekly self-improvement optimization: {e}")
 
-def optimize_own_prompt(settings, recent_trades, best_oversold, best_overbought, best_threshold, best_tp_mult, best_sl_mult, gemini_api_key):
+def optimize_own_prompt(settings, recent_trades, best_oversold, best_overbought, best_threshold, best_tp_mult, best_sl_mult):
     try:
         db_prompt = settings.get("prompt_self_improvement", "")
         
@@ -385,8 +380,8 @@ Current Session Data:
 Critically analyze this context. Redesign your own prompt template to focus it even more tightly on achieving $1,000 USD/day, ensuring it asks for correct statistical checks and keeps its final settings JSON format.
 Return ONLY a JSON block containing the key "revised_prompt_self_improvement" with your improved prompt template as the value (do not include markdown wrappers like ```json).
 """
-        from quant_utils import query_gemini_robust
-        raw_text = query_gemini_robust(gemini_api_key, prompt)
+        from openclaw_bridge import query_openclaw
+        raw_text = query_openclaw(prompt, agent_name="quant", max_tokens=2048)
         if raw_text.startswith("```json"):
             raw_text = raw_text[7:]
         if raw_text.endswith("```"):

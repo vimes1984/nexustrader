@@ -30,9 +30,8 @@ def run_nn_self_improvement(trigger_deploy: bool = False):
     gemini_api_key = settings.get("blog_gemini_api_key", "").strip()
     ai_enabled = settings.get("blog_ai_enabled", "false") == "true"
     
-    if not gemini_api_key or not ai_enabled:
-        logging.warning("Gemini API key is not configured or AI is disabled. Cannot run NN self-improvement.")
-        return "Gemini API key is not configured or AI is disabled."
+    if not gemini_api_key and not os.environ.get("OPENCLAW_FORCE", ""):
+        logging.warning("Gemini API key not set; will use OpenClaw Gateway instead.")
         
     nn_lr = settings.get("nn_learning_rate", "0.15")
     nn_floor = settings.get("nn_weight_floor", "0.05")
@@ -77,8 +76,8 @@ Recent closed trades for analysis:
     
     try:
         logging.info("Requesting Neural Network evaluation from Gemini...")
-        from quant_utils import query_gemini_robust
-        advice_text = query_gemini_robust(gemini_api_key, prompt)
+        from openclaw_bridge import query_openclaw, extract_json_block
+        advice_text = query_openclaw(prompt, agent_name="nn")
         
         advice_clean = advice_text
         json_block = ""
@@ -130,8 +129,8 @@ Recent Developer/Quant logs:
 Critically analyze this context. Redesign your own prompt template to focus it even more tightly on achieving $1,000 USD/day, ensuring it asks for correct neural checks and keeps its final settings JSON format.
 Return ONLY a JSON block containing the key "revised_prompt_nn_agent" with your improved prompt template as the value (do not include markdown wrappers like ```json).
 """
-        from quant_utils import query_gemini_robust
-        raw_text = query_gemini_robust(gemini_api_key, meta_prompt)
+        from openclaw_bridge import query_openclaw, extract_json_block
+        raw_text = query_openclaw(meta_prompt, agent_name="nn", max_tokens=2048)
         if raw_text.startswith("```json"):
             raw_text = raw_text[7:]
         if raw_text.endswith("```"):
