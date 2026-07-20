@@ -4454,3 +4454,161 @@ if (optTab) {
         setTimeout(loadOptimizations, 100);
     });
 }
+
+// ============================================================
+// OpenClaw Gateway Router UI
+// ============================================================
+
+/** Check gateway connection and update status indicator */
+async function checkGatewayStatus() {
+    const dot = document.getElementById("gateway-status-dot");
+    const text = document.getElementById("gateway-status-text");
+    const urlDisplay = document.getElementById("gateway-url-display");
+    if (!dot || !text) return;
+
+    dot.style.background = "#6b7280";
+    text.textContent = "Checking...";
+
+    try {
+        const resp = await fetch("/api/gateway/status");
+        const data = await resp.json();
+        if (data.status === "connected") {
+            dot.style.background = "#10b981";
+            text.textContent = "Connected to OpenClaw Gateway";
+            if (urlDisplay) urlDisplay.textContent = data.gateway_url;
+        } else {
+            dot.style.background = "#ef4444";
+            text.textContent = "Gateway error: " + (data.error || "unknown");
+        }
+    } catch (e) {
+        dot.style.background = "#ef4444";
+        text.textContent = "Can't reach agent API";
+    }
+}
+
+// Test gateway on button click
+const testGatewayBtn = document.getElementById("btn-test-gateway");
+if (testGatewayBtn) {
+    testGatewayBtn.addEventListener("click", function() {
+        const dotEl = document.getElementById("gateway-status-dot");
+        const txtEl = document.getElementById("gateway-status-text");
+        if (dotEl) dotEl.style.background = "#6b7280";
+        if (txtEl) txtEl.textContent = "Checking...";
+        checkGatewayStatus();
+    });
+}
+
+// Save gateway config (URL + token to DB)
+const saveGatewayBtn = document.getElementById("save-gateway-config-btn");
+if (saveGatewayBtn) {
+    saveGatewayBtn.addEventListener("click", async function() {
+        const urlEl = document.getElementById("setting-gateway-url");
+        const tokenEl = document.getElementById("setting-gateway-token");
+        const url = urlEl ? urlEl.value.trim() : "";
+        const token = tokenEl ? tokenEl.value.trim() : "";
+
+        if (url) {
+            await fetch("/api/system/save_setting", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({ key: "openclaw_gateway_url", value: url }),
+            });
+        }
+        if (token) {
+            await fetch("/api/system/save_setting", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({ key: "openclaw_gateway_token", value: token }),
+            });
+        }
+        showToast("Gateway config saved — testing connection...", "info");
+        checkGatewayStatus();
+    });
+}
+
+// Send test prompt to OpenClaw
+const sendTestBtn = document.getElementById("btn-send-test-prompt");
+if (sendTestBtn) {
+    sendTestBtn.addEventListener("click", async function() {
+        const inputEl = document.getElementById("test-prompt-input");
+        const agentEl = document.getElementById("test-prompt-agent");
+        const responseEl = document.getElementById("test-prompt-response");
+        const prompt = inputEl ? inputEl.value.trim() : "";
+        const agent = agentEl ? agentEl.value : "default";
+
+        if (!prompt) {
+            showToast("Enter a prompt first.", "error");
+            return;
+        }
+
+        sendTestBtn.disabled = true;
+        sendTestBtn.innerHTML = '<i data-lucide="loader" style="width: 12px; height: 12px; animation: spin 1s linear infinite;"></i> Sending...';
+        if (responseEl) {
+            responseEl.style.display = "block";
+            responseEl.textContent = "Waiting for OpenClaw response...";
+        }
+
+        try {
+            const resp = await fetch("/api/gateway/prompt", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({
+                    prompt: prompt,
+                    agent: agent,
+                    max_tokens: 1024,
+                    temperature: 0.7,
+                }),
+            });
+            const data = await resp.json();
+            if (responseEl) {
+                responseEl.textContent = data.status === "success"
+                    ? data.response
+                    : "Error: " + (data.error || "Unknown");
+            }
+        } catch (e) {
+            if (responseEl) {
+                responseEl.textContent = "Connection error: " + e.message;
+            }
+        } finally {
+            sendTestBtn.disabled = false;
+            sendTestBtn.innerHTML = '<i data-lucide="send" style="width: 12px; height: 12px; margin-right: 4px;"></i> Send';
+            if (window.lucide) lucide.createIcons();
+        }
+    });
+}
+
+// Allocation Check Agent button
+const allocBtn = document.getElementById("trigger-alloc-btn-tab");
+if (allocBtn) {
+    allocBtn.addEventListener("click", function() {
+        allocBtn.disabled = true;
+        showToast("Allocation Check Agent balancing portfolio...", "info");
+        fetch("/api/system/optimize/allocator", { method: "POST" })
+            .then(res => res.json())
+            .then(data => {
+                allocBtn.disabled = false;
+                if (data.status === "success") {
+                    showToast("Asset allocation rebalanced!", "success");
+                    alert("Allocation check completed!\n\n" + data.log);
+                } else {
+                    showToast("Allocation failed: " + data.error, "error");
+                }
+            })
+            .catch(err => {
+                allocBtn.disabled = false;
+                showToast("Error running allocator.", "error");
+            });
+    });
+}
+
+// Check gateway status when agent tab becomes visible
+const agentTab = document.querySelector('[data-tab="tab-agents"]');
+if (agentTab) {
+    agentTab.addEventListener("click", function() {
+        setTimeout(checkGatewayStatus, 200);
+    });
+}
+
+// Also check on page load if agent tab is active
+setTimeout(checkGatewayStatus, 2000);
+

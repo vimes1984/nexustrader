@@ -1039,7 +1039,24 @@
                                          <button class="btn trigger-risk-audit-btn" id="trigger-risk-audit-btn-tab" style="padding: 4px 8px; font-size: 10px; border-color: rgba(244,63,94,0.3); color: var(--neon-red);">Audit Risk</button>
                                     </div>
                                     <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.4; margin-top: 6px;">
-                                        "I check drawdown, position sizes, and correlation between open trades to flag risk issues."
+                                        Checks drawdown, position sizes, and correlation between open trades to flag risk issues.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Persona 7: Allocation Check Agent -->
+                            <div class="persona-card" style="border-left: 3px solid var(--neon-blue); background: rgba(0,200,255,0.02);">
+                                <div class="persona-avatar">⚖️</div>
+                                <div style="flex: 1;">
+                                    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap;">
+                                         <div>
+                                             <h3 style="font-size: 15px; font-weight: 600; color: var(--text-primary);">Allocation Check Agent</h3>
+                                             <span style="font-size: 10px; color: var(--neon-blue); text-transform: uppercase; font-weight: 600;">Portfolio Allocator</span>
+                                         </div>
+                                         <button class="btn" id="trigger-alloc-btn-tab" style="padding: 4px 8px; font-size: 10px; border-color: rgba(0,200,255,0.3); color: var(--neon-blue);">Allocate</button>
+                                    </div>
+                                    <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.4; margin-top: 6px;">
+                                        Suggests asset allocation rebalancing, Kelly ceiling adjustments, and capital rotation.
                                     </p>
                                 </div>
                             </div>
@@ -1143,19 +1160,9 @@
                                 <input type="checkbox" id="blog-git-push-check" style="accent-color: var(--neon-blue); cursor: pointer;">
                             </label>
                             <label style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
-                                <span>Use AI Styling (Gemini)</span>
-                                <input type="checkbox" id="blog-ai-check" style="accent-color: var(--neon-blue); cursor: pointer;">
+                                <span>Let Reporter AI Use OpenClaw</span>
+                                <input type="checkbox" id="blog-openclaw-check" checked style="accent-color: var(--neon-purple); cursor: pointer;">
                             </label>
-                            
-                            <div id="blog-key-container" style="display: flex; flex-direction: column; gap: 6px; margin-top: 4px;">
-                                <span>Gemini API Key</span>
-                                <div style="position: relative; display: flex; align-items: center; width: 100%;">
-                                    <input type="password" id="blog-api-key" placeholder="Enter API key..." style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 36px 8px 12px; border-radius: 8px; font-size:12px; font-family:inherit; outline:none; width: 100%;">
-                                    <button type="button" id="toggle-blog-api-key-visibility" style="position: absolute; right: 10px; background: transparent; border: none; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center; outline: none; padding: 0;">
-                                        <i data-lucide="eye" style="width: 16px; height: 16px;"></i>
-                                    </button>
-                                </div>
-                            </div>
                             
                             <button class="btn btn-primary" id="save-blog-config-btn" style="width: 100%; justify-content: center; padding: 8px; font-size: 12px; margin-top: 10px;">
                                 <i data-lucide="save" style="width: 15px; height: 15px; margin-right: 4px;"></i>
@@ -1168,58 +1175,46 @@
                         </div>
                     </article>
                     
-                    <!-- Agent LLM Gateway Router -->
-                    <article class="glass-panel" style="padding: 24px; margin-top: 20px; display: flex; flex-direction: column; gap: 15px;">
+                    <!-- OpenClaw Gateway Router -->
+                    <article class="glass-panel" style="padding: 24px; display: flex; flex-direction: column; gap: 15px;">
                         <h2 class="panel-title" style="display: flex; align-items: center; gap: 8px;">
                             <i data-lucide="cpu" style="color: var(--neon-purple);"></i>
-                            Agent LLM Provider Configuration
+                            OpenClaw Gateway Router
                         </h2>
                         <span style="font-size: 11px; color: var(--text-muted); text-align: left;">
-                            Point your quant, developer, and auditor agents to different LLM endpoints including OpenAI, Anthropic, or Gemini.
+                            All quant agents now route through the local OpenClaw Gateway (<code>openclaw_bridge.py</code>).
+                            No external API keys needed — prompts go to <code>deepseek/deepseek-v4-flash</code> on the LAN.
                         </span>
-                        
-                        <div style="display: flex; flex-direction: column; gap: 12px; font-size: 12px;">
-                            <label style="display: flex; flex-direction: column; gap: 5px; text-align: left;">
-                                <span>Target Agent to Configure</span>
-                                <select id="setting-agent-llm-target" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 12px; border-radius: 8px; font-family: inherit; font-size: 12px; outline: none; cursor: pointer;">
-                                    <option value="default">Global Default (All Agents)</option>
-                                    <option value="quant">NexusQuant PhD (Risk/Params)</option>
-                                    <option value="dev">NexusDev Architect (Self-Dev)</option>
-                                    <option value="sentiment">Sentiment Feeds Agent</option>
-                                    <option value="nn">Network Optimizer</option>
-                                    <option value="risk">Risk Check Agent</option>
-                                    <option value="reporter">Reporter AI (Weekly Blog)</option>
-                                    <option value="allocator">Allocation Check Agent</option>
-                                </select>
-                            </label>
 
-                            <label style="display: flex; flex-direction: column; gap: 5px; text-align: left;">
-                                <span>LLM Provider Selection</span>
-                                <select id="setting-agent-llm-provider" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 12px; border-radius: 8px; font-family: inherit; font-size: 12px; outline: none; cursor: pointer;">
-                                    <option value="gemini">Google Gemini</option>
-                                    <option value="openai">OpenAI (GPT)</option>
-                                    <option value="anthropic">Anthropic (Claude)</option>
-                                </select>
+                        <div id="gateway-status-indicator" style="display: flex; align-items: center; gap: 10px; padding: 12px; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px solid var(--border-color);">
+                            <div id="gateway-status-dot" style="width: 10px; height: 10px; border-radius: 50%; background: #6b7280; flex-shrink: 0;"></div>
+                            <div style="flex: 1;">
+                                <div style="font-size: 12px; font-weight: 600; color: var(--text-primary);">
+                                    <span id="gateway-status-text">Checking connection...</span>
+                                </div>
+                                <div style="font-size: 10px; color: var(--text-muted);">
+                                    <span id="gateway-url-display">http://192.168.0.197:18789</span>
+                                    &middot; deepseek/deepseek-v4-flash
+                                </div>
+                            </div>
+                            <button class="btn" id="btn-test-gateway" style="font-size: 10px; padding: 4px 10px; border-color: rgba(168,85,247,0.3); color: var(--neon-purple);">
+                                <i data-lucide="refresh-cw" style="width: 11px; height: 11px;"></i>
+                                Test
+                            </button>
+                        </div>
+
+                        <div style="display: flex; flex-direction: column; gap: 10px; font-size: 12px; border-top: 1px solid var(--border-color); padding-top: 12px;">
+                            <label style="display: flex; flex-direction: column; gap: 4px;">
+                                <span style="font-size: 10px; color: var(--text-muted);">Gateway URL (optional override)</span>
+                                <input type="text" id="setting-gateway-url" placeholder="http://192.168.0.197:18789/api/chat/completions" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 6px 10px; border-radius: 6px; font-family: inherit; font-size: 11px; outline: none; width: 100%;">
                             </label>
-                            
-                            <label id="container-agent-llm-base-url" style="display: flex; flex-direction: column; gap: 5px; text-align: left;">
-                                <span>Custom Base URL (optional)</span>
-                                <input type="text" id="setting-agent-llm-base-url" placeholder="e.g. https://api.openai.com/v1" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 12px; border-radius: 8px; font-family: inherit; font-size: 12px; outline: none; width: 100%;">
+                            <label style="display: flex; flex-direction: column; gap: 4px;">
+                                <span style="font-size: 10px; color: var(--text-muted);">Auth Token (optional override)</span>
+                                <input type="password" id="setting-gateway-token" placeholder="Paste token" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 6px 10px; border-radius: 6px; font-family: inherit; font-size: 11px; outline: none; width: 100%;">
                             </label>
-                            
-                            <label id="container-agent-llm-model" style="display: flex; flex-direction: column; gap: 5px; text-align: left;">
-                                <span>Model Identifier (optional)</span>
-                                <input type="text" id="setting-agent-llm-model" placeholder="e.g. gpt-4o, claude-3-5-sonnet" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 12px; border-radius: 8px; font-family: inherit; font-size: 12px; outline: none; width: 100%;">
-                            </label>
-                            
-                            <label style="display: flex; flex-direction: column; gap: 5px; text-align: left;">
-                                <span id="label-agent-llm-api-key">API Secret Key</span>
-                                <input type="password" id="setting-agent-llm-api-key" placeholder="Enter API secret key..." style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 8px 12px; border-radius: 8px; font-family: inherit; font-size: 12px; outline: none; width: 100%;">
-                            </label>
-                            
-                            <button class="btn btn-primary" id="save-agent-llm-btn" style="width: 100%; justify-content: center; padding: 10px; font-size: 12px; margin-top: 5px; cursor: pointer;">
-                                <i data-lucide="save" style="width: 15px; height: 15px; margin-right: 4px;"></i>
-                                Save Agent LLM Config
+                            <button class="btn btn-primary" id="save-gateway-config-btn" style="width: 100%; justify-content: center; padding: 7px; font-size: 11px;">
+                                <i data-lucide="save" style="width: 13px; height: 13px; margin-right: 4px;"></i>
+                                Save Gateway Config
                             </button>
                         </div>
                     </article>
@@ -1240,6 +1235,29 @@
                             <button class="btn" id="trigger-reset-cooldowns-btn-tab" style="width: 100%; justify-content: center; border-color: rgba(244,63,94,0.3); color: var(--neon-red); font-size: 11px; padding: 8px;">
                                 Clear System Cooldowns
                             </button>
+                        </div>
+
+                        <div style="margin-top: 15px; padding-top: 12px; border-top: 1px solid var(--border-color);">
+                            <h3 class="panel-title" style="margin-bottom: 8px; display: flex; align-items: center; gap: 6px; font-size: 12px;">
+                                <i data-lucide="message-square" style="color: var(--neon-purple); width: 14px; height: 14px;"></i>
+                                Send Test Prompt to OpenClaw
+                            </h3>
+                            <textarea id="test-prompt-input" placeholder="Type a prompt to send directly to the OpenClaw Gateway..." style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 8px; padding: 10px; font-family: monospace; font-size: 11px; height: 60px; resize: vertical; outline: none; width: 100%; margin-bottom: 8px;"></textarea>
+                            <div style="display: flex; gap: 6px;">
+                                <button class="btn btn-primary" id="btn-send-test-prompt" style="flex: 1; justify-content: center; font-size: 11px; padding: 7px;">
+                                    <i data-lucide="send" style="width: 12px; height: 12px; margin-right: 4px;"></i>
+                                    Send
+                                </button>
+                                <select id="test-prompt-agent" style="background: #0f172b; border: 1px solid var(--border-color); color: var(--text-primary); padding: 4px 8px; border-radius: 6px; font-family: inherit; font-size: 10px; outline: none; width: 100px;">
+                                    <option value="quant">Parameter Opt.</option>
+                                    <option value="nn">Network Opt.</option>
+                                    <option value="sentiment">Sentiment</option>
+                                    <option value="risk">Risk Check</option>
+                                    <option value="allocator">Allocation</option>
+                                    <option value="default" selected>Default</option>
+                                </select>
+                            </div>
+                            <pre id="test-prompt-response" style="display: none; margin: 8px 0 0 0; padding: 10px; background: rgba(10,15,30,0.5); border: 1px solid var(--border-color); border-radius: 6px; font-size: 11px; color: var(--neon-green); white-space: pre-wrap; line-height: 1.4; max-height: 200px; overflow-y: auto;"></pre>
                         </div>
                     </article>
                     

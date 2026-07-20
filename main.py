@@ -2130,21 +2130,6 @@ def reset_all_cooldowns():
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-@app.post("/api/system/optimize/sentiment")
-def trigger_sentiment_optimization():
-    try:
-        from weekly_optimizer import optimize_sentiment_weights
-        optimize_sentiment_weights()
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        report_path = os.path.join(base_dir, "blog", "daily_summaries", "weekly_sentiment_optimization.md")
-        if os.path.exists(report_path):
-            with open(report_path, "r") as f:
-                return {"status": "success", "log": f.read()}
-        return {"status": "success", "log": "Sentiment source optimization completed successfully."}
-    except Exception as e:
-        logging.error(f"Error in manual sentiment optimization: {e}")
-        return {"status": "error", "error": str(e)}
-
 @app.post("/api/system/optimize/parameters")
 def trigger_parameter_optimization():
     try:
@@ -2381,6 +2366,79 @@ def trigger_allocator():
     except Exception as e:
         logging.error(f"Error in manual Allocator optimization: {e}")
         return {"status": "error", "error": str(e)}
+
+@app.get("/api/gateway/status")
+def gateway_status():
+    """Test reachability of OpenClaw Gateway from the LXC."""
+    try:
+        from openclaw_bridge import get_gateway_config
+        url, token = get_gateway_config()
+        masked = token[:6] + "..." + token[-4:] if len(token) > 10 else "***"
+        import urllib.request
+        import json
+        req = urllib.request.Request(
+            url,
+            data=json.dumps({"model": "deepseek/deepseek-v4-flash", "messages": [{"role": "user", "content": "Hello"}], "max_tokens": 5}).encode(),
+            headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"},
+            method="POST",
+        )
+        resp = urllib.request.urlopen(req, timeout=10)
+        data = json.loads(resp.read().decode("utf-8"))
+        return {
+            "status": "connected",
+            "gateway_url": url,
+            "token_prefix": masked,
+            "model": "deepseek/deepseek-v4-flash",
+            "response_preview": (data.get("choices") or [{}])[0].get("message", {}).get("content", "")[:60],
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "gateway_url": url if 'url' in locals() else "unknown",
+            "error": str(e),
+        }
+
+
+class SendPromptRequest(BaseModel):
+    prompt: str
+    agent: str = "default"
+    model: str = "deepseek/deepseek-v4-flash"
+    max_tokens: int = 512
+    temperature: float = 0.7
+
+
+@app.post("/api/gateway/prompt")
+def send_prompt(req: SendPromptRequest):
+    """Send a custom prompt to OpenClaw Gateway and return the response."""
+    try:
+        from openclaw_bridge import query_openclaw
+        text = query_openclaw(
+            req.prompt,
+            agent_name=req.agent,
+            model=req.model,
+            max_tokens=req.max_tokens,
+            temperature=req.temperature,
+        )
+        return {"status": "success", "response": text}
+    except Exception as e:
+        logging.error(f"Error sending prompt to OpenClaw: {e}")
+        return {"status": "error", "error": str(e)}
+
+
+class SaveSettingRequest(BaseModel):
+    key: str
+    value: str
+
+
+@app.post("/api/system/save_setting")
+def save_system_setting(req: SaveSettingRequest):
+    """Save a single key-value setting to the DB (bypasses MutationFreeze)."""
+    try:
+        database.save_setting_directly(req.key, req.value)
+        return {"status": "success", "key": req.key}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
 
 DEFAULT_PROMPT_QUANT = """You are a PhD Quantitative Finance Specialist and Senior Market Analyst.
 Our mission is to optimize parameters to safely and consistently earn a stable, risk-adjusted target of $1,000 USD a day.
