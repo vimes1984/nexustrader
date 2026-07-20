@@ -684,6 +684,23 @@ def load_setting(key, default=None):
 
 
 # -------------------------------------------------------------
+def save_setting_directly(key, value):
+    """Save a setting WITHOUT mutation freeze check or agent logging.
+    
+    Used by human-approved actions via the dashboard / API.
+    Bypasses the inspection-based agent detection in save_setting().
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
+        conn.commit()
+    except Exception as e:
+        logging.error(f"Error in save_setting_directly {key}: {e}")
+    finally:
+        conn.close()
+
+
 # Mode-aware wrappers (trading_modes isolation)
 # -------------------------------------------------------------
 

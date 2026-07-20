@@ -1,9 +1,38 @@
 import numpy as np
 import json
 import logging
+import random
+
+class ReplayBuffer:
+    """Experience replay buffer for batch policy gradient training.
+    
+    Stores (state, alignment, advantage) tuples and samples minibatches.
+    This decouples training from individual trade events, smoothing gradients
+    and preventing catastrophic forgetting.
+    """
+    def __init__(self, capacity=200):
+        self.capacity = capacity
+        self.buffer = []
+        self.pos = 0
+
+    def push(self, state, alignment, advantage):
+        if len(self.buffer) < self.capacity:
+            self.buffer.append((state, alignment, advantage))
+        else:
+            self.buffer[self.pos] = (state, alignment, advantage)
+        self.pos = (self.pos + 1) % self.capacity
+
+    def sample(self, batch_size=32):
+        if len(self.buffer) < batch_size:
+            return list(self.buffer)
+        return random.sample(self.buffer, batch_size)
+
+    def __len__(self):
+        return len(self.buffer)
+
 
 class PolicyNetwork:
-    """NumPy-based Policy Gradient Neural Network for dynamic strategy weight allocation.
+    """NumPy-based Policy Gradient Neural Network with Experience Replay.
     
     Inputs (State Dim = 8):
     - Market Regime (1.0 if Mean Reverting, 0.0 if Trending)
@@ -17,6 +46,9 @@ class PolicyNetwork:
     
     Outputs (Action Dim = num_strategies):
     - Softmax probability distribution over the strategies.
+    
+    Training uses a replay buffer to batch-update from past experiences,
+    avoiding weight collapse from single-trade noise.
     """
     def __init__(self, state_dim=8, hidden_dim=12, action_dim=6, learning_rate=0.05, hidden_layers=1, dropout=0.0, optimizer="Adam"):
         self.state_dim = state_dim
@@ -54,6 +86,13 @@ class PolicyNetwork:
         # Policy Gradient Baseline & Entropy scaling for stable convergence
         self.reward_baseline = 0.0
         self.baseline_alpha = 0.05
+        
+        # Experience replay buffer
+        self.replay = ReplayBuffer(capacity=200)
+        # Batch size for replay training
+        self.replay_batch_size = 32
+        # How often to train from replay (every N trades)
+        self.replay_train_interval = 5
 
     def softmax(self, x):
         e_x = np.exp(x - np.max(x, axis=-1, keepdims=True))
@@ -82,41 +121,8 @@ class PolicyNetwork:
         self.probs = self.softmax(z_out)
         return self.probs[0]
 
-    def backward(self, state, strategy_signals, trade_direction, reward):
-        """Policy Gradient backward pass with advantage baseline and entropy regularization."""
-        dir_val = 1.0 if trade_direction == "BUY" else -1.0
-        
-        # Calculate strategy alignment: signals are in [-1, 0, 1]
-        alignment = np.array(strategy_signals) * dir_val
-        
-        # Calculate policy gradient advantage baseline
-        advantage = reward - self.reward_baseline
-        self.reward_baseline = (1.0 - self.baseline_alpha) * self.reward_baseline + self.baseline_alpha * reward
-        
-        # Scale advantage
-        scaled_reward = np.clip(advantage * 100.0, -5.0, 5.0)
-        
-        # Calculate Entropy Regularization Gradient to prevent weight collapse
-        probs = self.probs
-        entropy = -np.sum(probs * np.log(probs + 1e-9))
-        entropy_grad = -probs * (entropy + np.log(probs + 1e-9))
-        entropy_beta = 0.01
-        
-        d_z = -scaled_reward * alignment.reshape(1, -1) - entropy_beta * entropy_grad
-        
-        dW = [None] * len(self.W)
-        db = [None] * len(self.b)
-        
-        # Backpropagate gradients
-        for i in reversed(range(len(self.W))):
-            dW[i] = np.dot(self.a[i].T, d_z)
-            db[i] = d_z
-            
-            if i > 0:
-                d_a = np.dot(d_z, self.W[i].T)
-                d_z = d_a * (self.z[i-1] > 0)  # ReLU gradient
-                
-        # Parameter updates
+    def _apply_gradients(self, dW, db):
+        """Apply gradients using the configured optimizer."""
         self.t += 1
         for i in range(len(self.W)):
             if self.optimizer == "Adam":
@@ -150,16 +156,74 @@ class PolicyNetwork:
                 self.W[i] -= self.lr * dW[i]
                 self.b[i] -= self.lr * db[i]
 
-    def to_json(self):
-        return json.dumps({
-            "W": [w.tolist() for w in self.W],
-            "b": [b.tolist() for b in self.b],
-            "hidden_layers": self.hidden_layers,
-            "dropout": self.dropout,
-            "optimizer": self.optimizer
-        })
+    def _compute_gradients(self, state, alignment, advantage, entropy_beta=0.01):
+        """Compute policy gradients for a single (state, alignment, advantage) tuple."""
+        # Forward pass to cache activations
+        self.forward(state)
+        
+        # Scale advantage
+        scaled_reward = np.clip(advantage * 100.0, -5.0, 5.0)
+        
+        probs = self.probs
+        entropy = -np.sum(probs * np.log(probs + 1e-9))
+        entropy_grad = -probs * (entropy + np.log(probs + 1e-9))
+        
+        d_z = -scaled_reward * alignment.reshape(1, -1) - entropy_beta * entropy_grad
+        
+        dW = [None] * len(self.W)
+        db = [None] * len(self.b)
+        
+        for i in reversed(range(len(self.W))):
+            dW[i] = np.dot(self.a[i].T, d_z)
+            db[i] = d_z
+            if i > 0:
+                d_a = np.dot(d_z, self.W[i].T)
+                d_z = d_a * (self.z[i-1] > 0)
+        
+        return dW, db
 
-    def from_json(self, json_str):
+    def backward(self, state, strategy_signals, trade_direction, reward):
+        """Policy Gradient backward pass with experience replay.
+        
+        Stores (state, alignment, advantage) in replay buffer and
+        periodically trains from a minibatch to smooth gradients.
+        """
+        dir_val = 1.0 if trade_direction == "BUY" else -1.0
+        alignment = np.array(strategy_signals) * dir_val
+        
+        # Calculate advantage
+        advantage = reward - self.reward_baseline
+        self.reward_baseline = (1.0 - self.baseline_alpha) * self.reward_baseline + self.baseline_alpha * reward
+        
+        # Store in replay buffer
+        self.replay.push(np.array(state, dtype=float), alignment, advantage)
+        
+        # Immediate gradient update for this trade (online learning)
+        dW, db = self._compute_gradients(state, alignment, advantage)
+        self._apply_gradients(dW, db)
+        
+        # Periodically train from replay buffer to reinforce patterns
+        if len(self.replay) >= self.replay_batch_size and (
+            self.t % self.replay_train_interval == 0
+        ):
+            batch = self.replay.sample(self.replay_batch_size)
+            # Accumulate gradients across batch
+            dW_acc = [np.zeros_like(w) for w in self.W]
+            db_acc = [np.zeros_like(b) for b in self.b]
+            for s, al, adv in batch:
+                dW_s, db_s = self._compute_gradients(s, al, adv)
+                for i in range(len(dW_acc)):
+                    dW_acc[i] += dW_s[i]
+                    db_acc[i] += db_s[i]
+            # Average and apply
+            n = len(batch)
+            for i in range(len(dW_acc)):
+                dW_acc[i] /= n
+                db_acc[i] /= n
+            self._apply_gradients(dW_acc, db_acc)
+
+    def to_json(self):
+        
         data = json.loads(json_str)
         if "W" in data:
             self.W = [np.array(w) for w in data["W"]]

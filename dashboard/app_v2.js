@@ -4354,8 +4354,103 @@ async function sendTestNotification() {
     }
 }
 
+// ============================================================
+// Optimizations Manager
+// ============================================================
+
+async function loadOptimizations() {
+    const tbody = document.getElementById("optimizations-table-body");
+    if (!tbody) return;
+    try {
+        const resp = await fetch("/api/system/optimizations?limit=100&t=" + Date.now());
+        const data = await resp.json();
+        if (data.status !== "success" || !data.optimizations) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text-muted);">Failed to load optimizations.</td></tr>';
+            return;
+        }
+        const opts = data.optimizations;
+        if (opts.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text-muted);">No optimizations recorded yet.</td></tr>';
+            return;
+        }
+        let html = "";
+        opts.forEach(o => {
+            const ts = o.timestamp ? new Date(o.timestamp * 1000).toLocaleString() : "-";
+            html += `<tr style="border-bottom: 1px solid rgba(255,255,255,0.03);">`;
+            html += `<td style="padding: 8px 6px; color: var(--text-muted); font-family: monospace;">${o.id}</td>`;
+            html += `<td style="padding: 8px 6px; color: var(--neon-purple);">${o.agent || "-"}</td>`;
+            html += `<td style="padding: 8px 6px; font-family: monospace;">${o.parameter || "-"}</td>`;
+            html += `<td style="padding: 8px 6px; color: var(--text-muted); font-family: monospace;">${String(o.old_value || "").substring(0, 30)}</td>`;
+            html += `<td style="padding: 8px 6px; color: var(--neon-green); font-family: monospace;">${String(o.new_value || "").substring(0, 30)}</td>`;
+            html += `<td style="padding: 8px 6px; color: var(--text-secondary); font-size: 10px;">${(o.rationale || "").substring(0, 80)}</td>`;
+            html += `<td style="padding: 8px 6px;"><button class="btn btn-apply-opt" data-id="${o.id}" data-param="${o.parameter}" data-old="${String(o.old_value || "")}" data-new="${String(o.new_value || "")}" style="font-size: 10px; padding: 3px 8px; cursor: pointer;">Apply</button></td>`;
+            html += `</tr>`;
+        });
+        tbody.innerHTML = html;
+        
+        // Bind apply buttons
+        document.querySelectorAll(".btn-apply-opt").forEach(btn => {
+            btn.addEventListener("click", async function() {
+                const id = this.getAttribute("data-id");
+                const param = this.getAttribute("data-param");
+                const newVal = this.getAttribute("data-new");
+                if (!confirm(`Apply optimization?\n\nParameter: ${param}\nNew value: ${newVal}`)) return;
+                try {
+                    const resp = await fetch("/api/optimizations/apply/" + id, { method: "POST" });
+                    const result = await resp.json();
+                    if (result.status === "success") {
+                        showToast("Applied: " + param + " = " + newVal, "success");
+                        loadOptimizations();
+                    } else {
+                        showToast("Failed: " + (result.error || ""), "error");
+                    }
+                } catch(err) {
+                    showToast("Error: " + err, "error");
+                }
+            });
+        });
+    } catch(err) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text-muted);">Error loading.</td></tr>';
+        console.error("loadOptimizations error:", err);
+    }
+}
+
+// Review with OpenClaw
+async function reviewOptimizations() {
+    const panel = document.getElementById("optimization-review-panel");
+    const content = document.getElementById("optimization-review-content");
+    if (!panel || !content) return;
+    content.textContent = "Asking OpenClaw to review...";
+    panel.style.display = "block";
+    try {
+        const resp = await fetch("/api/optimizations/review", { method: "POST" });
+        const data = await resp.json();
+        if (data.status === "success") {
+            content.textContent = data.review;
+        } else {
+            content.textContent = "Error: " + (data.error || "Unknown");
+        }
+    } catch(err) {
+        content.textContent = "Request failed: " + err;
+    }
+}
+
 // Bind buttons
 const notifSaveBtn = document.getElementById("notif-save-btn");
 const notifTestBtn = document.getElementById("notif-test-btn");
 if (notifSaveBtn) notifSaveBtn.addEventListener("click", saveNotificationSettings);
 if (notifTestBtn) notifTestBtn.addEventListener("click", sendTestNotification);
+
+// Optimizations buttons
+const refreshOptBtn = document.getElementById("btn-refresh-optimizations");
+const reviewOptBtn = document.getElementById("btn-review-optimizations");
+if (refreshOptBtn) refreshOptBtn.addEventListener("click", loadOptimizations);
+if (reviewOptBtn) reviewOptBtn.addEventListener("click", reviewOptimizations);
+
+// Load on tab show
+const optTab = document.querySelector('[data-tab="tab-optimizations"]');
+if (optTab) {
+    optTab.addEventListener("click", function() {
+        setTimeout(loadOptimizations, 100);
+    });
+}

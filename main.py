@@ -1292,6 +1292,126 @@ def get_agent_optimizations(limit: int = 100):
     except Exception as e:
         return {"status": "error", "error": str(e)}
 
+@app.post("/api/optimizations/apply/{opt_id}")
+def apply_optimization(opt_id: int):
+    """Apply a specific optimization from the log. Bypasses MutationFreeze for human-approved changes."""
+    try:
+        opts = database.load_optimizations(limit=1000)
+        target = None
+        for o in opts:
+            if o["id"] == opt_id:
+                target = o
+                break
+        if not target:
+            return {"status": "error", "error": f"Optimization {opt_id} not found"}
+        param = target["parameter"]
+        new_val = target["new_value"]
+        old_val = target["old_value"]
+        
+        # Save the parameter directly (bypasses MutationFreeze)
+        database.save_setting_directly(param, new_val)
+        
+        # Also update in-memory if applicable
+        if hasattr(orchestrator, 'probability_engine'):
+            if param == "risk_mode":
+                orchestrator.probability_engine.set_risk_mode(new_val)
+            elif param == "kelly_fraction" and hasattr(orchestrator.probability_engine, 'kelly_fraction'):
+                try:
+                    orchestrator.probability_engine.kelly_fraction = float(new_val)
+                except:
+                    pass
+        
+        return {
+            "status": "success",
+            "message": f"Applied {param}: {old_val} → {new_val} (agent: {target['agent']})",
+            "applied": target
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+@app.post("/api/optimizations/review")
+def review_pending_optimizations():
+    """Ask OpenClaw to review pending optimizations and recommend which to apply."""
+    import requests as http_req
+    try:
+        opts = database.load_optimizations(limit=50)
+        if not opts:
+            return {"status": "success", "review": "No optimizations to review."}
+        
+        prompt_lines = ["Review the following trading bot optimization suggestions. "
+                        "For each, say APPLY, REJECT, or MODIFY with justification."]
+        for o in opts[:10]:
+            prompt_lines.append(
+                f"- ID#{o['id']}: {o['agent']} wants to change {o['parameter']} "
+                f"from '{o['old_value']}' to '{o['new_value']}'. "
+                f"Rationale: {o['rationale']}"
+            )
+        
+        # Call OpenClaw Gateway API
+        gateway_url = "http://localhost:18789/api/chat/completions"
+        gateway_token = None
+        import json, os
+        config_path = os.path.expanduser("~/.openclaw/openclaw.json")
+        if os.path.exists(config_path):
+            with open(config_path) as f:
+                cfg = json.load(f)
+                gateway_token = cfg.get("gateway", {}).get("auth", {}).get("token", "")
+        
+        headers = {"Content-Type": "application/json"}
+        if gateway_token:
+            headers["Authorization"] = f"Bearer {gateway_token}"
+        
+        payload = {
+            "model": "deepseek/deepseek-v4-flash",
+            "messages": [{"role": "user", "content": "\n".join(prompt_lines)}],
+            "max_tokens": 1024
+        }
+        
+        resp = http_req.post(gateway_url, json=payload, headers=headers, timeout=30)
+        review_text = resp.json().get("choices", [{}])[0].get("message", {}).get("content", "No response")
+        
+        return {"status": "success", "review": review_text}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+@app.post("/api/system/backtest")
+def run_backtest(data: dict):
+    """Run a backtest for a given ticker using backtest_engine.py."""
+    try:
+        ticker = data.get("ticker", "")
+        period = data.get("period", "60d")
+        interval = data.get("interval", "1h")
+        if not ticker:
+            return {"status": "error", "error": "ticker required"}
+        if ticker not in orchestrator.tickers:
+            return {"status": "error", "error": f"Unknown ticker: {ticker}"}
+        
+        from backtest_engine import BacktestEngine
+        from cost_model import CostModel
+        
+        ingestor = orchestrator.data_ingestions.get(ticker)
+        if ingestor is None or ingestor.data is None or ingestor.data.empty:
+            return {"status": "error", "error": f"No data loaded for {ticker}"}
+        
+        df = ingestor.data.tail(1000)
+        candles = df.to_dict('records')
+        
+        # Add required keys if missing
+        for c in candles:
+            if 'open' not in c: c['open'] = c.get('close', 0)
+            if 'high' not in c: c['high'] = c.get('close', 0)
+            if 'low' not in c: c['low'] = c.get('close', 0)
+            if 'volume' not in c: c['volume'] = 0.0
+        
+        cm = CostModel()
+        engine = BacktestEngine(ticker, cm)
+        result = engine.run(candles, period, period)
+        
+        return {"status": "success", "result": result}
+    except Exception as e:
+        logging.error(f"Backtest error: {e}")
+        return {"status": "error", "error": str(e)}
+
 @app.get("/api/system/agent_runs")
 def get_agent_runs(limit: int = 100):
     try:

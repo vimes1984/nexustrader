@@ -173,7 +173,7 @@ class DataIngestion:
         logging.info("Simulation stream finished.")
 
     def start_live_stream(self, interval_seconds=10):
-        """Polls yfinance for live price updates in a background thread."""
+        """Polls exchange/yfinance for live price updates with automatic reconnection."""
         self.streaming = True
         self.stream_thread = threading.Thread(
             target=self._run_live_polling,
@@ -207,22 +207,34 @@ class DataIngestion:
             except Exception:
                 pass
 
-        # If ccxt is available and we want live mode, initialize exchange client
+        # Track exchange health for reconnection
         exchange = None
-        if use_ccxt:
+        exchange_failures = 0
+        max_exchange_failures = 3
+        reconnect_delay = 5
+        
+        def init_exchange():
+            """Initialize or reinitialize the exchange client."""
+            nonlocal exchange_failures
+            if not use_ccxt:
+                return None
             try:
                 import ccxt
                 if hasattr(ccxt, broker_type):
                     exchange_class = getattr(ccxt, broker_type)
-                    exchange = exchange_class({
+                    ex = exchange_class({
                         'apiKey': api_key,
                         'secret': api_secret,
                         'enableRateLimit': True,
                     })
+                    exchange_failures = 0
                     logging.info(f"[LIVE POLLING] Initialized live ticker polling from exchange: {broker_type.upper()}")
+                    return ex
             except Exception as e:
-                logging.error(f"[LIVE POLLING ERROR] Failed to initialize ccxt for polling: {e}")
-                exchange = None
+                logging.error(f"[LIVE POLLING ERROR] Failed to initialize ccxt: {e}")
+                return None
+        
+        exchange = init_exchange()
 
         while self.streaming:
             try:
@@ -236,23 +248,31 @@ class DataIngestion:
                         ticker_data = exchange.fetch_ticker(ccxt_symbol)
                         price = float(ticker_data['last'])
                         self.live_price = price
+                        exchange_failures = 0  # reset on success
                         
                         # Fetch OHLCV or construct from history
                         if not self.data.empty:
                             last_row = self.data.iloc[-1]
                             row = {
                                 'timestamp': pd.Timestamp.now(),
-                                'open': float(last_row['close']), # current open is previous close
+                                'open': float(last_row['close']),
                                 'high': max(float(last_row['close']), price),
                                 'low': min(float(last_row['close']), price),
                                 'close': price,
                                 'volume': 0.0
                             }
                     except Exception as e:
-                        logging.error(f"[LIVE EXCHANGE POLLING FAILED] {e}. Falling back to yfinance.")
+                        exchange_failures += 1
+                        logging.error(f"[LIVE EXCHANGE POLLING FAILED #{exchange_failures}] {e}")
+                        if exchange_failures >= max_exchange_failures:
+                            # Attempt reconnection with exponential backoff
+                            backoff = min(reconnect_delay * (2 ** (exchange_failures - max_exchange_failures)), 120)
+                            logging.warning(f"[EXCHANGE RECONNECT] Attempting reconnection in {backoff}s (try #{exchange_failures - max_exchange_failures + 1})")
+                            time.sleep(backoff)
+                            exchange = init_exchange()
                         price = None
                 
-                # Fallback to yfinance if not CCXT or CCXT failed
+                # Fallback to yfinance if exchange failed or unavailable
                 if price is None:
                     ticker_obj = yf.Ticker(self.ticker)
                     df = ticker_obj.history(period="1d", interval="1m")
