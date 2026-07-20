@@ -173,3 +173,61 @@ Here's the JSON output as requested — it reflects that nothing meaningful has 
 
 
 📊 **Auto-Applied Asset Setting**: `BTC-USD` -> Active: `True`, TP: `2.5x`, SL: `1.5x`, Kelly Cap: `0.2`
+
+
+## ⚖️ Ensemble Asset Allocator Report
+[OpenClawBridge ERROR] Failed after 3 retries for Allocation Check Agent
+
+
+## 🛡️ Portfolio Risk Audit Report
+**Risk Audit Report**
+
+---
+
+**1. Single-Trade Limit Breach Analysis**
+
+The sole telemetry entry shows a SOL-USD BUY stopped out at exactly **-5.0%** — which already equals the **entire daily loss budget**. This is a critical red flag:
+
+- **Position sizing is wrong.** If one trade can consume 100% of the daily risk budget, the system has no tolerance for multiple signals turning sour, spread losses, or slippage.
+- **Stop placement vs daily limit mismatch.** A stop that triggers exactly at the daily limit means the stop is either too wide relative to capital, or the daily limit is too tight relative to position size. Neither is acceptable.
+- **Sample size concern.** One trade isn't statistical significance — but as a first data point, it's the worst possible signal. Correlation metrics cannot be assessed until we have at least 30–100 trades.
+
+**2. Leverage & Drawdown Limits**
+
+| Metric | Current | Assessment |
+|---|---|---|
+| Max Daily Loss | 5.0% | **Too high for conservative profile.** 5%/day compounds to ~75% monthly loss if maxed repeatedly. For a $1,000/day target, this implies $20k capital at most — dangerously undercapitalized for the target. |
+| Cooldown Hold | 4.0 hours | **Too short for 24/7 markets.** In crypto, 4 hours is barely two candles on the 2H chart. Emotional tilt + revenge trading window is wide open. |
+
+**3. Correlation & Diversification Concerns**
+
+With only SOL-USD in the telemetry, we have **single-asset exposure**. If this is representative of the full portfolio:
+- No cross-asset hedge
+- **100% crypto-beta concentration** — correlated to a single narrative (Solana ecosystem)
+- A SOL-specific black swan (validator issue, exploit, L1 competitor migration) would gap the stop and exceed the daily limit instantly
+
+**4. Capital Adequacy Check**
+
+Target: **$1,000/day** (≈ $30,000/month)
+
+| Assumed Capital | Daily 5% Loss | Daily 2% Loss | R/R at $1k target |
+|---|---|---|---|
+| $20,000 | $1,000 | $400 | 1:1 at 5% (unacceptable) |
+| $50,000 | $2,500 | $1,000 | 1:0.4 at 5% (worse) |
+| $100,000 | $5,000 | $2,000 | 1:0.2 at 5% (insane) |
+
+$30k/month requires a 150% monthly return on $20k capital. That is **not conservative**. Either the target needs to be reduced, or capital must be much higher, or the daily loss limit must drop sharply.
+
+**5. Recommendations**
+
+- **Reduce max daily loss to 2.0%** — gives room for ~3–5 losing trades before halting, while capping monthly ruin risk at ~33% in worst-case streaks.
+- **Extend cooldown to 12 hours** — forces at least one full market session away from the terminal. Covers 2 full 4H candle rotations in crypto. Prevents revenge trading. Still allows re-entry the same calendar day if the halt triggered early.
+- **Implement a trailing daily loss limit** — if 1.5% is hit within the first 4 hours, reduce remaining headroom. Tighter stop-loss as the day progresses.
+- **Diversification mandate** — until the portfolio holds at least 3 uncorrelated assets, cap single-asset allocation to 33%.
+- **Capital review** — if actual capital < $50k, the $1,000/day target is incompatible with a conservative profile.
+
+
+
+📊 **Auto-Applied Setting**: Max Daily Drawdown adjusted to `2.0%`
+
+📊 **Auto-Applied Setting**: Loss Cooldown adjusted to `12.0 hours`

@@ -1,6 +1,6 @@
 ---
 name: Workspace Coding & Agentic Standards
-description: Enforces test-driven development, clean code quality, diagnostic logging, and proxy routing in sandboxed environments.
+description: Enforces test-driven development, clean code quality, diagnostic logging, and disciplined deployment.
 always_on: true
 ---
 
