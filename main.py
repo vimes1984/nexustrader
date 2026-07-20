@@ -833,6 +833,65 @@ async def shutdown_event():
 
 
 
+@app.get("/api/trades/all")
+async def api_trades_all():
+    """All completed trades: DB truth merged with live Kraken fills when available."""
+    try:
+        db_trades = database.load_trades()
+    except Exception as e:
+        logging.error(f"/api/trades/all DB load failed: {e}")
+        db_trades = []
+
+    exchange_trades = []
+    try:
+        cfg_path = os.path.expanduser("~/.nexustrader/config.json")
+        if os.path.exists(cfg_path):
+            with open(cfg_path, "r") as f:
+                cfg = json.load(f)
+            if cfg.get("trading_mode", "paper") == "live":
+                creds = cfg.get("api_credentials", {})
+                api_key = creds.get("api_key")
+                api_secret = creds.get("api_secret")
+                broker = cfg.get("broker", "kraken").lower()
+                if api_key and api_secret:
+                    import ccxt
+                    exchange_class = getattr(ccxt, broker)
+                    exchange = exchange_class({
+                        "apiKey": api_key,
+                        "secret": api_secret,
+                        "enableRateLimit": True,
+                        "timeout": 20000,
+                    })
+                    exchange_trades = reconstruct_trades_from_exchange(exchange)
+    except Exception as e:
+        logging.error(f"/api/trades/all exchange fetch failed: {e}")
+
+    merged = []
+    seen = set()
+    def key(t):
+        return (
+            str(t.get("symbol", "")),
+            str(t.get("direction", "")),
+            round(float(t.get("entry_time", 0) or 0), 3),
+            round(float(t.get("exit_time", 0) or 0), 3),
+            round(float(t.get("quantity", 0) or 0), 12),
+        )
+    for t in exchange_trades + db_trades:
+        k = key(t)
+        if k not in seen:
+            seen.add(k)
+            merged.append(t)
+    merged.sort(key=lambda x: float(x.get("exit_time", 0) or 0), reverse=True)
+    return {"trades": merged, "db_count": len(db_trades), "exchange_count": len(exchange_trades), "count": len(merged)}
+
+@app.get("/api/trading/signals")
+def get_trading_signals():
+    """Latest weighted signals per ticker — flat dict {ticker: {...}}."""
+    try:
+        return getattr(orchestrator, "latest_signals", {}) or {}
+    except Exception:
+        return {}
+
 @app.get("/api/trading/reasoning")
 def get_trading_reasoning():
     items = []
@@ -979,15 +1038,6 @@ async def api_positions():
         pass
     return {"positions": positions, "fiat_breakdown": fiat_breakdown, "crypto_asset_count": crypto_count}
 
-@app.get("/api/trades/all")
-async def api_trades_all():
-    """All completed trades."""
-    import database as _db
-    try:
-        trades = _db.load_trades()
-        return {"trades": trades}
-    except Exception as e:
-        return {"trades": [], "error": str(e)}
 
 @app.get("/api/health")
 async def api_health():

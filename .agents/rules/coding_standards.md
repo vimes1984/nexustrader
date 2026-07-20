@@ -24,7 +24,7 @@ All agents working on this codebase (including Antigravity, openclaw, and downst
 
 ---
 
-## 3. Sandboxed LLM API Key Routing (The Antigravity Key Rule)
-* **Antigravity Key Prefix**: Sandbox API keys start with `AQ.` (Antigravity context-bound keys). Sending requests containing these keys directly to standard Vertex AI or Generative Language endpoints will fail.
-* **Proxy Requirement**: Route all LLM calls locally through the `antigravity_proxy` daemon on port `8001` (`http://127.0.0.1:8001/v1`).
-* **Routing Check**: Always check if the proxy is running before routing LLM calls, and start it if offline.
+## 3. Commit & Deploy Discipline
+* **Atomic Commits**: One logical change per commit with a descriptive message.
+* **Push Before Handoff**: Always push working changes to GitHub before yielding to another agent or ending a session.
+* **Deploy via Script**: Use the repository's `deploy.sh` for production deployments — it enforces unit tests and restarts the systemd service cleanly.
