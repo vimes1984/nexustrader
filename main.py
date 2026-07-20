@@ -2698,7 +2698,12 @@ async def websocket_endpoint(websocket: WebSocket):
             "trades": trades_to_send,
             "lifetime_steps": steps,
             "model_dna": model_dna,
-            "active_brains": active_brains
+            "active_brains": active_brains,
+            "ticker_prices": {
+                t: (orchestrator.data_ingestions[t].live_price or
+                    orchestrator.latest_ticks.get(t, {}).get("close", 0.0))
+                for t in orchestrator.tickers
+            }
         }
         await websocket.send_text(json.dumps(init_state))
         

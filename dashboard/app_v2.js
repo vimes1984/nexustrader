@@ -663,6 +663,24 @@ function handleInitState(data) {
         portBtn.addEventListener("click", () => switchPortfolioMode(true));
         switcherEl.appendChild(portBtn);
 
+        // Populate ticker prices from init data (not waiting for first tick)
+        if (data.ticker_prices) {
+            data.tickers.forEach(t => {
+                const p = data.ticker_prices[t];
+                if (p && p > 0) {
+                    const tabEl = document.getElementById(`tab-price-${t}`);
+                    if (tabEl) {
+                        tabEl.textContent = `$${Number(p).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                    }
+                }
+            });
+            // Also set main price display for the active ticker
+            const activePrice = data.ticker_prices[activeTicker];
+            if (activePrice && activePrice > 0 && elPrice) {
+                elPrice.textContent = `$${Number(activePrice).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            }
+        }
+
         // Toggle controls and status badges based on trading mode (live vs paper)
         globalTradingMode = data.trading_mode || "paper";
         globalBrokerName = data.broker || "kraken";

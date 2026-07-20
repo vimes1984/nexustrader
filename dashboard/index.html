@@ -1678,191 +1678,179 @@
         </div>
 
         <!-- TAB CONTENT 5: SYSTEM ARCHITECTURE -->
-        <div id="tab-architecture" class="tab-content">
+                <div id="tab-architecture" class="tab-content">
             <article class="glass-panel" style="padding: 28px; display: flex; flex-direction: column; gap: 24px;">
                 <div style="border-bottom: 1px solid var(--border-color); padding-bottom: 16px;">
                     <h2 class="panel-title" style="display: flex; align-items: center; gap: 8px; font-size: 18px;">
                         <i data-lucide="network" style="color: var(--neon-blue); width: 22px; height: 22px;"></i>
-                        Production-Grade Systems Architecture Map
+                        Architecture — What Actually Runs
                     </h2>
                     <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.5; margin-top: 6px; max-width: 900px;">
-                        NexusTrader operates as an event-driven quantitative system. Below is a systems-engineered view mapping the actual data pipelines, mathematical gatekeepers, in-memory learning feedback loops, and decoupled agent optimization layers.
+                        What follows is the real architecture. No imaginary daemons or fake cron agents.
+                        These are the actual source files, their runtime responsibilities, and their data flows.
                     </p>
                 </div>
 
-                <!-- Interactive SVG Map -->
-                <div style="background: rgba(8, 12, 20, 0.75); border: 1px solid var(--border-color); border-radius: 12px; padding: 24px; display: flex; justify-content: center; overflow-x: auto;">
-                    <svg width="880" height="460" viewBox="0 0 880 460" style="font-family: 'Space Grotesk', sans-serif;">
-                        <defs>
-                            <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                                <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b" />
-                            </marker>
-                            <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                                <path d="M 0 0 L 10 5 L 0 10 z" fill="#00f0ff" />
-                            </marker>
-                            <marker id="arrow-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                                <path d="M 0 0 L 10 5 L 0 10 z" fill="#a855f7" />
-                            </marker>
-                            <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                                <path d="M 0 0 L 10 5 L 0 10 z" fill="#10b981" />
-                            </marker>
-                            <linearGradient id="blueGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                                <stop offset="0%" stop-color="#00f0ff" stop-opacity="0.15"/>
-                                <stop offset="100%" stop-color="#00f0ff" stop-opacity="0.02"/>
-                            </linearGradient>
-                            <linearGradient id="purpleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                                <stop offset="0%" stop-color="#a855f7" stop-opacity="0.15"/>
-                                <stop offset="100%" stop-color="#a855f7" stop-opacity="0.02"/>
-                            </linearGradient>
-                            <linearGradient id="greenGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                                <stop offset="0%" stop-color="#10b981" stop-opacity="0.15"/>
-                                <stop offset="100%" stop-color="#10b981" stop-opacity="0.02"/>
-                            </linearGradient>
-                        </defs>
+                <!-- Runtime Flow Diagram (honest) -->
+                <div style="background: rgba(8, 12, 20, 0.75); border: 1px solid var(--border-color); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 4px; font-family: monospace; font-size: 12px; line-height: 1.6;">
+                    <div style="color: var(--text-muted); padding-bottom: 8px; border-bottom: 1px solid var(--border-color); margin-bottom: 8px; font-weight: bold; font-size: 11px;">
+                        PER-TICK RUNTIME FLOW (process_tick, called ~1-10s per ticker in live mode)
+                    </div>
+                    <div><span style="color: var(--neon-blue);">data_ingestion.py</span> <span style="color: var(--text-muted);">&rarr;</span> <span style="color: var(--text-secondary);">Fetch price from CCXT / CSV. Compute RSI, MACD, BB, ATR.</span></div>
+                    <div style="padding-left: 20px;"><span style="color: var(--text-muted);">&#x2514;&#x2500;</span> <span style="color: var(--text-secondary);">row = {"close", "rsi", "macd", "bb_upper", "bb_lower", "atr", ...}</span></div>
 
-                        <!-- Flow Lines (Runtime Processing Loop) -->
-                        <!-- Ingestion to Regime -->
-                        <path d="M 130 90 L 165 90" stroke="#00f0ff" stroke-width="2" marker-end="url(#arrow-blue)" fill="none" />
-                        <!-- State Vector (Regime -> Policy Net) -->
-                        <path d="M 230 135 L 230 185" stroke="#a855f7" stroke-width="2" marker-end="url(#arrow-purple)" fill="none" />
-                        <!-- Policy Allocation Weights back to Signal Combiner -->
-                        <path d="M 310 185 L 310 135" stroke="#a855f7" stroke-width="1.5" stroke-dasharray="3,3" marker-end="url(#arrow-purple)" fill="none" />
-                        <!-- Blended Signal (Regime -> Probability Gate) -->
-                        <path d="M 345 90 L 375 90" stroke="#00f0ff" stroke-width="2" marker-end="url(#arrow-blue)" fill="none" />
-                        <!-- Viable Sized Order (Probability -> Execution) -->
-                        <path d="M 505 90 L 535 90" stroke="#00f0ff" stroke-width="2" marker-end="url(#arrow-blue)" fill="none" />
-                        <!-- Execution -> Broker API -->
-                        <path d="M 665 90 L 695 90" stroke="#10b981" stroke-width="2" marker-end="url(#arrow-green)" fill="none" />
-                        
-                        <!-- Closed Trade PnL Reward Feedback loop -->
-                        <!-- Broker -> Execution (Trade Close Notification) -->
-                        <path d="M 755 130 L 755 310 L 665 310" stroke="#a855f7" stroke-width="1.5" stroke-dasharray="4,4" marker-end="url(#arrow-purple)" fill="none" />
-                        <!-- Execution -> Learning Engine (Telemetry payload) -->
-                        <path d="M 535 310 L 345 310" stroke="#a855f7" stroke-width="1.5" stroke-dasharray="4,4" marker-end="url(#arrow-purple)" fill="none" />
-                        <!-- Learning Engine -> Policy Net (Backprop weights update) -->
-                        <path d="M 230 310 L 230 245" stroke="#a855f7" stroke-width="2" marker-end="url(#arrow-purple)" fill="none" />
+                    <div><span style="color: var(--neon-purple);">main.py (process_tick)</span> <span style="color: var(--text-muted);">&rarr;</span></div>
+                    <div style="padding-left: 20px;"><span style="color: var(--text-muted);">&#x251C;&#x2500;</span> <span style="color: var(--neon-blue);">quant_utils.estimate_ou_process()</span> <span style="color: var(--text-secondary);">&rarr; OU theta + regime (trending/mr)</span></div>
+                    <div style="padding-left: 20px;"><span style="color: var(--text-muted);">&#x251C;&#x2500;</span> <span style="color: var(--neon-blue);">learning_engine.get_state_vector()</span> <span style="color: var(--text-secondary);">&rarr; 8D vector [rsi, macd, bb, atr, ou_theta, ...]</span></div>
+                    <div style="padding-left: 20px;"><span style="color: var(--text-muted);">&#x251C;&#x2500;</span> <span style="color: var(--neon-blue);">learning_engine.select_weights(state)</span> <span style="color: var(--text-secondary);">&rarr; PolicyNetwork softmax &rarr; 12 weights</span></div>
+                    <div style="padding-left: 20px;"><span style="color: var(--text-muted);">&#x251C;&#x2500;</span> <span style="color: var(--neon-blue);">strategy_engine.get_weighted_signal()</span> <span style="color: var(--text-secondary);">&rarr; weighted signal (-1..1)</span></div>
+                    <div style="padding-left: 20px;"><span style="color: var(--text-muted);">&#x251C;&#x2500;</span> <span style="color: var(--neon-blue);">12 strategies</span> <span style="color: var(--text-secondary);">: ema_cross, rsi_reversal, bb_reversion, kalman, stophunt, ml_rf, momentum, volatility, mean_reversion, trend, scalping, breakout</span></div>
+                    <div style="padding-left: 20px;"><span style="color: var(--text-muted);">&#x251C;&#x2500;</span> <span style="color: var(--neon-blue);">probability_engine.evaluate_trade()</span> <span style="color: var(--text-secondary);">&rarr; p_win, EV, Kelly fraction, is_viable</span></div>
+                    <div style="padding-left: 20px;"><span style="color: var(--text-muted);">&#x251C;&#x2500;</span> <span style="color: var(--neon-blue);">evaluation.safety.KillSwitch.check()</span> <span style="color: var(--text-secondary);">&rarr; blocks if drawdown/position/exposure limits exceeded</span></div>
+                    <div style="padding-left: 20px;"><span style="color: var(--text-muted);">&#x251C;&#x2500;</span> <span style="color: var(--neon-blue);">execution_engine.open_position()</span> <span style="color: var(--text-secondary);">&rarr; CCXT order (live) or simulated fill (paper/sim)</span></div>
+                    <div style="padding-left: 20px;"><span style="color: var(--text-muted);">&#x251C;&#x2500;</span> <span style="color: var(--neon-blue);">execution_engine.update_positions()</span> <span style="color: var(--text-secondary);">&rarr; check SL/TP every tick</span></div>
+                    <div style="padding-left: 20px;"><span style="color: var(--text-muted);">&#x2514;&#x2500;</span> <span style="color: var(--neon-blue);">broadcast_message()</span> <span style="color: var(--text-secondary);">&rarr; WebSocket push to dashboard</span></div>
 
-                        <!-- Decoupled DB Sync (SQLite WAL File System) -->
-                        <path d="M 600 132 L 600 230 L 695 230" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)" fill="none" />
-                        <path d="M 270 245 L 270 280 L 695 280" stroke="#64748b" stroke-width="1.2" stroke-dasharray="4,4" marker-end="url(#arrow)" fill="none" />
-
-                        <!-- Core Labels -->
-                        <text x="312" y="160" fill="#a855f7" font-size="9" font-weight="600">Trust Weights</text>
-                        <text x="515" y="80" fill="#00f0ff" font-size="9" font-weight="600">Kelly Sized Orders</text>
-                        <text x="460" y="325" fill="#a855f7" font-size="9" font-weight="600">Closed Trade PnL Reward Feedback</text>
-                        <text x="610" y="180" fill="#64748b" font-size="9" font-weight="600">Write-Ahead SQLite log</text>
-
-                        <!-- Box 1: Ingestion & indicator computation -->
-                        <rect x="10" y="50" width="120" height="80" rx="8" fill="url(#blueGrad)" stroke="#00f0ff" stroke-width="1.5" />
-                        <text x="70" y="78" text-anchor="middle" fill="#00f0ff" font-size="12" font-weight="700">1. Data Ingest</text>
-                        <text x="70" y="96" text-anchor="middle" fill="#94a3b8" font-size="9">Tick Stream Aggregator</text>
-                        <text x="70" y="110" text-anchor="middle" fill="#64748b" font-size="8">Candle Bounds Rescaling</text>
-
-                        <!-- Box 2: Regime Estimation & Signal Blend -->
-                        <rect x="165" y="50" width="180" height="85" rx="8" fill="url(#blueGrad)" stroke="#00f0ff" stroke-width="1.5" />
-                        <text x="255" y="76" text-anchor="middle" fill="#00f0ff" font-size="12" font-weight="700">2. Regime & Ensemble</text>
-                        <text x="255" y="93" text-anchor="middle" fill="#94a3b8" font-size="9">OLS Reversion Speed (θ)</text>
-                        <text x="255" y="108" text-anchor="middle" fill="#64748b" font-size="8">blends 6 strategies signal</text>
-
-                        <!-- Box 3: Policy Gradient Allocator -->
-                        <rect x="165" y="185" width="180" height="60" rx="8" fill="url(#purpleGrad)" stroke="#a855f7" stroke-width="1.5" />
-                        <text x="255" y="212" text-anchor="middle" fill="#a855f7" font-size="12" font-weight="700">3. Policy Gradient Net</text>
-                        <text x="255" y="228" text-anchor="middle" fill="#94a3b8" font-size="9">Softmax Strategy Weights</text>
-
-                        <!-- Box 4: Probability Gatekeeper -->
-                        <rect x="375" y="50" width="130" height="80" rx="8" fill="url(#blueGrad)" stroke="#00f0ff" stroke-width="1.5" />
-                        <text x="440" y="78" text-anchor="middle" fill="#00f0ff" font-size="12" font-weight="700">4. Prob Gatekeeper</text>
-                        <text x="440" y="95" text-anchor="middle" fill="#94a3b8" font-size="9">Expected Value check</text>
-                        <text x="440" y="110" text-anchor="middle" fill="#64748b" font-size="8">Kelly Sizing Sieve</text>
-
-                        <!-- Box 5: Inventory Execution -->
-                        <rect x="535" y="50" width="130" height="80" rx="8" fill="url(#blueGrad)" stroke="#00f0ff" stroke-width="1.5" />
-                        <text x="600" y="78" text-anchor="middle" fill="#00f0ff" font-size="12" font-weight="700">5. Execution Engine</text>
-                        <text x="600" y="95" text-anchor="middle" fill="#94a3b8" font-size="9">Inventory Short Tracker</text>
-                        <text x="600" y="110" text-anchor="middle" fill="#64748b" font-size="8">SL/TP volatility placement</text>
-
-                        <!-- Box 6: Broker REST API -->
-                        <rect x="695" y="50" width="175" height="80" rx="8" fill="url(#greenGrad)" stroke="#10b981" stroke-width="1.5" />
-                        <text x="782" y="78" text-anchor="middle" fill="#10b981" font-size="12" font-weight="700">6. Broker / Simulator</text>
-                        <text x="782" y="95" text-anchor="middle" fill="#94a3b8" font-size="9">CCXT Live API / Simulator Engine</text>
-                        <text x="782" y="110" text-anchor="middle" fill="#64748b" font-size="8">Order Execution & Balance Updates</text>
-
-                        <!-- Box 7: Write-Ahead SQLite database -->
-                        <rect x="695" y="185" width="175" height="110" rx="8" fill="rgba(255,255,255,0.01)" stroke="#64748b" stroke-width="1" />
-                        <text x="782" y="210" text-anchor="middle" fill="#94a3b8" font-size="11" font-weight="700">SQLite WAL Database</text>
-                        <text x="782" y="228" text-anchor="middle" fill="#64748b" font-size="9">settings (risk_profile, active_brains)</text>
-                        <text x="782" y="243" text-anchor="middle" fill="#64748b" font-size="9">trades (live, paper, simulation)</text>
-                        <text x="782" y="258" text-anchor="middle" fill="#64748b" font-size="9">policy_brains (weight configs)</text>
-                        <text x="782" y="273" text-anchor="middle" fill="#64748b" font-size="9">portfolio_history (equity curve)</text>
-
-                        <!-- Box 8: Reinforcement Learning Backprop -->
-                        <rect x="165" y="295" width="180" height="60" rx="8" fill="url(#purpleGrad)" stroke="#a855f7" stroke-width="1.5" />
-                        <text x="255" y="320" text-anchor="middle" fill="#a855f7" font-size="12" font-weight="700">7. Learning Engine</text>
-                        <text x="255" y="336" text-anchor="middle" fill="#94a3b8" font-size="9">Online Reinforcement Backprop</text>
-
-                        <!-- Decoupled Cron optimization layer (Bottom) -->
-                        <rect x="10" y="380" width="860" height="70" rx="10" fill="rgba(255,255,255,0.01)" stroke="rgba(255,255,255,0.05)" stroke-width="1" />
-                        <text x="25" y="400" fill="#94a3b8" font-size="10" font-weight="600" text-anchor="start">DECOUPLED OPTIMIZATION LAYER (CRON DAEMONS / SYSTEMD)</text>
-                        
-                        <!-- Represent cron flows -->
-                        <text x="40" y="430" fill="#a855f7" font-size="10" font-weight="600">📊 PhD Quant (parameter optimization sweeps via SQLite ticks)</text>
-                        <text x="460" y="430" fill="#00f0ff" font-size="10" font-weight="600">📡 Sentinel (computes news correlations & updates sources)</text>
-                        <text x="40" y="445" fill="#10b981" font-size="10" font-weight="600">📝 Reporter (summarizes closed trades & writes blogs)</text>
-                        <text x="460" y="445" fill="#f43f5e" font-size="10" font-weight="600">🛡️ Risk Auditor (audits equity drawdowns & locks cooldowns)</text>
-                    </svg>
+                    <div style="color: var(--neon-green); padding-top: 8px; border-top: 1px solid var(--border-color); margin-top: 8px;">ON TRADE CLOSE (on_trade_closed callback)</div>
+                    <div style="padding-left: 20px;"><span style="color: var(--text-muted);">&#x251C;&#x2500;</span> <span style="color: var(--neon-blue);">evaluation.safety.KillSwitch.record_trade(pnl)</span></div>
+                    <div style="padding-left: 20px;"><span style="color: var(--text-muted);">&#x251C;&#x2500;</span> <span style="color: var(--neon-blue);">evaluation.safety.DrawdownTracker.update(equity)</span></div>
+                    <div style="padding-left: 20px;"><span style="color: var(--text-muted);">&#x251C;&#x2500;</span> <span style="color: var(--neon-blue);">strategy_engine.record_trade_outcome()</span> <span style="color: var(--text-secondary);">&rarr; update rolling win rates</span></div>
+                    <div style="padding-left: 20px;"><span style="color: var(--text-muted);">&#x2514;&#x2500;</span> <span style="color: var(--neon-blue);">learning_engine.learn_from_trade()</span> <span style="color: var(--text-secondary);">&rarr; PolicyNetwork backprop</span></div>
                 </div>
 
-                <!-- Systems Engineer Descriptions Grid -->
-                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; font-size: 13px; line-height: 1.5; margin-top: 10px;">
-                    <div style="background: rgba(255,255,255,0.01); padding: 18px; border-radius: 10px; border: 1px solid var(--border-color);">
-                        <strong style="color: var(--neon-blue); display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
-                            <i data-lucide="cpu" style="width: 16px; height: 16px;"></i>
-                            1. Subsystem A: Event Ingestion & State Vector
-                        </strong>
-                        <p style="color: var(--text-secondary); font-size: 12px;">
-                            Raw tick feeds arrive via CCXT exchange polling (live/paper) or history loops (simulation). Ticks are rescaled into time-boundary candles. The system runs OLS regression on historical closes to compute the Ornstein-Uhlenbeck mean-reversion speed ($\theta$) and constructs a 7D state vector (Regime, $\theta$, RSI, MACD, BB, ATR, WinTrend).
-                        </p>
+                <!-- Source file catalog -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; font-size: 12px;">
+                    <div style="background: rgba(0, 240, 255, 0.03); border: 1px solid rgba(0, 240, 255, 0.15); border-radius: 8px; padding: 14px;">
+                        <strong style="color: var(--neon-blue);">data_ingestion.py</strong>
+                        <p style="color: var(--text-secondary); margin: 4px 0 0 0;">Fetches historical/candles from CCXT (Kraken). Computes RSI, MACD, Bollinger Bands, ATR. Runs live WebSocket streams via ccxt.pro. Optional CSV reload for sim.</p>
                     </div>
+                    <div style="background: rgba(168, 85, 247, 0.03); border: 1px solid rgba(168, 85, 247, 0.15); border-radius: 8px; padding: 14px;">
+                        <strong style="color: var(--neon-purple);">strategy_engine.py</strong>
+                        <p style="color: var(--text-secondary); margin: 4px 0 0 0;">12 strategy classes with per-strategy signals. Ensemble weights from PolicyNetwork. OU regime detection. Performance biasing (rolling win rate).</p>
+                    </div>
+                    <div style="background: rgba(16, 185, 129, 0.03); border: 1px solid rgba(16, 185, 129, 0.15); border-radius: 8px; padding: 14px;">
+                        <strong style="color: var(--neon-green);">learning_engine.py</strong>
+                        <p style="color: var(--text-secondary); margin: 4px 0 0 0;">Policy network (4-layer MLP: 8&rarr;12&rarr;12&rarr;12). REINFORCE-like backprop with PnL reward. State vector builder. Brain persistence in DB. Weight migration 7&rarr;12.</p>
+                    </div>
+                    <div style="background: rgba(244, 63, 94, 0.03); border: 1px solid rgba(244, 63, 94, 0.15); border-radius: 8px; padding: 14px;">
+                        <strong style="color: var(--neon-red);">execution_engine.py</strong>
+                        <p style="color: var(--text-secondary); margin: 4px 0 0 0;">Position management (open/close/update). Live order routing via CCXT. SL/TP tracking. Cooldown system. Balance persistence to DB.</p>
+                    </div>
+                    <div style="background: rgba(255, 159, 67, 0.03); border: 1px solid rgba(255, 159, 67, 0.15); border-radius: 8px; padding: 14px;">
+                        <strong style="color: var(--neon-orange);">probability_engine.py</strong>
+                        <p style="color: var(--text-secondary); margin: 4px 0 0 0;">ATR-based SL/TP. Win prob from signal + RSI + historical similarity. Kelly sizing. Drawdown-aware + calibration-capped position sizing.</p>
+                    </div>
+                    <div style="background: rgba(168, 85, 247, 0.03); border: 1px solid rgba(168, 85, 247, 0.15); border-radius: 8px; padding: 14px;">
+                        <strong style="color: var(--neon-purple);">quant_utils.py</strong>
+                        <p style="color: var(--text-secondary); margin: 4px 0 0 0;">OU process estimation (OLS on log prices), regime detection, signal normalization utilities.</p>
+                    </div>
+                    <div style="background: rgba(16, 185, 129, 0.03); border: 1px solid rgba(16, 185, 129, 0.15); border-radius: 8px; padding: 14px;">
+                        <strong style="color: var(--neon-green);">evaluation/ package</strong>
+                        <p style="color: var(--text-secondary); margin: 4px 0 0 0;">safety.py (KillSwitch, DrawdownTracker, MutationFreeze), metrics.py (Sharpe, Sortino, Kelly), cost_model.py, harness.py, position_sizing.py, singletons.py</p>
+                    </div>
+                    <div style="background: rgba(100, 116, 139, 0.03); border: 1px solid rgba(100, 116, 139, 0.15); border-radius: 8px; padding: 14px;">
+                        <strong style="color: var(--text-muted);">database.py</strong>
+                        <p style="color: var(--text-secondary); margin: 4px 0 0 0;">SQLite WAL. Tables: settings, trades, portfolio_history, policy_brains, active_assets, notifications, backups, agent_runs, optimizations.</p>
+                    </div>
+                    <div style="background: rgba(0, 240, 255, 0.03); border: 1px solid rgba(0, 240, 255, 0.15); border-radius: 8px; padding: 14px;">
+                        <strong style="color: var(--neon-blue);">main.py</strong>
+                        <p style="color: var(--text-secondary); margin: 4px 0 0 0;">FastAPI server. Orchestrator class. Tick processing loop. WebSocket broadcast. REST API + dashboard serving. Startup/shutdown hooks.</p>
+                    </div>
+                </div>
 
-                    <div style="background: rgba(255,255,255,0.01); padding: 18px; border-radius: 10px; border: 1px solid var(--border-color);">
-                        <strong style="color: var(--neon-purple); display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
-                            <i data-lucide="brain" style="width: 16px; height: 16px;"></i>
-                            2. Subsystem B: Neural Allocator & Ensembling
-                        </strong>
-                        <p style="color: var(--text-secondary); font-size: 12px;">
-                            The 7D state vector is processed by the Policy Gradient Neural Network, which outputs a Softmax probability distribution. These probabilities serve as trust weights to combine signals from 6 strategies (EMA Crossover, RSI, BB Reversion, Kalman Filter, stop hunt sweeps, and Random Forest).
-                        </p>
+                <!-- Self-Learning Agent System -->
+                <div style="border-radius: 10px; border: 1px solid var(--border-color); padding: 16px;">
+                    <h3 style="font-size: 14px; font-weight: 600; margin: 0 0 12px 0; display: flex; align-items: center; gap: 6px;">
+                        <i data-lucide="bot" style="color: var(--neon-blue); width: 16px; height: 16px;"></i>
+                        Self-Learning Agent System (LLM-driven, runs via process_inference.py)
+                    </h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; font-size: 11px;">
+                        <div style="padding: 8px; border-radius: 6px; background: rgba(0,240,255,0.02);">
+                            <span style="color: var(--neon-blue); font-weight: 600;">PhD Quant Agent</span><br>
+                            <span style="color: var(--text-secondary);">Reads trades + metrics logs, suggests parameter optimizations via agent_runs table.</span>
+                        </div>
+                        <div style="padding: 8px; border-radius: 6px; background: rgba(168,85,247,0.02);">
+                            <span style="color: var(--neon-purple); font-weight: 600;">NeuralCore Optimizer</span><br>
+                            <span style="color: var(--text-secondary);">Reads policy weight performance, suggests brain config changes.</span>
+                        </div>
+                        <div style="padding: 8px; border-radius: 6px; background: rgba(16,185,129,0.02);">
+                            <span style="color: var(--neon-green); font-weight: 600;">Sentiment Sentinel</span><br>
+                            <span style="color: var(--text-secondary);">Fetches crypto news, computes sentiment correlation with prices.</span>
+                        </div>
+                        <div style="padding: 8px; border-radius: 6px; background: rgba(244,63,94,0.02);">
+                            <span style="color: var(--neon-red); font-weight: 600;">Risk Auditor</span><br>
+                            <span style="color: var(--text-secondary);">Checks drawdown, sets cooldowns, adjusts risk mode.</span>
+                        </div>
+                        <div style="padding: 8px; border-radius: 6px; background: rgba(255,159,67,0.02);">
+                            <span style="color: var(--neon-orange); font-weight: 600;">Ensemble Allocator</span><br>
+                            <span style="color: var(--text-secondary);">Suggests asset allocation rebalancing.</span>
+                        </div>
                     </div>
+                    <p style="font-size: 11px; color: var(--text-muted); margin: 12px 0 0 0; border-top: 1px solid var(--border-color); padding-top: 10px;">
+                        All agent suggestions are <em>logged only</em> &mdash; they never apply automatically.
+                        MutationFreeze prevents DB writes from code paths originating in agent inference.
+                        Human applies via API or dashboard. Agent runs stored in <code style="color: var(--neon-blue);">agent_runs</code>
+                        table (LLM prompt + response), optimizations in <code style="color: var(--neon-blue);">optimizations</code>
+                        table (parameter change audit trail).
+                    </p>
+                </div>
 
-                    <div style="background: rgba(255,255,255,0.01); padding: 18px; border-radius: 10px; border: 1px solid var(--border-color);">
-                        <strong style="color: var(--neon-green); display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
-                            <i data-lucide="activity" style="width: 16px; height: 16px;"></i>
-                            3. Subsystem C: EV Filters & execution
-                        </strong>
-                        <p style="color: var(--text-secondary); font-size: 12px;">
-                            The combined signal is evaluated by the Probability Engine. It validates expected trade value ($EV > 0$) and computes sizing fractions using the Kelly Criterion. If viable, the order is routed to Execution. The Execution Engine sets volatility-adjusted SL/TP stops, offsets positions using a Short-Position Inventory Tracker, and routes orders via CCXT.
-                        </p>
+                <!-- Source tree -->
+                <div>
+                    <h3 style="font-size: 13px; font-weight: 600; margin: 0 0 8px 0;">Source Tree (29 Python files)</h3>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2px 20px; font-family: monospace; font-size: 11px; color: var(--text-secondary);">
+                        <div>main.py (FastAPI server + orchestrator)</div>
+                        <div>dashboard/ (index.html, app_v2.js, index_v2.css)</div>
+                        <div>data_ingestion.py</div>
+                        <div>strategy_engine.py</div>
+                        <div>execution_engine.py</div>
+                        <div>learning_engine.py</div>
+                        <div>probability_engine.py</div>
+                        <div>quant_utils.py</div>
+                        <div>database.py</div>
+                        <div>trading_modes.py</div>
+                        <div>sentiment_analyzer.py</div>
+                        <div>process_inference.py</div>
+                        <div>mutation_guard.py</div>
+                        <div>cost_model.py</div>
+                        <div>performance_metrics.py</div>
+                        <div>probability_calibration.py</div>
+                        <div>long_term_strategy.py</div>
+                        <div>long_term_quant.py</div>
+                        <div>backup_manager.py</div>
+                        <div>notification_manager.py</div>
+                        <div>backtest_engine.py</div>
+                        <div>monthly_researcher.py</div>
+                        <div>evaluation/ (6 files)</div>
+                        <div>tests/ (4 test files)</div>
                     </div>
+                </div>
 
-                    <div style="background: rgba(255,255,255,0.01); padding: 18px; border-radius: 10px; border: 1px solid var(--border-color);">
-                        <strong style="color: var(--text-primary); display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
-                            <i data-lucide="shield-check" style="width: 16px; height: 16px; color: var(--neon-orange)"></i>
-                            4. Subsystem D: Decoupled SQLite WAL Database
-                        </strong>
-                        <p style="color: var(--text-secondary); font-size: 12px;">
-                            A central SQLite database configured in Write-Ahead Logging (WAL) mode enables concurrent, lock-free operations. It segregates trade metrics by execution mode (`live`, `paper`, `simulation`), preventing statistics contamination, and holds active neural configuration files loaded dynamically by runtime threads.
-                        </p>
+                <!-- Deployment -->
+                <div style="border-radius: 10px; border: 1px solid var(--border-color); padding: 14px;">
+                    <h3 style="font-size: 13px; font-weight: 600; margin: 0 0 8px 0;">Deployment</h3>
+                    <div style="font-family: monospace; font-size: 11px; color: var(--text-secondary); line-height: 1.8;">
+                        <div>Proxmox LXC (192.168.0.144) &mdash; <span style="color: var(--neon-green);">nexustrader.service</span> (systemd, auto-restart)</div>
+                        <div>Python 3.8 + FastAPI + CCXT + scikit-learn + numpy + websockets</div>
+                        <div>SQLite DB at /root/nexustrader/nexustrader.db (WAL mode)</div>
+                        <div>Port 8000 &mdash; dashboard + REST API + WebSocket (ws://.../ws)</div>
+                        <div>Live broker: Kraken (CCXT) &mdash; paper/sim mode available</div>
+                        <div>CI: GitHub &rarr; rsync via SSH key &rarr; systemctl restart</div>
                     </div>
+                </div>
 
-                    <div style="grid-column: span 2; background: rgba(255,255,255,0.01); padding: 18px; border-radius: 10px; border: 1px solid var(--border-color);">
-                        <strong style="color: var(--neon-red); display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
-                            <i data-lucide="refresh-cw" style="width: 16px; height: 16px;"></i>
-                            5. In-Memory Reinforcement Feedback & Decoupled Cron Optimizations
-                        </strong>
-                        <p style="color: var(--text-secondary); font-size: 12px;">
-                            When a trade closes, the PnL percentage acts as a reward signal, triggering backpropagation. The network updates strategy allocation weights in-memory (and saves to the database settings during live trades). Decoupled cron daemons run out-of-process to perform parameter optimizations, news correlations, risk auditing, and weekly HTML blog publishing.
-                        </p>
-                    </div>
+                <!-- Honest caveats -->
+                <div style="border-radius: 10px; border: 1px solid rgba(244, 63, 94, 0.3); background: rgba(244, 63, 94, 0.02); padding: 12px;">
+                    <h3 style="font-size: 12px; font-weight: 600; margin: 0 0 6px 0; color: var(--neon-red);">Current Limitations</h3>
+                    <ul style="margin: 0; padding-left: 16px; font-size: 11px; color: var(--text-secondary); line-height: 1.6;">
+                        <li>Policy network is an MLP, not a deep RL agent &mdash; weights shift slowly, no replay buffer</li>
+                        <li>No GPU support &mdash; everything is CPU-only (scikit-learn, numpy)</li>
+                        <li>Live exchange WebSocket feeds disconnect periodically (ccxt.pro reconnection)</li>
+                        <li>Kraken API balance is ~$89 equity / $4.81 cash &mdash; most trades hit "Insufficient funds"</li>
+                        <li>No historical backtest framework integrated with live pipeline (backtest_engine.py is standalone)</li>
+                        <li>MutationFreeze blocks agent config changes &mdash; acts as a safety gate, not a learning loop</li>
+                        <li>Sparse documentation &mdash; dashboard has inline docs, code has docstrings, no external wiki</li>
+                    </ul>
                 </div>
             </article>
         </div>
