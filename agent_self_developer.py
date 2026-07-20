@@ -20,27 +20,18 @@ def load_settings():
 def run_self_developer(trigger_deploy: bool = False):
     logging.info("Starting autonomous agent self-developer session...")
     settings = load_settings()
-    gemini_api_key = settings.get("blog_gemini_api_key", "").strip()
-    ai_enabled = settings.get("blog_ai_enabled", "false") == "true"
-    
-    if not gemini_api_key or not ai_enabled:
-        logging.warning("Gemini API key is not configured or AI is disabled. Cannot run self-developer agent.")
-        return "Gemini API key is not configured or AI is disabled."
-        
+
     # Read files
     try:
-        with open("dashboard/index.html", "r") as f:
-            index_html = f.read()
-        with open("dashboard/index_v2.css", "r") as f:
-            index_css = f.read()
-        with open("dashboard/app_v2.js", "r") as f:
-            app_js = f.read()
-        with open("main.py", "r") as f:
-            main_py = f.read()
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        index_html = open(os.path.join(base_dir, "dashboard", "index.html")).read()
+        index_css  = open(os.path.join(base_dir, "dashboard", "index_v2.css")).read()
+        app_js     = open(os.path.join(base_dir, "dashboard", "app_v2.js")).read()
+        main_py    = open(os.path.join(base_dir, "main.py")).read()
     except Exception as e:
         logging.error(f"Failed to read codebase files: {e}")
         return f"Failed to read codebase files: {e}"
-        
+
     db_prompt = settings.get("prompt_self_developer")
     if not db_prompt:
         db_prompt = """You are Antigravity, an elite autonomous AI software engineer. Your goal is to improve the NexusTrader algorithmic trading bot codebase.
@@ -48,7 +39,7 @@ Our mission is to build features and UI visualizations that help the bot consist
 
 Identify ONE specific, clean, non-breaking improvement or feature to implement. 
 Return your response STRICTLY in JSON format containing "explanation" and "modifications" find-and-replace rules."""
-        
+
     prompt = f"""{db_prompt}
 
 Codebase outline and instructions:
@@ -76,123 +67,109 @@ Return your response STRICTLY in the following JSON format (do not include markd
 
 The "find" blocks MUST MATCH EXACTLY (whitespace, newlines, etc.) to the existing content. Keep replacement blocks minimal and target-focused to avoid parsing errors.
 """
-    # Build payload
-    contents = {
-        "contents": [
-            {
-                "role": "user",
-                "parts": [
-                    {"text": prompt},
-                    {"text": f"--- START main.py ---\n{main_py}\n--- END main.py ---"},
-                    {"text": f"--- START index.html ---\n{index_html}\n--- END index.html ---"},
-                    {"text": f"--- START index_v2.css ---\n{index_css}\n--- END index_v2.css ---"},
-                    {"text": f"--- START app_v2.js ---\n{app_js}\n--- END app_v2.js ---"}
-                ]
-            }
-        ]
-    }
-    
+
+    # Build combined prompt with codebase
+    contents_prompt = prompt + (
+        f"\n--- START main.py ---\n{main_py}\n--- END main.py ---\n"
+        f"--- START index.html ---\n{index_html}\n--- END index.html ---\n"
+        f"--- START index_v2.css ---\n{index_css}\n--- END index_v2.css ---\n"
+        f"--- START app_v2.js ---\n{app_js}\n--- END app_v2.js ---"
+    )
+
     try:
-        logging.info("Requesting new feature design from Gemini...")
-        from quant_utils import query_gemini_robust
-        raw_text = query_gemini_robust(gemini_api_key, contents)
-        
-        # Remove any markdown wrappers if present
-        if raw_text.startswith("```json"):
-            raw_text = raw_text[7:]
-        if raw_text.endswith("```"):
-            raw_text = raw_text[:-3]
-        raw_text = raw_text.strip()
-        
+        from openclaw_bridge import query_openclaw, extract_json_block
+        logging.info("Requesting new feature design via OpenClaw Gateway...")
+        raw_text = query_openclaw(contents_prompt, system_prompt=(
+            "You are an autonomous AI software engineer. "
+            "Analyze the provided codebase and return ONLY valid JSON — no markdown, no commentary."
+        ))
+        raw_text = extract_json_block(raw_text)
         response_data = json.loads(raw_text)
     except Exception as e:
-        logging.error(f"API call failed: {e}")
-        return f"API call failed: {e}"
-        
+        logging.error(f"OpenClaw call failed: {e}")
+        return f"OpenClaw call failed: {e}"
+
     explanation = response_data.get("explanation", "No explanation provided.")
     modifications = response_data.get("modifications", [])
-    
-    logging.info(f"Gemini generated feature: {explanation}")
-    
-    # Save a backup of the current state of modified files in case we need to roll back
+
+    logging.info(f"Generated feature: {explanation}")
+
+    # Backups
     backups = {}
     try:
         for mod in modifications:
-            file_path = mod["file_path"]
-            with open(file_path, "r") as f:
-                backups[file_path] = f.read()
+            fp = os.path.join(base_dir, mod["file_path"])
+            backups[fp] = open(fp).read()
     except Exception as e:
-        logging.error(f"Failed to create backups of modified files: {e}")
+        logging.error(f"Failed to create backups: {e}")
         return f"Failed to create backups: {e}"
-        
+
     # Apply modifications
     try:
         for mod in modifications:
-            file_path = mod["file_path"]
-            with open(file_path, "r") as f:
-                content = f.read()
+            fp = os.path.join(base_dir, mod["file_path"])
+            content = open(fp).read()
             for rep in mod["replacements"]:
                 find_str = rep["find"]
                 replace_str = rep["replace"]
-                if find_str in content:
-                    content = content.replace(find_str, replace_str)
-                else:
-                    raise ValueError(f"Could not find exact text match in {file_path}:\n{find_str}")
-            with open(file_path, "w") as f:
-                f.write(content)
+                if find_str not in content:
+                    raise ValueError(f"Could not find exact text match in {mod['file_path']}")
+                content = content.replace(find_str, replace_str)
+            open(fp, "w").write(content)
         logging.info("Successfully applied file replacements.")
     except Exception as e:
         logging.error(f"Failed to apply modifications: {e}. Restoring backups...")
-        for file_path, original in backups.items():
-            with open(file_path, "w") as f:
-                f.write(original)
+        for fp, original in backups.items():
+            open(fp, "w").write(original)
         return f"Modifications failed: {e}"
-        
-    # Verify compilation & correctness of main.py if modified
+
+    # Compilation check
     try:
-        compile_res = subprocess.run(
+        res = subprocess.run(
             ["python3", "-m", "py_compile", "main.py"],
-            capture_output=True,
-            text=True
+            capture_output=True, text=True, cwd=base_dir
         )
-        if compile_res.returncode != 0:
-            raise ValueError(f"Compilation error in main.py: {compile_res.stderr}")
-        logging.info("Compilation check passed successfully.")
+        if res.returncode != 0:
+            raise ValueError(f"Compilation error: {res.stderr}")
+        logging.info("Compilation check passed.")
     except Exception as e:
-        logging.error(f"Validation failed: {e}. Rolling back modified files...")
-        for file_path, original in backups.items():
-            with open(file_path, "w") as f:
-                f.write(original)
+        logging.error(f"Validation failed: {e}. Rolling back...")
+        for fp, original in backups.items():
+            open(fp, "w").write(original)
         return f"Validation failed: {e}"
-        
-    # Deploy to Proxmox server if requested
+
+    # Deploy
     if trigger_deploy:
         try:
-            deploy_res = subprocess.run(
-                ["./deploy.sh"],
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-            logging.info(f"Deployment completed: {deploy_res.stdout}")
+            deploy_script = os.path.join(base_dir, "deploy.sh")
+            if os.path.exists(deploy_script):
+                deploy_res = subprocess.run(
+                    [deploy_script], capture_output=True, text=True, timeout=30, cwd=base_dir
+                )
+                logging.info(f"Deployment: {deploy_res.stdout}")
+            else:
+                logging.warning("deploy.sh not found, skipping deployment.")
         except Exception as e:
             logging.error(f"Deployment failed: {e}")
-        
-    # Run meta-prompt optimization
-    optimize_own_prompt(settings, gemini_api_key)
 
-    # Write a summary log in the blog summaries folder
-    blog_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "blog", "daily_summaries")
+    # Meta-prompt optimisation
+    optimize_own_prompt(settings)
+
+    # Write summary
+    blog_dir = os.path.join(base_dir, "blog", "daily_summaries")
     if os.path.exists(blog_dir):
         report_path = os.path.join(blog_dir, "weekly_self_improvement.md")
         try:
             with open(report_path, "a") as f:
-                f.write(f"\n\n### 🤖 AI Agent Self-Development Session:\n* **Designed Feature**: {explanation}\n* **Status**: Successfully deployed to Proxmox.\n")
-            logging.info("Saved AI self development log to blog.")
+                f.write(f"\n\n### \U0001f916 AI Agent Self-Development Session:\n"
+                        f"* **Designed Feature**: {explanation}\n"
+                        f"* **Status**: Successfully deployed.\n")
+            logging.info("Saved self-development log to blog.")
         except Exception as e:
-            logging.error(f"Failed to write self-development log to blog: {e}")
-            
+            logging.error(f"Failed to write log: {e}")
+
     return f"Success! Designed and implemented new feature:\n\n{explanation}"
+
 
 def save_setting(key, value):
     conn = sqlite3.connect(DB_PATH)
@@ -201,67 +178,63 @@ def save_setting(key, value):
     conn.commit()
     conn.close()
 
-def optimize_own_prompt(settings, gemini_api_key):
+
+def optimize_own_prompt(settings):
+    """Meta-cognition: evaluate and rewrite the self-developer prompt template."""
     try:
         db_prompt = settings.get("prompt_self_developer", "")
-        
-        # Read PhD Quant optimizer logs
-        quant_summary = ""
         base_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # Read past self-development logs
+        quant_summary = ""
         report_path = os.path.join(base_dir, "blog", "daily_summaries", "weekly_self_improvement.md")
         if os.path.exists(report_path):
-            with open(report_path, "r") as f:
+            with open(report_path) as f:
                 quant_summary = f.read()[-3000:]
-                
-        # Read Blogger log from the latest weekly report
+
         blog_summary = ""
         try:
             blog_dir = os.path.join(base_dir, "blog")
             reports = [f for f in os.listdir(blog_dir) if f.startswith("weekly_report_") and f.endswith(".md")]
             if reports:
-                latest_report = sorted(reports)[-1]
-                with open(os.path.join(blog_dir, latest_report), "r") as f:
+                latest = sorted(reports)[-1]
+                with open(os.path.join(blog_dir, latest)) as f:
                     blog_summary = f.read()[-3000:]
         except Exception:
             pass
-            
-        prompt = f"""
-You are Antigravity, the AI Software Developer agent. Part of your meta-cognition routine is to evaluate your own prompt template and optimize it based on:
-1. Your current prompt template.
-2. The outputs of the PhD Quant Optimizer agent (which optimizes parameters).
-3. The outputs of the Blogger agent (which logs weekly performance summaries).
 
-Our mission is to make the bot consistently earn $1,000 USD a day.
+        prompt = f"""
+You are an autonomous AI prompt engineer. Evaluate and rewrite the self-developer prompt template based on:
+1. The current template.
+2. Output from past self-development sessions.
+3. Weekly blog reports.
+
+Goal: features that help the bot consistently earn $1,000 USD/day.
 
 Current Prompt Template:
 \"\"\"{db_prompt}\"\"\"
 
-Recent PhD Quant Logs:
+Recent Self-Development Logs:
 \"\"\"{quant_summary}\"\"\"
 
 Recent Blogger Reports:
 \"\"\"{blog_summary}\"\"\"
 
-Critically analyze this context. Redesign your own prompt template to focus it even more tightly on achieving $1,000 USD/day, ensuring it asks for non-breaking features and keeps its final modifications JSON format.
-Return ONLY a JSON block containing the key "revised_prompt_self_developer" with your improved prompt template as the value (do not include markdown wrappers like ```json).
+Return ONLY a JSON object with key "revised_prompt_self_developer" containing your improved prompt template (no markdown wrappers).
 """
-        from quant_utils import query_gemini_robust
-        raw_text = query_gemini_robust(gemini_api_key, prompt)
-        if raw_text.startswith("```json"):
-            raw_text = raw_text[7:]
-        if raw_text.endswith("```"):
-            raw_text = raw_text[:-3]
-        raw_text = raw_text.strip()
-        
+        from openclaw_bridge import query_openclaw, extract_json_block
+        raw_text = query_openclaw(prompt, system_prompt="You are a prompt engineer. Return only valid JSON.")
+        raw_text = extract_json_block(raw_text)
         res_data = json.loads(raw_text)
         revised = res_data.get("revised_prompt_self_developer")
         if revised:
             save_setting("prompt_self_developer", revised)
-            logging.info("Meta-optimization: Successfully updated prompt_self_developer in database settings.")
+            logging.info("Meta-optimization: updated prompt_self_developer in database.")
             return revised
     except Exception as e:
-        logging.error(f"Failed to meta-optimize prompt_self_developer: {e}")
+        logging.error(f"Failed to meta-optimize prompt: {e}")
     return None
+
 
 if __name__ == "__main__":
     print(run_self_developer(trigger_deploy=True))
