@@ -607,6 +607,13 @@ if __name__ == "__main__":
     except Exception as e:
         logging.error(f"Error running weekly self-improvement optimization: {e}")
         
+    # 3. Run the weekly Long-Term Strategy Quant Optimizer
+    try:
+        from long_term_quant import run_long_term_strategy_optimization
+        run_long_term_strategy_optimization()
+    except Exception as e:
+        logging.error(f"Error running weekly long-term strategy optimization: {e}")
+        
     settings = load_settings()
     
     # Check if blog agent is disabled in config

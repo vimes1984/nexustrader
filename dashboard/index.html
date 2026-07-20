@@ -57,6 +57,25 @@
         .animate-spin {
             animation: spin 1s linear infinite;
         }
+        
+        /* Switch slider styles */
+        .switch input:checked + .slider {
+            background-color: var(--neon-blue) !important;
+        }
+        .switch .slider:before {
+            position: absolute;
+            content: "";
+            height: 14px;
+            width: 14px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        .switch input:checked + .slider:before {
+            transform: translateX(20px);
+        }
     </style>
 </head>
 <body>
@@ -64,6 +83,9 @@
         <!-- App Header -->
         <header class="glass-panel" style="margin-bottom: 12px; padding: 15px 25px; position: relative; z-index: 999999;">
             <div class="brand">
+                <button id="open-drawer-btn" style="background: transparent; border: none; color: var(--text-secondary); cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center; margin-right: 12px;">
+                    <i data-lucide="menu" style="width: 24px; height: 24px;"></i>
+                </button>
                 <i data-lucide="cpu" style="color: var(--neon-blue); width: 32px; height: 32px;"></i>
                 <div>
                     <h1 style="font-size: 22px; font-weight: 700; letter-spacing: -0.5px;">NexusTrader</h1>
@@ -135,41 +157,64 @@
             </div>
         </div>
 
-        <!-- Menu Navigation Tabs -->
-        <nav class="nav-tabs" style="display: flex; gap: 8px; margin-bottom: 20px; padding: 4px; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-color); border-radius: 12px;">
-            <button class="nav-tab active" data-tab="tab-dashboard" style="flex: 1; min-width: 90px; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 12px; background: transparent; border: 1px solid transparent; color: var(--text-secondary); border-radius: 8px; font-family: inherit; font-size: 12px; font-weight: 500; cursor: pointer; transition: var(--transition);">
-                <i data-lucide="layout-dashboard" style="width: 16px; height: 16px;"></i>
-                Dashboard
-            </button>
-            <button class="nav-tab" data-tab="tab-neural" style="flex: 1; min-width: 90px; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 12px; background: transparent; border: 1px solid transparent; color: var(--text-secondary); border-radius: 8px; font-family: inherit; font-size: 12px; font-weight: 500; cursor: pointer; transition: var(--transition);">
-                <i data-lucide="brain-circuit" style="width: 16px; height: 16px;"></i>
-                Neural Core
-            </button>
-            <button class="nav-tab" data-tab="tab-assets" style="flex: 1; min-width: 90px; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 12px; background: transparent; border: 1px solid transparent; color: var(--text-secondary); border-radius: 8px; font-family: inherit; font-size: 12px; font-weight: 500; cursor: pointer; transition: var(--transition);">
-                <i data-lucide="coins" style="width: 16px; height: 16px; color: var(--neon-blue);"></i>
-                Assets Manager
-            </button>
-            <button class="nav-tab" data-tab="tab-simulator" style="flex: 1; min-width: 90px; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 12px; background: transparent; border: 1px solid transparent; color: var(--text-secondary); border-radius: 8px; font-family: inherit; font-size: 12px; font-weight: 500; cursor: pointer; transition: var(--transition);">
-                <i data-lucide="play-circle" style="width: 16px; height: 16px; color: var(--neon-purple);"></i>
-                Training Simulator
-            </button>
-            <button class="nav-tab" data-tab="tab-agents" style="flex: 1; min-width: 90px; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 12px; background: transparent; border: 1px solid transparent; color: var(--text-secondary); border-radius: 8px; font-family: inherit; font-size: 12px; font-weight: 500; cursor: pointer; transition: var(--transition);">
-                <i data-lucide="bot" style="width: 16px; height: 16px;"></i>
-                AI Agent Nexus
-            </button>
-            <button class="nav-tab" data-tab="tab-settings" style="flex: 1; min-width: 90px; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 12px; background: transparent; border: 1px solid transparent; color: var(--text-secondary); border-radius: 8px; font-family: inherit; font-size: 12px; font-weight: 500; cursor: pointer; transition: var(--transition);">
-                <i data-lucide="sliders" style="width: 16px; height: 16px;"></i>
-                Trading System
-            </button>
-            <button class="nav-tab" data-tab="tab-architecture" style="flex: 1; min-width: 90px; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 12px; background: transparent; border: 1px solid transparent; color: var(--text-secondary); border-radius: 8px; font-family: inherit; font-size: 12px; font-weight: 500; cursor: pointer; transition: var(--transition);">
-                <i data-lucide="network" style="width: 16px; height: 16px;"></i>
-                Architecture
-            </button>
-            <button class="nav-tab" data-tab="tab-logs" style="flex: 1; min-width: 90px; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 12px; background: transparent; border: 1px solid transparent; color: var(--text-secondary); border-radius: 8px; font-family: inherit; font-size: 12px; font-weight: 500; cursor: pointer; transition: var(--transition);">
-                <i data-lucide="terminal" style="width: 16px; height: 16px;"></i>
-                System Logs
-            </button>
-        </nav>
+        <!-- Hamburger Navigation Drawer Overlay -->
+        <div id="nav-drawer-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(4px); z-index: 1000000; transition: opacity 0.3s ease;"></div>
+        
+        <!-- Hamburger Slide Navigation Drawer -->
+        <div id="nav-drawer" style="position: fixed; top: 0; left: -280px; width: 280px; height: 100vh; background: var(--bg-card); border-right: 1px solid var(--border-color); box-shadow: 10px 0 30px rgba(0,0,0,0.5); z-index: 1000001; transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1); display: flex; flex-direction: column; padding: 24px 16px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 1px solid var(--border-color);">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <i data-lucide="activity" style="width: 20px; height: 20px; color: var(--neon-blue);"></i>
+                    <span style="font-weight: 700; font-size: 16px; letter-spacing: 0.5px; background: linear-gradient(90deg, #fff, #94a3b8); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">NEXUSTRADER</span>
+                </div>
+                <button id="close-drawer-btn" style="background: transparent; border: none; color: var(--text-secondary); cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center;">
+                    <i data-lucide="x" style="width: 20px; height: 20px;"></i>
+                </button>
+            </div>
+            
+            <nav style="display: flex; flex-direction: column; gap: 6px; flex: 1; overflow-y: auto;">
+                <button class="nav-tab active" data-tab="tab-dashboard" style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: transparent; border: none; border-radius: 8px; color: var(--text-secondary); font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer; text-align: left; transition: all 0.2s ease;">
+                    <i data-lucide="layout-dashboard" style="width: 18px; height: 18px;"></i>
+                    Dashboard
+                </button>
+                <button class="nav-tab" data-tab="tab-neural" style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: transparent; border: none; border-radius: 8px; color: var(--text-secondary); font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer; text-align: left; transition: all 0.2s ease;">
+                    <i data-lucide="brain-circuit" style="width: 18px; height: 18px;"></i>
+                    Neural Core
+                </button>
+                <button class="nav-tab" data-tab="tab-assets" style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: transparent; border: none; border-radius: 8px; color: var(--text-secondary); font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer; text-align: left; transition: all 0.2s ease;">
+                    <i data-lucide="coins" style="width: 18px; height: 18px; color: var(--neon-blue);"></i>
+                    Assets Manager
+                </button>
+                <button class="nav-tab" data-tab="tab-simulator" style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: transparent; border: none; border-radius: 8px; color: var(--text-secondary); font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer; text-align: left; transition: all 0.2s ease;">
+                    <i data-lucide="play-circle" style="width: 18px; height: 18px; color: var(--neon-purple);"></i>
+                    Training Simulator
+                </button>
+                <button class="nav-tab" data-tab="tab-longterm" style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: transparent; border: none; border-radius: 8px; color: var(--text-secondary); font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer; text-align: left; transition: all 0.2s ease;">
+                    <i data-lucide="trending-up" style="width: 18px; height: 18px; color: var(--neon-green);"></i>
+                    Long-Term Strategy
+                </button>
+                <button class="nav-tab" data-tab="tab-agents" style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: transparent; border: none; border-radius: 8px; color: var(--text-secondary); font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer; text-align: left; transition: all 0.2s ease;">
+                    <i data-lucide="bot" style="width: 18px; height: 18px;"></i>
+                    AI Agent Nexus
+                </button>
+                <button class="nav-tab" data-tab="tab-settings" style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: transparent; border: none; border-radius: 8px; color: var(--text-secondary); font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer; text-align: left; transition: all 0.2s ease;">
+                    <i data-lucide="sliders" style="width: 18px; height: 18px;"></i>
+                    Trading System
+                </button>
+                <button class="nav-tab" data-tab="tab-notifications" style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: transparent; border: none; border-radius: 8px; color: var(--text-secondary); font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer; text-align: left; transition: all 0.2s ease;">
+                    <i data-lucide="bell" style="width: 18px; height: 18px; color: var(--neon-blue);"></i>
+                    Notifications settings
+                </button>
+                <button class="nav-tab" data-tab="tab-architecture" style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: transparent; border: none; border-radius: 8px; color: var(--text-secondary); font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer; text-align: left; transition: all 0.2s ease;">
+                    <i data-lucide="network" style="width: 18px; height: 18px;"></i>
+                    Architecture
+                </button>
+                <button class="nav-tab" data-tab="tab-logs" style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: transparent; border: none; border-radius: 8px; color: var(--text-secondary); font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer; text-align: left; transition: all 0.2s ease;">
+                    <i data-lucide="terminal" style="width: 18px; height: 18px;"></i>
+                    System Logs
+                </button>
+            </nav>
+        </div>
 
         <!-- KPI Grid (Global to active tabs) -->
         <section class="dashboard-grid" aria-label="Key Performance Indicators" style="margin-bottom: 20px;">
@@ -1190,6 +1235,217 @@
             </main>
         </div>
 
+        <!-- TAB CONTENT 3.5: LONG-TERM STRATEGY -->
+        <div id="tab-longterm" class="tab-content">
+            <main class="main-content" style="grid-template-columns: 2fr 1.2fr; gap: 20px; display: grid;">
+                <div class="main-left-column" style="display: flex; flex-direction: column; gap: 20px;">
+                    <!-- Rule Engine & Rationale -->
+                    <article class="glass-panel" style="padding: 24px;">
+                        <h2 class="panel-title" style="display: flex; align-items: center; gap: 8px; margin-bottom: 15px;">
+                            <i data-lucide="shield" style="color: var(--neon-green)"></i>
+                            Long-Term Strategy Rules & Statistical Rationale
+                        </h2>
+                        <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 20px; line-height: 1.5;">
+                            Formulated directly from mined production logs (42 trades analyzed) to eliminate transaction fee drag, filter low-expectancy environments, and establish steady walk-forward growth.
+                        </p>
+                        
+                        <div style="display: flex; flex-direction: column; gap: 15px;">
+                            <div style="background: rgba(255,255,255,0.01); border: 1px solid var(--border-color); padding: 15px; border-radius: 8px;">
+                                <strong style="color: var(--neon-blue); font-size: 13px; display: block; margin-bottom: 4px;">Rule 1: Trend Filter Alignment (Kalman Filter)</strong>
+                                <span style="font-size: 12px; color: var(--text-secondary); line-height: 1.4; display: block;">
+                                    Only execute Buy/Long trades when the Kalman filter indicates a solid up-trend. 
+                                    <strong style="color: var(--neon-green);">Rationale:</strong> Production logs reveal that Kalman trend-aligned entries (Value 1.0) achieved an expectancy of $-0.0064, while trend-opposing entries (Value -1.0) crashed to $-0.0628 (nearly 10x higher average loss!).
+                                </span>
+                            </div>
+                            
+                            <div style="background: rgba(255,255,255,0.01); border: 1px solid var(--border-color); padding: 15px; border-radius: 8px;">
+                                <strong style="color: var(--neon-blue); font-size: 13px; display: block; margin-bottom: 4px;">Rule 2: Extended Holding Horizon (4-Hour Minimum)</strong>
+                                <span style="font-size: 12px; color: var(--text-secondary); line-height: 1.4; display: block;">
+                                    Set minimum trade holding duration to 240 minutes (4 hours) or hold until ATR targets are crossed, up to 48 hours. 
+                                    <strong style="color: var(--neon-green);">Rationale:</strong> Mined logs show an average holding time of 87.81 minutes. At this frequency, standard exchange transaction fees (0.15%) and bid-ask slippage consume the entirety of the returns. Moving to a multi-hour horizon lets the trend outrun execution costs.
+                                </span>
+                            </div>
+
+                            <div style="background: rgba(255,255,255,0.01); border: 1px solid var(--border-color); padding: 15px; border-radius: 8px;">
+                                <strong style="color: var(--neon-blue); font-size: 13px; display: block; margin-bottom: 4px;">Rule 3: Volatility-Targeted Position Sizing</strong>
+                                <span style="font-size: 12px; color: var(--text-secondary); line-height: 1.4; display: block;">
+                                    Dynamically scale positions by <code style="color: var(--neon-purple); font-family: monospace;">Target Volatility (1.5% of price) / Current ATR</code>.
+                                    <strong style="color: var(--neon-green);">Rationale:</strong> Volatility clustering causes outsized stops during peak volatility, leading to massive drawdowns. Sizing inversely to Average True Range standardizes risk contribution across all regimes.
+                                </span>
+                            </div>
+
+                            <div style="background: rgba(255,255,255,0.01); border: 1px solid var(--border-color); padding: 15px; border-radius: 8px;">
+                                <strong style="color: var(--neon-blue); font-size: 13px; display: block; margin-bottom: 4px;">Rule 4: Neural Network Consensus Gate</strong>
+                                <span style="font-size: 12px; color: var(--text-secondary); line-height: 1.4; display: block;">
+                                    Restrict execution of long positions if the active Policy brain outputs a weight below 12% for the Kalman filter trend.
+                                    <strong style="color: var(--neon-green);">Rationale:</strong> Mined results show that when the NN allocation consensus drops (Value -1.0), average trade loss was $-0.0643. When positive, average loss was constrained to $-0.0178 (a **72.3% reduction**).
+                                </span>
+                            </div>
+
+                            <div style="background: rgba(255,255,255,0.01); border: 1px solid var(--border-color); padding: 15px; border-radius: 8px;">
+                                <strong style="color: var(--neon-blue); font-size: 13px; display: block; margin-bottom: 4px;">Rule 5: Multi-Layer Drawdown Circuit Breaker</strong>
+                                <span style="font-size: 12px; color: var(--text-secondary); line-height: 1.4; display: block;">
+                                    Halt new position triggers if the main trading system drawdown exceeds 5% or the shadow walk-forward model drawdown exceeds 10%.
+                                    <strong style="color: var(--neon-green);">Rationale:</strong> Protects capital against structural market regime changes or API data feed corruptions.
+                                </span>
+                            </div>
+                        </div>
+                    </article>
+
+                    <!-- Shadow Mode Trades Log -->
+                    <article class="glass-panel" style="padding: 24px;">
+                        <h2 class="panel-title" style="display: flex; align-items: center; gap: 8px; margin-bottom: 15px;">
+                            <i data-lucide="eye" style="color: var(--neon-blue)"></i>
+                            Shadow Mode Walk-Forward Trades Log
+                        </h2>
+                        <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 15px;">
+                            All long-term strategy signals are evaluated and executed in real-time shadow (paper) mode alongside live logic, capturing bid-ask slippage (0.05%) and exchange commissions (0.15%).
+                        </p>
+                        
+                        <div style="overflow-x: auto;">
+                            <table style="width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; color: var(--text-primary);">
+                                <thead>
+                                    <tr style="border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">
+                                        <th style="padding: 10px 5px;">Time</th>
+                                        <th style="padding: 10px 5px;">Asset</th>
+                                        <th style="padding: 10px 5px;">Side</th>
+                                        <th style="padding: 10px 5px;">Qty</th>
+                                        <th style="padding: 10px 5px;">Entry Price</th>
+                                        <th style="padding: 10px 5px;">Exit Price</th>
+                                        <th style="padding: 10px 5px;">PnL ($)</th>
+                                        <th style="padding: 10px 5px;">PnL (%)</th>
+                                        <th style="padding: 10px 5px;">Exit/Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="shadow-trades-tbody">
+                                    <tr>
+                                        <td colspan="9" style="text-align: center; color: var(--text-muted); padding: 15px;">No shadow trades loaded yet.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </article>
+                </div>
+                <div class="main-right-column" style="display: flex; flex-direction: column; gap: 20px;">
+                    <!-- Daily Target Configuration Panel -->
+                    <article class="glass-panel" style="padding: 20px;">
+                        <h3 style="font-size: 14px; font-weight: 700; color: var(--text-primary); margin-top: 0; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="target" style="color: var(--neon-purple); width: 16px; height: 16px;"></i>
+                            Configure Daily Income Target
+                        </h3>
+                        <p style="font-size: 11px; color: var(--text-secondary); line-height: 1.4; margin-bottom: 15px;">
+                            Adjust your dynamic daily profit goal. Sizing calculations and expectancy models will adapt automatically.
+                        </p>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <div style="position: relative; flex-grow: 1;">
+                                <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 12px; color: var(--text-secondary);">$</span>
+                                <input type="number" id="input-daily-goal" min="1" step="10" value="1000" style="width: 100%; padding: 8px 8px 8px 22px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 6px; font-size: 12px; color: var(--text-primary); font-family: monospace;" />
+                            </div>
+                            <button class="btn" id="btn-save-daily-goal" style="padding: 8px 15px; border-color: rgba(168,85,247,0.3); color: var(--neon-purple); font-size: 12px;">
+                                Save Target
+                            </button>
+                        </div>
+                    </article>
+
+                    <!-- Side-by-Side Performance Comparison -->
+                    <article class="glass-panel" style="padding: 20px;">
+                        <h3 style="font-size: 14px; font-weight: 700; color: var(--text-primary); margin-top: 0; margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="bar-chart-2" style="color: var(--neon-purple); width: 16px; height: 16px;"></i>
+                            Live vs. Backtest Performance
+                        </h3>
+                        
+                        <div style="overflow-x: auto;">
+                            <table style="width: 100%; border-collapse: collapse; font-size: 11px; text-align: left; color: var(--text-primary);">
+                                <thead>
+                                    <tr style="border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">
+                                        <th style="padding: 8px 4px;">Metric</th>
+                                        <th style="padding: 8px 4px; text-align: right;">Live/Paper</th>
+                                        <th style="padding: 8px 4px; text-align: right;">Shadow (LT)</th>
+                                        <th style="padding: 8px 4px; text-align: right;">Backtest</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.02);">
+                                        <td style="padding: 8px 4px; font-weight: 600;">Win Rate</td>
+                                        <td style="padding: 8px 4px; text-align: right;" id="lt-live-winrate">30.95%</td>
+                                        <td style="padding: 8px 4px; text-align: right; color: var(--neon-blue);" id="lt-shadow-winrate">0.00%</td>
+                                        <td style="padding: 8px 4px; text-align: right;" id="lt-backtest-winrate">58.40%</td>
+                                    </tr>
+                                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.02);">
+                                        <td style="padding: 8px 4px; font-weight: 600;">Net Profit</td>
+                                        <td style="padding: 8px 4px; text-align: right;" id="lt-live-pnl">-$1.41</td>
+                                        <td style="padding: 8px 4px; text-align: right; color: var(--neon-blue);" id="lt-shadow-pnl">$0.00</td>
+                                        <td style="padding: 8px 4px; text-align: right;" id="lt-backtest-pnl">+€0.29</td>
+                                    </tr>
+                                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.02);">
+                                        <td style="padding: 8px 4px; font-weight: 600;">Expectancy</td>
+                                        <td style="padding: 8px 4px; text-align: right;" id="lt-live-expectancy">-0.03%</td>
+                                        <td style="padding: 8px 4px; text-align: right; color: var(--neon-blue);" id="lt-shadow-expectancy">0.00%</td>
+                                        <td style="padding: 8px 4px; text-align: right;" id="lt-backtest-expectancy">+0.42%</td>
+                                    </tr>
+                                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.02);">
+                                        <td style="padding: 8px 4px; font-weight: 600; vertical-align: top;">Capital for Target</td>
+                                        <td style="padding: 8px 4px; text-align: right; color: var(--neon-red); vertical-align: top;" id="lt-live-capital">Infinite<br><span style="font-size: 8px; color: var(--text-muted); font-weight: 400;">(Neg. Expectancy)</span></td>
+                                        <td style="padding: 8px 4px; text-align: right; color: var(--neon-blue); vertical-align: top;" id="lt-shadow-capital">Calculating...</td>
+                                        <td style="padding: 8px 4px; text-align: right; vertical-align: top;" id="lt-backtest-capital">$1,190,476</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </article>
+
+                    <!-- Capital Sizing Calculator Explainer -->
+                    <article class="glass-panel" style="padding: 20px;">
+                        <h3 style="font-size: 14px; font-weight: 700; color: var(--text-primary); margin-top: 0; margin-bottom: 10px; display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="calculator" style="color: var(--neon-green); width: 16px; height: 16px;"></i>
+                            Honest Capital Target Math
+                        </h3>
+                        <p style="font-size: 11px; color: var(--text-secondary); line-height: 1.4; margin-bottom: 12px;">
+                            Required capital is computed directly from actual trading outcomes to eliminate bias:
+                        </p>
+                        <div style="font-family: monospace; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); padding: 10px; border-radius: 6px; font-size: 10px; color: var(--neon-blue); line-height: 1.4; margin-bottom: 12px;">
+                            Capital = Target (<span id="calc-goal-target-formula">$1,000</span>) / (Trades/Day * Kelly Fraction * Expectancy %)
+                        </div>
+                        <span style="font-size: 11px; color: var(--text-muted); display: block; line-height: 1.4;">
+                            ⚠️ **The Uncomfortable Truth:** Because our active trading results currently produce a negative expectancy per trade (-0.03%), **no amount of capital** can mathematically scale to average <span id="calc-goal-target-uncomfortable">$1,000</span>/day. The system must remain in shadow/paper validation until expectancy turns positive.
+                        </span>
+                    </article>
+
+                    <!-- Neural Network Explainer -->
+                    <article class="glass-panel" style="padding: 20px;">
+                        <h3 style="font-size: 14px; font-weight: 700; color: var(--text-primary); margin-top: 0; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="brain-circuit" style="color: var(--neon-purple); width: 16px; height: 16px;"></i>
+                            Neural Network Decision Chain Explainer
+                        </h3>
+                        <p style="font-size: 11px; color: var(--text-secondary); line-height: 1.4; margin-bottom: 15px;">
+                            How the NumPy-based reinforcement learning model guides the long-term execution pipeline:
+                        </p>
+                        
+                        <!-- Simple Flowchart -->
+                        <div style="display: flex; flex-direction: column; gap: 6px; align-items: center; margin-bottom: 15px;">
+                            <div style="border: 1px solid var(--border-color); padding: 4px 8px; border-radius: 4px; font-size: 9px; width: 100%; text-align: center; background: rgba(0,240,255,0.02); color: var(--neon-blue); font-family: monospace;">8D Inputs (Regime, RSI, Volatility, Sentiment...)</div>
+                            <i data-lucide="arrow-down" style="width: 12px; height: 12px; color: var(--text-muted);"></i>
+                            <div style="border: 1px solid var(--border-color); padding: 4px 8px; border-radius: 4px; font-size: 9px; width: 100%; text-align: center; background: rgba(168,85,247,0.02); color: var(--neon-purple); font-family: monospace;">Multi-Layer Perceptron Forward Pass</div>
+                            <i data-lucide="arrow-down" style="width: 12px; height: 12px; color: var(--text-muted);"></i>
+                            <div style="border: 1px solid var(--border-color); padding: 4px 8px; border-radius: 4px; font-size: 9px; width: 100%; text-align: center; background: rgba(255,255,255,0.02); color: var(--text-primary); font-family: monospace;">Softmax Weight Allocations over Strategies</div>
+                            <i data-lucide="arrow-down" style="width: 12px; height: 12px; color: var(--text-muted);"></i>
+                            <div style="border: 1px solid var(--border-color); padding: 4px 8px; border-radius: 4px; font-size: 9px; width: 100%; text-align: center; background: rgba(16,185,129,0.02); color: var(--neon-green); font-family: monospace;">Consensus Gate: Reject if Kalman weight &lt; 12%</div>
+                        </div>
+
+                        <div style="border-top: 1px solid var(--border-color); padding-top: 12px; font-size: 11px;">
+                            <span style="font-weight: 600; color: var(--text-primary); display: block; margin-bottom: 6px;">Quantified Edge Contribution:</span>
+                            <ul style="padding-left: 15px; margin: 0 0 10px 0; color: var(--text-secondary); display: flex; flex-direction: column; gap: 4px;">
+                                <li>**With NN active (Long-Term Rule 4):** Avg trade loss constrained to **-$0.0178**.</li>
+                                <li>**Without NN (NN Value -1.0):** Avg trade loss was **-$0.0643**.</li>
+                                <li>**Loss Reduction Edge:** **72.3%** improvement!</li>
+                            </ul>
+                            <span style="color: var(--neon-green); font-weight: 600;">The NN adds clear edge by serving as a risk gatekeeper.</span>
+                        </div>
+                    </article>
+                </div>
+            </main>
+        </div>
+
         <!-- TAB CONTENT 4: TRADING SYSTEM SETTINGS -->
         <div id="tab-settings" class="tab-content">
             <main class="main-content" style="grid-template-columns: 2fr 1fr;">
@@ -1303,8 +1559,113 @@
                             Save Broker & Risk Settings
                         </button>
                     </article>
+
+                    <!-- System Backups & Recovery -->
+                    <article class="glass-panel" style="padding: 20px; display: flex; flex-direction: column; gap: 15px;">
+                        <h3 style="font-size: 14px; font-weight: 700; color: var(--text-primary); margin: 0; display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="archive" style="color: var(--neon-blue); width: 16px; height: 16px;"></i>
+                            Backups & Recovery
+                        </h3>
+                        <p style="font-size: 11px; color: var(--text-secondary); line-height: 1.4; margin: 0;">
+                            Create compressed hot-backups of the trading state, SQLite database, configs, and logs. Restores automatically apply rolling pruning rotation.
+                        </p>
+                        
+                        <button class="btn" id="btn-trigger-backup" style="width: 100%; justify-content: center; gap: 6px; border-color: rgba(0, 240, 255, 0.2); color: var(--neon-blue); font-size: 12px; padding: 8px;">
+                            <i data-lucide="plus-circle" style="width: 14px; height: 14px;"></i>
+                            Create Hot Backup
+                        </button>
+                        
+                        <div style="border-top: 1px solid var(--border-color); padding-top: 10px; display: flex; flex-direction: column; gap: 8px;">
+                            <span style="font-size: 11px; font-weight: 600; color: var(--text-primary);">Available Backups:</span>
+                            <div id="backup-list-container" style="max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding-right: 4px;">
+                                <div style="font-size: 10px; color: var(--text-muted); text-align: center; padding: 10px 0;">No backups created yet.</div>
+                            </div>
+                        </div>
+                    </article>
                 </div>
             </main>
+        </div>
+
+        <!-- TAB CONTENT 4b: NOTIFICATION SETTINGS -->
+        <div id="tab-notifications" class="tab-content">
+            <main class="settings-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; margin-bottom: 20px;">
+                <!-- SMTP Email Configuration Card -->
+                <article class="glass-panel" style="padding: 24px; display: flex; flex-direction: column; gap: 16px;">
+                    <h2 class="panel-title" style="display: flex; align-items: center; justify-content: space-between; font-size: 16px; margin-bottom: 8px;">
+                        <span style="display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="mail" style="color: var(--neon-blue); width: 20px; height: 20px;"></i>
+                            Email Alerts (SMTP)
+                        </span>
+                        <label class="switch" style="position: relative; display: inline-block; width: 44px; height: 20px;">
+                            <input type="checkbox" id="notif-email-enabled" style="opacity: 0; width: 0; height: 0;">
+                            <span class="slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(255,255,255,0.06); border: 1px solid var(--border-color); transition: .4s; border-radius: 20px;"></span>
+                        </label>
+                    </h2>
+                    
+                    <div style="display: flex; flex-direction: column; gap: 12px;">
+                        <div class="input-group">
+                            <label for="notif-email-recipient" style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">Recipient Email Address</label>
+                            <input type="email" id="notif-email-recipient" value="churchill.c.j@gmail.com" style="width: 100%; padding: 8px 12px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-primary); font-family: inherit; font-size: 13px; outline: none; transition: var(--transition);">
+                        </div>
+                        <div class="input-group">
+                            <label for="notif-smtp-host" style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">SMTP Host</label>
+                            <input type="text" id="notif-smtp-host" placeholder="smtp.gmail.com" style="width: 100%; padding: 8px 12px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-primary); font-family: inherit; font-size: 13px; outline: none; transition: var(--transition);">
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                            <div class="input-group">
+                                <label for="notif-smtp-port" style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">SMTP Port</label>
+                                <input type="number" id="notif-smtp-port" placeholder="587" style="width: 100%; padding: 8px 12px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-primary); font-family: inherit; font-size: 13px; outline: none; transition: var(--transition);">
+                            </div>
+                            <div class="input-group">
+                                <label for="notif-smtp-user" style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">SMTP Username</label>
+                                <input type="text" id="notif-smtp-user" style="width: 100%; padding: 8px 12px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-primary); font-family: inherit; font-size: 13px; outline: none; transition: var(--transition);">
+                            </div>
+                        </div>
+                        <div class="input-group">
+                            <label for="notif-smtp-pass" style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">SMTP Password</label>
+                            <input type="password" id="notif-smtp-pass" placeholder="••••••••••••••••" style="width: 100%; padding: 8px 12px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-primary); font-family: inherit; font-size: 13px; outline: none; transition: var(--transition);">
+                        </div>
+                    </div>
+                </article>
+
+                <!-- WhatsApp Configuration Card -->
+                <article class="glass-panel" style="padding: 24px; display: flex; flex-direction: column; gap: 16px;">
+                    <h2 class="panel-title" style="display: flex; align-items: center; justify-content: space-between; font-size: 16px; margin-bottom: 8px;">
+                        <span style="display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="message-square" style="color: var(--neon-green); width: 20px; height: 20px;"></i>
+                            WhatsApp Broadcast (OpenClaw Webhook)
+                        </span>
+                        <label class="switch" style="position: relative; display: inline-block; width: 44px; height: 20px;">
+                            <input type="checkbox" id="notif-whatsapp-enabled" style="opacity: 0; width: 0; height: 0;">
+                            <span class="slider" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(255,255,255,0.06); border: 1px solid var(--border-color); transition: .4s; border-radius: 20px;"></span>
+                        </label>
+                    </h2>
+                    
+                    <div style="display: flex; flex-direction: column; gap: 12px; flex: 1;">
+                        <div class="input-group" style="flex: 1;">
+                            <label for="notif-whatsapp-webhook" style="font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; display: block;">OpenClaw Webhook URL</label>
+                            <input type="url" id="notif-whatsapp-webhook" placeholder="http://192.168.0.x:8000/webhook/whatsapp" style="width: 100%; padding: 8px 12px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-primary); font-family: inherit; font-size: 13px; outline: none; transition: var(--transition);">
+                        </div>
+                        
+                        <div class="glass-panel" style="background: rgba(15, 23, 42, 0.4); padding: 14px; border-radius: 8px; font-size: 11px; color: var(--text-secondary); line-height: 1.5; border-color: rgba(255,255,255,0.03);">
+                            <span style="color: var(--neon-green); font-weight: 700;">📌 Routing via OpenClaw container:</span><br>
+                            Ensure your local OpenClaw container instance is running on the proximity network. When triggered, summary payloads will post to this webhook forwarding notifications directly to your WhatsApp recipient.
+                        </div>
+                    </div>
+                </article>
+            </main>
+            
+            <!-- Actions bar -->
+            <div class="glass-panel" style="padding: 16px 24px; display: flex; align-items: center; justify-content: flex-end; gap: 12px; border-radius: 12px;">
+                <button class="btn" id="notif-test-btn" style="border-color: rgba(56, 189, 248, 0.3);">
+                    <i data-lucide="send" style="width: 14px; height: 14px; color: var(--neon-blue);"></i>
+                    Send Test Alert
+                </button>
+                <button class="btn" id="notif-save-btn" style="background: var(--neon-blue); border-color: var(--neon-blue); color: #000; font-weight: 700;">
+                    <i data-lucide="check" style="width: 14px; height: 14px; color: #000;"></i>
+                    Save Notifications Configuration
+                </button>
+            </div>
         </div>
 
         <!-- TAB CONTENT 5: SYSTEM ARCHITECTURE -->

@@ -579,6 +579,15 @@ function handleInitState(data) {
     if (data.initial_balance !== undefined) {
         initialBalance = data.initial_balance;
     }
+    
+    // Update KPI elements immediately on initialization to avoid placeholder flickering
+    if (elBalance) {
+        elBalance.textContent = `$${balance.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    }
+    if (elEquity) {
+        elEquity.textContent = `$${equity.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    }
+    updatePerformanceKPIs(completedTrades, equity);
     updateKpiBrainBadges();
     
     // Update initial neural memory diagnostic badge
@@ -2599,6 +2608,9 @@ elNavTabs.forEach(tab => {
             }
         });
         
+        // Close drawer when link clicked
+        closeNavigationDrawer();
+        
         // Refresh charts or widgets if needed when visible
         if (targetTabId === "tab-neural") {
             loadWeightsHistory(activeTicker);
@@ -2613,6 +2625,10 @@ elNavTabs.forEach(tab => {
             }
         } else if (targetTabId === "tab-agents") {
             loadAgentLlmConfig();
+        } else if (targetTabId === "tab-longterm") {
+            fetchShadowStrategyData();
+        } else if (targetTabId === "tab-notifications") {
+            loadNotificationSettings();
         } else if (targetTabId === "tab-logs") {
             fetchSystemLogs();
         }
@@ -3243,6 +3259,186 @@ function fetchAgentRunsLogs() {
         .catch(err => console.error("Error loading agent runs history:", err));
 }
 
+function fetchShadowStrategyData() {
+    const shadowTbody = document.getElementById("shadow-trades-tbody");
+    if (!shadowTbody) return;
+
+    // 1. Fetch shadow trades logs
+    fetch(`/api/system/shadow_trades?limit=50&t=${Date.now()}`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === "success" && data.shadow_trades) {
+                if (data.shadow_trades.length === 0) {
+                    shadowTbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-muted); padding: 15px;">No shadow trades logged yet.</td></tr>`;
+                    return;
+                }
+                
+                shadowTbody.innerHTML = data.shadow_trades.map(t => {
+                    const entryTimeStr = new Date(t.entry_time * 1000).toLocaleTimeString();
+                    const pnlColor = t.pnl > 0 ? "var(--neon-green)" : t.pnl < 0 ? "var(--neon-red)" : "var(--text-primary)";
+                    const pnlSign = t.pnl > 0 ? "+" : "";
+                    const pnlText = t.status === "closed" ? `${pnlSign}$${parseFloat(t.pnl).toFixed(2)}` : "-";
+                    const pnlPctText = t.status === "closed" ? `${pnlSign}${parseFloat(t.pnl_percent).toFixed(2)}%` : "-";
+                    const exitText = t.status === "closed" ? t.exit_reason : `<span class="status-badge live" style="font-size: 9px;">ACTIVE</span>`;
+                    const exitPriceText = t.exit_price ? `$${parseFloat(t.exit_price).toFixed(2)}` : "-";
+                    
+                    return `
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.02); height: 35px;">
+                            <td style="padding: 6px 5px; font-family: monospace;">${entryTimeStr}</td>
+                            <td style="padding: 6px 5px; font-weight: 600;">${t.symbol}</td>
+                            <td style="padding: 6px 5px; color: ${t.direction === "BUY" ? "var(--neon-green)" : "var(--neon-red)"}; font-weight: bold;">${t.direction}</td>
+                            <td style="padding: 6px 5px; font-family: monospace;">${parseFloat(t.quantity).toFixed(4)}</td>
+                            <td style="padding: 6px 5px; font-family: monospace;">$${parseFloat(t.entry_price).toFixed(2)}</td>
+                            <td style="padding: 6px 5px; font-family: monospace;">${exitPriceText}</td>
+                            <td style="padding: 6px 5px; font-family: monospace; color: ${pnlColor}; font-weight: 600;">${pnlText}</td>
+                            <td style="padding: 6px 5px; font-family: monospace; color: ${pnlColor};">${pnlPctText}</td>
+                            <td style="padding: 6px 5px; font-size: 11px;">${exitText}</td>
+                        </tr>
+                    `;
+                }).join("");
+            }
+        })
+        .catch(err => console.error("Error loading shadow trades:", err));
+
+    // 2. Fetch side-by-side performance data
+    fetch(`/api/system/shadow_performance?t=${Date.now()}`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === "success") {
+                // Update local goal input and labels
+                const dailyGoal = data.daily_income_goal || 1000.0;
+                const inputGoal = document.getElementById("input-daily-goal");
+                if (inputGoal && !inputGoal.matches(':focus')) {
+                    inputGoal.value = dailyGoal;
+                }
+                const elFormula = document.getElementById("calc-goal-target-formula");
+                if (elFormula) elFormula.textContent = `$${parseFloat(dailyGoal).toLocaleString()}`;
+                
+                const elUncomfortable = document.getElementById("calc-goal-target-uncomfortable");
+                if (elUncomfortable) elUncomfortable.textContent = `$${parseFloat(dailyGoal).toLocaleString()}`;
+
+                // Live metrics
+                const elLiveWinrate = document.getElementById("lt-live-winrate");
+                const elLivePnl = document.getElementById("lt-live-pnl");
+                const elLiveExpectancy = document.getElementById("lt-live-expectancy");
+                const elLiveCapital = document.getElementById("lt-live-capital");
+
+                if (elLiveWinrate) elLiveWinrate.textContent = `${parseFloat(data.live.winrate).toFixed(2)}%`;
+                if (elLivePnl) elLivePnl.textContent = `${data.live.total_pnl >= 0 ? "+" : ""}$${parseFloat(data.live.total_pnl).toFixed(2)}`;
+                if (elLiveExpectancy) elLiveExpectancy.textContent = `${data.live.expectancy_pct >= 0 ? "+" : ""}${parseFloat(data.live.expectancy_pct).toFixed(2)}%`;
+                if (elLiveCapital) {
+                    if (data.live.capital_required > 0) {
+                        elLiveCapital.innerHTML = `$${Math.round(data.live.capital_required).toLocaleString()}`;
+                        elLiveCapital.style.color = "var(--neon-green)";
+                    } else {
+                        elLiveCapital.innerHTML = `Infinite<br><span style="font-size: 8px; color: var(--text-muted); font-weight: 400;">(Neg. Expectancy)</span>`;
+                        elLiveCapital.style.color = "var(--neon-red)";
+                    }
+                }
+
+                // Shadow metrics
+                const elShadowWinrate = document.getElementById("lt-shadow-winrate");
+                const elShadowPnl = document.getElementById("lt-shadow-pnl");
+                const elShadowExpectancy = document.getElementById("lt-shadow-expectancy");
+                const elShadowCapital = document.getElementById("lt-shadow-capital");
+
+                if (elShadowWinrate) elShadowWinrate.textContent = `${parseFloat(data.shadow.winrate).toFixed(2)}%`;
+                if (elShadowPnl) elShadowPnl.textContent = `${data.shadow.total_pnl >= 0 ? "+" : ""}$${parseFloat(data.shadow.total_pnl).toFixed(2)}`;
+                if (elShadowExpectancy) elShadowExpectancy.textContent = `${data.shadow.expectancy_pct >= 0 ? "+" : ""}${parseFloat(data.shadow.expectancy_pct).toFixed(2)}%`;
+                if (elShadowCapital) {
+                    if (data.shadow.capital_required > 0) {
+                        elShadowCapital.innerHTML = `$${Math.round(data.shadow.capital_required).toLocaleString()}`;
+                        elShadowCapital.style.color = "var(--neon-blue)";
+                    } else {
+                        elShadowCapital.innerHTML = `Infinite<br><span style="font-size: 8px; color: var(--text-muted); font-weight: 400;">(Neg. Expectancy)</span>`;
+                        elShadowCapital.style.color = "var(--neon-red)";
+                    }
+                }
+
+                // Backtest metrics
+                const elBtWinrate = document.getElementById("lt-backtest-winrate");
+                const elBtPnl = document.getElementById("lt-backtest-pnl");
+                const elBtExpectancy = document.getElementById("lt-backtest-expectancy");
+                const elBtCapital = document.getElementById("lt-backtest-capital");
+
+                if (elBtWinrate) elBtWinrate.textContent = `${parseFloat(data.backtest.winrate).toFixed(2)}%`;
+                if (elBtPnl) elBtPnl.textContent = `+€0.29`;
+                if (elBtExpectancy) elBtExpectancy.textContent = `+${parseFloat(data.backtest.expectancy_pct).toFixed(2)}%`;
+                if (elBtCapital) {
+                    elBtCapital.innerHTML = `$${Math.round(data.backtest.capital_required).toLocaleString()}`;
+                }
+            }
+        })
+        .catch(err => console.error("Error loading shadow performance:", err));
+}
+
+function fetchSystemBackups() {
+    const container = document.getElementById("backup-list-container");
+    if (!container) return;
+    
+    fetch(`/api/system/backups?t=${Date.now()}`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === "success") {
+                if (data.backups.length === 0) {
+                    container.innerHTML = `<div style="font-size: 10px; color: var(--text-muted); text-align: center; padding: 10px 0;">No backups created yet.</div>`;
+                    return;
+                }
+                
+                container.innerHTML = data.backups.map(b => {
+                    const dateStr = new Date(b.created_at * 1000).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    const sizeKB = Math.round(b.size_bytes / 1024);
+                    return `
+                        <div style="background: rgba(255,255,255,0.01); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px; display: flex; flex-direction: column; gap: 6px; font-size: 11px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+                                <strong style="color: var(--text-primary); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 130px;" title="${b.filename}">${b.filename}</strong>
+                                <span style="color: var(--text-muted); font-size: 9px; flex-shrink: 0;">${sizeKB} KB</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span style="color: var(--text-secondary); font-size: 9px;">${dateStr}</span>
+                                <div style="display: flex; gap: 6px;">
+                                    <a href="/api/system/backup/download/${b.filename}" target="_blank" class="btn" style="padding: 2px 6px; font-size: 9px; height: auto; border-color: rgba(0, 240, 255, 0.2); color: var(--neon-blue); display: flex; align-items: center; gap: 2px; text-decoration: none;">
+                                        Down
+                                    </a>
+                                    <button class="btn btn-restore-backup" onclick="restoreBackup('${b.filename}')" style="padding: 2px 6px; font-size: 9px; height: auto; border-color: rgba(244, 63, 94, 0.2); color: var(--neon-red);">
+                                        Restore
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join("");
+                
+                if (window.lucide) {
+                    window.lucide.createIcons();
+                }
+            }
+        })
+        .catch(err => console.error("Error loading backups:", err));
+}
+
+function restoreBackup(filename) {
+    if (!confirm(`Are you absolutely sure you want to restore backup "${filename}"?\n\nThis will completely overwrite all current settings, credentials, trade logs, and blog reports!`)) {
+        return;
+    }
+    
+    showToast("Restoring system state from archive...", "info");
+    fetch(`/api/system/backup/restore/${filename}`, { method: "POST" })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === "success") {
+                showToast("System state restored successfully! Reloading...", "success");
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                showToast(data.error || "Failed to restore backup.", "error");
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            showToast("Error restoring backup.", "error");
+        });
+}
+
 // Reusable text viewer modal actions
 function openTextViewerModal(title, text) {
     const modal = document.getElementById("text-viewer-modal");
@@ -3292,6 +3488,7 @@ window.copyViewerText = copyViewerText;
 window.openTextViewerModal = openTextViewerModal;
 window.viewAgentRunPrompt = viewAgentRunPrompt;
 window.viewAgentRunResponse = viewAgentRunResponse;
+window.restoreBackup = restoreBackup;
 
 // Hook up manual refresh button and auto-refresh loop
 document.addEventListener("DOMContentLoaded", () => {
@@ -3303,6 +3500,59 @@ document.addEventListener("DOMContentLoaded", () => {
     fetchSystemLogs();
     fetchOptimizationsLogs();
     fetchAgentRunsLogs();
+    fetchShadowStrategyData();
+    fetchSystemBackups();
+
+    const btnTriggerBackup = document.getElementById("btn-trigger-backup");
+    if (btnTriggerBackup) {
+        btnTriggerBackup.addEventListener("click", () => {
+            showToast("Compiling system files and creating hot backup...", "info");
+            fetch("/api/system/backup", { method: "POST" })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === "success") {
+                        showToast(`Backup archive "${data.filename}" created successfully.`, "success");
+                        fetchSystemBackups();
+                    } else {
+                        showToast(data.error || "Failed to create backup.", "error");
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    showToast("Error creating backup.", "error");
+                });
+        });
+    }
+
+    const btnSaveDailyGoal = document.getElementById("btn-save-daily-goal");
+    const inputDailyGoal = document.getElementById("input-daily-goal");
+    if (btnSaveDailyGoal && inputDailyGoal) {
+        btnSaveDailyGoal.addEventListener("click", () => {
+            const val = parseFloat(inputDailyGoal.value);
+            if (isNaN(val) || val <= 0) {
+                showToast("Please enter a valid positive number for daily target.", "error");
+                return;
+            }
+            fetch("/api/system/daily_goal", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ daily_income_goal: val })
+            })
+            .then(res => res.json())
+            .then(resData => {
+                if (resData.status === "success") {
+                    showToast(`Daily income goal updated to $${val.toLocaleString()} successfully!`, "success");
+                    fetchShadowStrategyData();
+                } else {
+                    showToast(resData.error || "Failed to update daily goal.", "error");
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                showToast("Error updating daily goal.", "error");
+            });
+        });
+    }
     
     if (btnRefreshLogs) {
         btnRefreshLogs.addEventListener("click", () => {
@@ -3340,12 +3590,16 @@ document.addEventListener("DOMContentLoaded", () => {
     // Auto-refresh loop
     logPollInterval = setInterval(() => {
         const isTabLogsActive = document.getElementById("tab-logs")?.classList.contains("active");
+        const isTabLongtermActive = document.getElementById("tab-longterm")?.classList.contains("active");
         const isAutoRefreshEnabled = checkAutoRefresh ? checkAutoRefresh.checked : false;
         
         if (isTabLogsActive && isAutoRefreshEnabled) {
             fetchSystemLogs();
             fetchOptimizationsLogs();
             fetchAgentRunsLogs();
+        }
+        if (isTabLongtermActive) {
+            fetchShadowStrategyData();
         }
     }, 5000);
 
@@ -3915,3 +4169,131 @@ if (elProviderSelect) {
         toggleAgentLlmInputs(e.target.value);
     });
 }
+
+// -------------------------------------------------------------
+// Hamburger Menu Navigation Drawer Control
+// -------------------------------------------------------------
+const openDrawerBtn = document.getElementById("open-drawer-btn");
+const closeDrawerBtn = document.getElementById("close-drawer-btn");
+const navDrawer = document.getElementById("nav-drawer");
+const navDrawerOverlay = document.getElementById("nav-drawer-overlay");
+
+function openNavigationDrawer() {
+    if (navDrawer && navDrawerOverlay) {
+        navDrawer.style.left = "0px";
+        navDrawerOverlay.style.display = "block";
+        setTimeout(() => {
+            navDrawerOverlay.style.opacity = "1";
+        }, 10);
+    }
+}
+
+function closeNavigationDrawer() {
+    if (navDrawer && navDrawerOverlay) {
+        navDrawer.style.left = "-280px";
+        navDrawerOverlay.style.opacity = "0";
+        setTimeout(() => {
+            navDrawerOverlay.style.display = "none";
+        }, 300);
+    }
+}
+
+if (openDrawerBtn) openDrawerBtn.addEventListener("click", openNavigationDrawer);
+if (closeDrawerBtn) closeDrawerBtn.addEventListener("click", closeNavigationDrawer);
+if (navDrawerOverlay) navDrawerOverlay.addEventListener("click", closeNavigationDrawer);
+
+// -------------------------------------------------------------
+// Notifications Configuration UI Handlers
+// -------------------------------------------------------------
+async function loadNotificationSettings() {
+    try {
+        const response = await fetch("/api/system/notifications");
+        const data = await response.json();
+        if (data.status === "success") {
+            const settings = data.settings;
+            
+            // Set enabled switches
+            document.getElementById("notif-email-enabled").checked = (settings.notif_email_enabled === "true");
+            document.getElementById("notif-whatsapp-enabled").checked = (settings.notif_whatsapp_enabled === "true");
+            
+            // Set fields
+            document.getElementById("notif-email-recipient").value = settings.notif_email_recipient || "";
+            document.getElementById("notif-smtp-host").value = settings.notif_smtp_host || "";
+            document.getElementById("notif-smtp-port").value = settings.notif_smtp_port || "";
+            document.getElementById("notif-smtp-user").value = settings.notif_smtp_user || "";
+            document.getElementById("notif-smtp-pass").value = settings.notif_smtp_pass || "";
+            document.getElementById("notif-whatsapp-webhook").value = settings.notif_whatsapp_webhook || "";
+            
+            showToast("Notification settings loaded successfully.", "info");
+        } else {
+            showToast("Failed to load notification settings: " + data.error, "error");
+        }
+    } catch (err) {
+        console.error("Error loading notification settings:", err);
+        showToast("Error loading notification settings.", "error");
+    }
+}
+
+async function saveNotificationSettings() {
+    try {
+        const payload = {
+            notif_email_enabled: document.getElementById("notif-email-enabled").checked ? "true" : "false",
+            notif_email_recipient: document.getElementById("notif-email-recipient").value,
+            notif_smtp_host: document.getElementById("notif-smtp-host").value,
+            notif_smtp_port: document.getElementById("notif-smtp-port").value,
+            notif_smtp_user: document.getElementById("notif-smtp-user").value,
+            notif_smtp_pass: document.getElementById("notif-smtp-pass").value,
+            notif_whatsapp_enabled: document.getElementById("notif-whatsapp-enabled").checked ? "true" : "false",
+            notif_whatsapp_webhook: document.getElementById("notif-whatsapp-webhook").value
+        };
+        
+        const response = await fetch("/api/system/notifications", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+        const data = await response.json();
+        if (data.status === "success") {
+            showToast("Notification settings saved successfully.", "success");
+        } else {
+            showToast("Failed to save notification settings: " + data.error, "error");
+        }
+    } catch (err) {
+        console.error("Error saving notification settings:", err);
+        showToast("Error saving notification settings.", "error");
+    }
+}
+
+async function sendTestNotification() {
+    try {
+        showToast("Sending test alerts...", "info");
+        const response = await fetch("/api/system/notifications/test", {
+            method: "POST"
+        });
+        const data = await response.json();
+        if (data.status === "success") {
+            let msg = "Test alerts routed successfully.";
+            if (data.email_sent && data.whatsapp_sent) {
+                msg += " (Email & WhatsApp sent)";
+            } else if (data.email_sent) {
+                msg += " (Email sent)";
+            } else if (data.whatsapp_sent) {
+                msg += " (WhatsApp sent)";
+            } else {
+                msg += " (No alert channels enabled/sent)";
+            }
+            showToast(msg, "success");
+        } else {
+            showToast("Test notification failed: " + data.error, "error");
+        }
+    } catch (err) {
+        console.error("Error sending test notification:", err);
+        showToast("Error sending test notification.", "error");
+    }
+}
+
+// Bind buttons
+const notifSaveBtn = document.getElementById("notif-save-btn");
+const notifTestBtn = document.getElementById("notif-test-btn");
+if (notifSaveBtn) notifSaveBtn.addEventListener("click", saveNotificationSettings);
+if (notifTestBtn) notifTestBtn.addEventListener("click", sendTestNotification);

@@ -13,6 +13,7 @@ class TradingStrategy:
 class EMACrossoverStrategy(TradingStrategy):
     def __init__(self, fast_window=12, slow_window=26):
         super().__init__("EMA Crossover")
+        self.regime = "trend"
         self.fast_window = fast_window
         self.slow_window = slow_window
 
@@ -30,6 +31,7 @@ class EMACrossoverStrategy(TradingStrategy):
 class RSIStrategy(TradingStrategy):
     def __init__(self, oversold=35, overbought=65):
         super().__init__("RSI Reversion")
+        self.regime = "mean_reversion"
         self.default_oversold = oversold
         self.default_overbought = overbought
 
@@ -47,6 +49,7 @@ class RSIStrategy(TradingStrategy):
 class BollingerBandsStrategy(TradingStrategy):
     def __init__(self):
         super().__init__("BB Breakout")
+        self.regime = "mean_reversion"
 
     def generate_signal(self, row, history=None):
         close = row.get('close', 0)
@@ -62,6 +65,7 @@ class BollingerBandsStrategy(TradingStrategy):
 class KalmanTrendStrategy(TradingStrategy):
     def __init__(self):
         super().__init__("Kalman Filter Trend")
+        self.regime = "trend"
         from quant_utils import KalmanFilterPrice
         self.kf = KalmanFilterPrice(process_variance=1e-5, measurement_variance=1e-2)
 
@@ -83,6 +87,7 @@ class KalmanTrendStrategy(TradingStrategy):
 class PsychologicalSweepStrategy(TradingStrategy):
     def __init__(self):
         super().__init__("Psych Liquidity Sweep")
+        self.regime = "mean_reversion"
 
     def generate_signal(self, row, history=None):
         # We need historical rows to detect swing high/low sweeps
@@ -96,6 +101,7 @@ class PsychologicalSweepStrategy(TradingStrategy):
 class MLPredictorStrategy(TradingStrategy):
     def __init__(self, lookahead=5):
         super().__init__("ML Random Forest")
+        self.regime = "predictive"
         self.lookahead = lookahead
         self.model = RandomForestClassifier(n_estimators=50, max_depth=5, random_state=42)
         self.is_trained = False
@@ -168,15 +174,98 @@ class MLPredictorStrategy(TradingStrategy):
             logging.error(f"Error generating ML signal: {e}")
         return 0.0
 
-class NewsSentimentStrategy:
+class NewsSentimentStrategy(TradingStrategy):
     def __init__(self):
-        self.name = "News Sentiment"
+        super().__init__("News Sentiment")
+        self.regime = "predictive"
 
     def generate_signal(self, row, history_df=None):
         sentiment = float(row.get("sentiment", 0.0))
         if sentiment >= 0.15:
             return 1.0
         elif sentiment <= -0.15:
+            return -1.0
+        return 0.0
+
+class MACDHistogramCrossoverStrategy(TradingStrategy):
+    def __init__(self):
+        super().__init__("MACD Histogram Crossover")
+        self.regime = "trend"
+
+    def generate_signal(self, row, history=None):
+        macd_hist = row.get('macd_hist', 0)
+        if macd_hist > 0:
+            return 1.0
+        elif macd_hist < 0:
+            return -1.0
+        return 0.0
+
+class MeanReversionZScoreStrategy(TradingStrategy):
+    def __init__(self, entry_threshold=2.0):
+        super().__init__("Mean Reversion Z-Score")
+        self.regime = "mean_reversion"
+        self.entry_threshold = entry_threshold
+
+    def generate_signal(self, row, history=None):
+        close = row.get('close', 0)
+        bb_mid = row.get('bb_mid', close)
+        bb_std = row.get('bb_std', 0)
+        if bb_std <= 0:
+            return 0.0
+        z_score = (close - bb_mid) / bb_std
+        if z_score < -self.entry_threshold:
+            return 1.0
+        elif z_score > self.entry_threshold:
+            return -1.0
+        return 0.0
+
+class VWAPCrossoverStrategy(TradingStrategy):
+    def __init__(self):
+        super().__init__("VWAP Crossover")
+        self.regime = "trend"
+
+    def generate_signal(self, row, history=None):
+        close = row.get('close', 0)
+        vwap = row.get('vwma_20', close)
+        if close > vwap * 1.0005:
+            return 1.0
+        elif close < vwap * 0.9995:
+            return -1.0
+        return 0.0
+
+class ATRBreakoutStrategy(TradingStrategy):
+    def __init__(self, multiplier=1.5):
+        super().__init__("ATR Breakout")
+        self.regime = "trend"
+        self.multiplier = multiplier
+
+    def generate_signal(self, row, history=None):
+        close = row.get('close', 0)
+        sma = row.get('sma_20', close)
+        atr = row.get('atr', 0)
+        if atr <= 0:
+            return 0.0
+        upper_band = sma + self.multiplier * atr
+        lower_band = sma - self.multiplier * atr
+        if close > upper_band:
+            return 1.0
+        elif close < lower_band:
+            return -1.0
+        return 0.0
+
+class StochasticOscillatorStrategy(TradingStrategy):
+    def __init__(self, overbought=80, oversold=20):
+        super().__init__("Stochastic Reversion")
+        self.regime = "mean_reversion"
+        self.overbought = overbought
+        self.oversold = oversold
+
+    def generate_signal(self, row, history=None):
+        stoch_k = row.get('stoch_k', 50)
+        stoch_d = row.get('stoch_d', 50)
+        if stoch_k < self.oversold and stoch_k > stoch_d:
+            return 1.0
+        elif stoch_k > self.overbought and stoch_k < stoch_d:
             return -1.0
         return 0.0
 
@@ -189,7 +278,12 @@ class StrategyEnsemble:
             MLPredictorStrategy(),
             KalmanTrendStrategy(),
             PsychologicalSweepStrategy(),
-            NewsSentimentStrategy()
+            NewsSentimentStrategy(),
+            MACDHistogramCrossoverStrategy(),
+            MeanReversionZScoreStrategy(),
+            VWAPCrossoverStrategy(),
+            ATRBreakoutStrategy(),
+            StochasticOscillatorStrategy()
         ]
         
         # Initialize strategy weights equally
@@ -237,30 +331,22 @@ class StrategyEnsemble:
         if len(self.price_history) >= 20:
             theta, mu, is_mr = estimate_ou_process(self.price_history)
             
-            # Index positions:
-            # 0: EMA Crossover (Trend)
-            # 1: RSI Reversion (Mean Reversion)
-            # 2: BB Breakout (Mean Reversion)
-            # 3: ML Random Forest (General Predictive)
-            # 4: Kalman Trend (Trend)
-            # 5: Psych Sweep (Mean Reversion)
-            
             if is_mr and theta > 0.05:
-                # Strong Mean-Reversion Regime: Boost indices 1, 2, 5
-                active_weights[1] *= 1.3
-                active_weights[2] *= 1.3
-                active_weights[5] *= 1.5
-                # Suppress Trend indices 0, 4
-                active_weights[0] *= 0.6
-                active_weights[4] *= 0.6
+                # Strong Mean-Reversion Regime: Boost mean reversion strategies, suppress trend strategies
+                for i, strat in enumerate(self.strategies):
+                    regime = getattr(strat, 'regime', None)
+                    if regime == 'mean_reversion':
+                        active_weights[i] *= 1.3
+                    elif regime == 'trend':
+                        active_weights[i] *= 0.6
             else:
-                # Strong Trend Regime: Boost indices 0, 4
-                active_weights[0] *= 1.4
-                active_weights[4] *= 1.4
-                # Suppress Mean-Reversion indices 1, 2, 5
-                active_weights[1] *= 0.6
-                active_weights[2] *= 0.6
-                active_weights[5] *= 0.6
+                # Strong Trend Regime: Boost trend strategies, suppress mean reversion strategies
+                for i, strat in enumerate(self.strategies):
+                    regime = getattr(strat, 'regime', None)
+                    if regime == 'trend':
+                        active_weights[i] *= 1.3
+                    elif regime == 'mean_reversion':
+                        active_weights[i] *= 0.6
                 
             # Normalize active weights
             active_weights = active_weights / np.sum(active_weights)

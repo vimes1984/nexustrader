@@ -98,6 +98,15 @@ class DataIngestion:
         tr = pd.concat([high_low, high_close_prev, low_close_prev], axis=1).max(axis=1)
         df['atr'] = tr.rolling(window=14).mean()
         
+        # Volume Weighted Moving Average (VWMA)
+        df['vwma_20'] = (df['close'] * df['volume']).rolling(window=20).sum() / (df['volume'].rolling(window=20).sum() + 1e-9)
+        
+        # Stochastic Oscillator (14, 3)
+        low_14 = df['low'].rolling(window=14).min()
+        high_14 = df['high'].rolling(window=14).max()
+        df['stoch_k'] = 100 * ((df['close'] - low_14) / (high_14 - low_14 + 1e-9))
+        df['stoch_d'] = df['stoch_k'].rolling(window=3).mean()
+        
         # Clean up NaNs
         self.data = df.bfill().ffill()
 

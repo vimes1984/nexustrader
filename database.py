@@ -270,6 +270,27 @@ def init_db():
     )
     """)
     
+    # Create shadow trades table (for testing long-term strategy in shadow mode)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS shadow_trades (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        symbol TEXT,
+        direction TEXT,
+        quantity REAL,
+        entry_price REAL,
+        exit_price REAL,
+        pnl REAL,
+        pnl_percent REAL,
+        exit_reason TEXT,
+        entry_time REAL,
+        exit_time REAL,
+        status TEXT,
+        tp_price REAL,
+        sl_price REAL,
+        atr_at_entry REAL
+    )
+    """)
+    
     # Pre-populate and migrate default tickers
     default_tickers = ['ETH-USD', 'SOL-USD', 'BTC-USD', 'DOGE-USD', 'XRP-USD', 'LINK-USD', 'LTC-USD', 'AVAX-USD', 'ADA-USD', 'DOT-USD']
     for t in default_tickers:
@@ -493,6 +514,78 @@ def load_agent_runs(limit: int = 100):
         } for r in rows]
     except Exception as e:
         logging.error(f"Error loading agent runs: {e}")
+        return []
+    finally:
+        conn.close()
+
+def log_shadow_trade(symbol, direction, quantity, entry_price, status, tp_price, sl_price, atr_at_entry):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            INSERT INTO shadow_trades (symbol, direction, quantity, entry_price, status, tp_price, sl_price, atr_at_entry, entry_time)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (symbol, direction, quantity, entry_price, status, tp_price, sl_price, atr_at_entry, time.time())
+        )
+        conn.commit()
+    except Exception as e:
+        logging.error(f"Error logging shadow trade: {e}")
+    finally:
+        conn.close()
+
+def update_shadow_trade_exit(trade_id, exit_price, pnl, pnl_percent, exit_reason):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            UPDATE shadow_trades 
+            SET exit_price = ?, pnl = ?, pnl_percent = ?, exit_reason = ?, exit_time = ?, status = 'closed'
+            WHERE id = ?
+            """,
+            (exit_price, pnl, pnl_percent, exit_reason, time.time(), trade_id)
+        )
+        conn.commit()
+    except Exception as e:
+        logging.error(f"Error updating shadow trade exit: {e}")
+    finally:
+        conn.close()
+
+def load_shadow_trades(limit: int = 100):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            SELECT id, symbol, direction, quantity, entry_price, exit_price, pnl, pnl_percent, exit_reason, entry_time, exit_time, status, tp_price, sl_price, atr_at_entry
+            FROM shadow_trades 
+            ORDER BY entry_time DESC 
+            LIMIT ?
+            """,
+            (limit,)
+        )
+        rows = cursor.fetchall()
+        return [{
+            "id": r[0],
+            "symbol": r[1],
+            "direction": r[2],
+            "quantity": r[3],
+            "entry_price": r[4],
+            "exit_price": r[5],
+            "pnl": r[6],
+            "pnl_percent": r[7],
+            "exit_reason": r[8],
+            "entry_time": r[9],
+            "exit_time": r[10],
+            "status": r[11],
+            "tp_price": r[12],
+            "sl_price": r[13],
+            "atr_at_entry": r[14]
+        } for r in rows]
+    except Exception as e:
+        logging.error(f"Error loading shadow trades: {e}")
         return []
     finally:
         conn.close()

@@ -4,6 +4,31 @@ import json
 import os
 import database
 
+def normalize_kraken_asset(asset: str) -> str:
+    asset = asset.upper()
+    overrides = {
+        "XXBT": "BTC",
+        "XETH": "ETH",
+        "XXRP": "XRP",
+        "XLTC": "LTC",
+        "XXLM": "XLM",
+        "XDG": "DOGE",
+        "ZEUR": "EUR",
+        "ZUSD": "USD",
+        "ZGBP": "GBP",
+        "ZCAD": "CAD",
+        "ZJPY": "JPY"
+    }
+    if asset in overrides:
+        return overrides[asset]
+        
+    if asset.startswith("X") and len(asset) >= 4 and asset not in ["XLM", "XTZ", "XMR"]:
+        return asset[1:]
+    if asset.startswith("Z") and len(asset) >= 4:
+        return asset[1:]
+        
+    return asset
+
 class ExecutionEngine:
     def __init__(self, initial_balance=100.0, transaction_fee_rate=0.001):
         self.initial_balance = initial_balance
@@ -64,6 +89,28 @@ class ExecutionEngine:
             self.initial_balance = self.balance
             database.save_setting("initial_portfolio_balance", str(self.balance))
             
+        # Load live equity and holdings state cache
+        db_live_equity = database.load_setting("portfolio_live_equity")
+        self.live_equity = float(db_live_equity) if db_live_equity is not None else self.balance
+        
+        db_live_holdings = database.load_setting("portfolio_live_holdings")
+        if db_live_holdings is not None:
+            try:
+                self.live_holdings = json.loads(db_live_holdings)
+            except Exception:
+                self.live_holdings = {}
+        else:
+            self.live_holdings = {}
+            
+        db_prices = database.load_setting("portfolio_last_known_prices")
+        if db_prices is not None:
+            try:
+                self.last_known_prices = json.loads(db_prices)
+            except Exception:
+                self.last_known_prices = {}
+        else:
+            self.last_known_prices = {}
+
         # Load closed trades from DB
         self.closed_trades = database.load_trades()
         logging.info(f"Loaded {len(self.closed_trades)} closed trades from DB.")
@@ -95,80 +142,129 @@ class ExecutionEngine:
             balance_info = exchange.fetch_balance()
             total_bal = balance_info.get('total', {})
             
-            # 1. Quote Currency Balance (cash ready to invest)
-            usd_cash = float(total_bal.get('USD', total_bal.get('ZUSD', total_bal.get('EUR', total_bal.get('ZEUR', 0.0)))))
-            if usd_cash >= 0:
-                self.balance = usd_cash
-                database.save_setting("portfolio_balance", str(self.balance))
-                
-            # 2. Total Portfolio Value (USD cash + holdings value)
-            total_value_usd = usd_cash
+            # Load markets to check symbols
             try:
-                # Dynamically construct target tickers based on held assets and active assets configuration
-                held_assets = []
-                for asset, qty in total_bal.items():
-                    try:
-                        if float(qty) > 0.000001 and asset not in ['USD', 'ZUSD', 'EUR', 'ZEUR']:
-                            norm = asset
-                            if norm == "XXBT": norm = "BTC"
-                            if norm == "XETH": norm = "ETH"
-                            if norm == "XXRP": norm = "XRP"
-                            held_assets.append(f"{norm}/USD")
-                    except Exception:
-                        pass
-                
-                # Add tickers from database active assets to make sure we cover them
-                try:
-                    active_assets = database.load_active_assets()
-                    if active_assets:
-                        for aa in active_assets:
-                            t_base = aa["ticker"].split("-")[0]
-                            held_assets.append(f"{t_base}/USD")
-                except Exception:
-                    pass
-                
-                # Always ensure baseline default tickers are queried
-                for base in ["BTC", "ETH", "SOL", "DOGE", "XRP"]:
-                    held_assets.append(f"{base}/USD")
-                
-                # Filter and deduplicate
-                held_assets = list(set(held_assets))
-                
+                if not exchange.markets:
+                    exchange.load_markets()
+            except Exception as le:
+                logging.warning(f"Failed to load markets: {le}")
+
+            held_assets = []
+            fiat_symbols = {
+                "USD": "USD", "ZUSD": "USD",
+                "EUR": "EUR", "ZEUR": "EUR",
+                "GBP": "GBP", "ZGBP": "GBP",
+                "CAD": "CAD", "ZCAD": "CAD",
+                "JPY": "JPY", "ZJPY": "JPY",
+                "AUD": "AUD", "ZAUD": "AUD",
+                "CHF": "CHF"
+            }
+            
+            # Identify held assets that need conversion rates
+            for asset, qty in total_bal.items():
+                qty = float(qty)
+                if qty <= 0.000001:
+                    continue
+                norm = normalize_kraken_asset(asset)
+                if norm in fiat_symbols:
+                    fiat_name = fiat_symbols[norm]
+                    if fiat_name != "USD":
+                        symbol = f"{fiat_name}/USD"
+                        if not exchange.symbols or symbol in exchange.symbols:
+                            held_assets.append(symbol)
+                else:
+                    symbol = f"{norm}/USD"
+                    if not exchange.symbols or symbol in exchange.symbols:
+                        held_assets.append(symbol)
+                    else:
+                        alt_symbol = f"{asset}/USD"
+                        if not exchange.symbols or alt_symbol in exchange.symbols:
+                            held_assets.append(alt_symbol)
+            
+            # Always ensure baseline default tickers are queried
+            for base in ["BTC", "ETH", "SOL", "DOGE", "LINK", "ADA", "XRP"]:
+                symbol = f"{base}/USD"
+                if not exchange.symbols or symbol in exchange.symbols:
+                    held_assets.append(symbol)
+                    
+            held_assets = list(set(held_assets))
+            
+            prices = {}
+            try:
                 tickers = exchange.fetch_tickers(held_assets)
                 prices = {sym.split('/')[0]: float(tick['last']) for sym, tick in tickers.items() if tick.get('last') is not None}
             except Exception as pe:
-                logging.error(f"[LIVE VALUE SYNC] Failed to fetch conversion tickers: {pe}")
-                # Fallback to fetching all tickers if specific symbol lookup fails
-                try:
-                    tickers = exchange.fetch_tickers()
-                    prices = {sym.split('/')[0]: float(tick['last']) for sym, tick in tickers.items() if tick.get('last') is not None}
-                except Exception as pe2:
-                    logging.error(f"[LIVE VALUE SYNC FALLBACK] Failed to fetch all tickers: {pe2}")
-                    prices = {}
-                
+                logging.error(f"[LIVE VALUE SYNC] Failed to fetch specific conversion tickers: {pe}")
+                # Fallback to fetching one by one
+                for sym in held_assets:
+                    try:
+                        tick = exchange.fetch_ticker(sym)
+                        if tick.get('last') is not None:
+                            prices[sym.split('/')[0]] = float(tick['last'])
+                    except Exception:
+                        pass
+            
+            # Calculate Cash balance (in USD)
+            total_cash_usd = 0.0
             for asset, qty in total_bal.items():
                 qty = float(qty)
-                if qty <= 0 or asset in ['USD', 'ZUSD', 'EUR', 'ZEUR']:
+                if qty <= 0.000001:
+                    continue
+                norm = normalize_kraken_asset(asset)
+                if norm in fiat_symbols:
+                    fiat_name = fiat_symbols[norm]
+                    if fiat_name == "USD":
+                        total_cash_usd += qty
+                    else:
+                        rate = 1.0
+                        if fiat_name in prices:
+                            rate = prices[fiat_name]
+                        elif norm in prices:
+                            rate = prices[norm]
+                        elif f"{fiat_name}/USD" in prices:
+                            rate = prices[f"{fiat_name}/USD"]
+                        else:
+                            fallbacks = {"EUR": 1.09, "GBP": 1.30, "CAD": 0.73, "JPY": 0.0064, "AUD": 0.66, "CHF": 1.15}
+                            rate = fallbacks.get(fiat_name, 1.0)
+                        total_cash_usd += qty * rate
+            
+            self.balance = total_cash_usd
+            
+            # Calculate Holdings balance (in USD)
+            total_value_usd = total_cash_usd
+            for asset, qty in total_bal.items():
+                qty = float(qty)
+                if qty <= 0.000001:
+                    continue
+                norm = normalize_kraken_asset(asset)
+                if norm in fiat_symbols:
                     continue
                     
-                # Map Kraken specific asset symbols to Standard Tickers
-                norm_asset = asset
-                if asset == "XXBT": norm_asset = "BTC"
-                if asset == "XETH": norm_asset = "ETH"
-                if asset == "XXRP": norm_asset = "XRP"
-                
                 price_rate = 0.0
-                if norm_asset in prices:
-                    price_rate = prices[norm_asset]
+                if norm in prices:
+                    price_rate = prices[norm]
                 elif asset in prices:
                     price_rate = prices[asset]
-                    
-                if price_rate > 0:
-                    total_value_usd += qty * price_rate
-                    
+                else:
+                    db_last_prices = database.load_setting("portfolio_last_known_prices")
+                    if db_last_prices:
+                        try:
+                            cached_prices = json.loads(db_last_prices)
+                            price_rate = float(cached_prices.get(norm, cached_prices.get(asset, 0.0)))
+                        except Exception:
+                            pass
+                            
+                total_value_usd += qty * price_rate
+                
             self.live_equity = total_value_usd
             self.live_holdings = {k: float(v) for k, v in total_bal.items() if float(v) > 0.000001}
             self.last_known_prices = prices
+            
+            # Save all values to persistent database cache
+            database.save_setting("portfolio_balance", str(self.balance))
+            database.save_setting("portfolio_live_equity", str(self.live_equity))
+            database.save_setting("portfolio_live_holdings", json.dumps(self.live_holdings))
+            database.save_setting("portfolio_last_known_prices", json.dumps(self.last_known_prices))
             
             # Update initial balance if not set
             is_custom = database.load_setting("initial_balance_is_custom") == "true"
@@ -509,16 +605,25 @@ class ExecutionEngine:
             total_value = 0.0
             last_prices = getattr(self, "last_known_prices", {})
             
+            # Find EUR/USD price rate to convert EUR cash
+            eur_usd_rate = 1.09 # fallback
+            if "EUR" in last_prices:
+                eur_usd_rate = last_prices["EUR"]
+            elif "ZEUR" in last_prices:
+                eur_usd_rate = last_prices["ZEUR"]
+            elif "EUR/USD" in last_prices:
+                eur_usd_rate = last_prices["EUR/USD"]
+                
             for asset, qty in holdings.items():
-                if asset in ["EUR", "USD", "ZUSD", "ZEUR"]:
+                if asset in ["USD", "ZUSD"]:
                     total_value += qty
+                elif asset in ["EUR", "ZEUR"]:
+                    total_value += qty * eur_usd_rate
                 else:
-                    norm_asset = asset
-                    if asset == "XXBT": norm_asset = "BTC"
-                    if asset == "XETH": norm_asset = "ETH"
-                    if asset == "XXRP": norm_asset = "XRP"
+                    norm_asset = normalize_kraken_asset(asset)
                     
                     price = None
+                    # Try current price inputs (e.g. from websocket ticks / base assets list)
                     for key in [f"{norm_asset}-USD", f"{norm_asset}/USD", f"{asset}-USD", f"{asset}/USD", f"BTC-USD", f"ETH-USD", f"XRP-USD"]:
                         if key in current_prices and current_prices[key] is not None:
                             price = float(current_prices[key])

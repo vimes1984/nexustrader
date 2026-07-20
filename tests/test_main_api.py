@@ -7,11 +7,6 @@ import json
 # Setup sys.path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Mock ccxt, database, and background tasks before importing main
-sys.modules['ccxt'] = MagicMock()
-sys.modules['database'] = MagicMock()
-import database
-
 # Mock settings load/save
 def load_setting_mock(key, default=None):
     if key == "loss_cooldown_hours":
@@ -32,18 +27,25 @@ def load_setting_mock(key, default=None):
         return "conservative"
     return default or f"mocked_{key}"
 
-database.load_setting = MagicMock(side_effect=load_setting_mock)
-database.save_setting = MagicMock()
-
-# Import main router endpoints
-with patch('main.update_crontab_schedule') as mock_cron:
-    import main
-
 class TestMainApi(unittest.TestCase):
     def setUp(self):
-        database.load_setting.reset_mock()
-        database.save_setting.reset_mock()
-        database.load_setting.side_effect = load_setting_mock
+        import importlib
+        from unittest.mock import MagicMock
+        sys.modules['ccxt'] = MagicMock()
+        sys.modules['database'] = MagicMock()
+        global database
+        database = sys.modules['database']
+        database.load_setting = MagicMock(side_effect=load_setting_mock)
+        database.save_setting = MagicMock()
+        database.load_active_assets.return_value = []
+        database.list_policy_brains.return_value = []
+        
+        global main
+        import notification_manager
+        importlib.reload(notification_manager)
+        with patch('main.update_crontab_schedule'):
+            import main
+            importlib.reload(main)
 
     @patch('os.path.exists', return_value=True)
     @patch('builtins.open', new_callable=MagicMock)
@@ -203,6 +205,106 @@ class TestMainApi(unittest.TestCase):
         self.assertEqual(res["status"], "success")
         self.assertIn("Successfully connected", res["message"])
         self.assertEqual(res["balances"], {'USD': 100.0})
+
+    def test_daily_goal_endpoints(self):
+        from fastapi.testclient import TestClient
+        client = TestClient(main.app)
+        
+        # Test GET daily_goal
+        database.load_setting.side_effect = lambda k, d=None: "1500.0" if k == "daily_income_goal" else d
+        response = client.get("/api/system/daily_goal")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"status": "success", "daily_income_goal": 1500.0})
+        
+        # Test POST daily_goal
+        database.save_setting.reset_mock()
+        response = client.post("/api/system/daily_goal", json={"daily_income_goal": 2000.0})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"status": "success", "daily_income_goal": 2000.0})
+        database.save_setting.assert_called_with("daily_income_goal", "2000.0")
+
+    @patch('backup_manager.create_backup', return_value="/mock/backup_20260719.tar.gz")
+    @patch('backup_manager.restore_backup')
+    @patch('os.path.exists', return_value=True)
+    def test_backup_restore_endpoints(self, mock_exists, mock_restore, mock_backup):
+        from fastapi.testclient import TestClient
+        client = TestClient(main.app)
+        
+        # Test POST backup
+        response = client.post("/api/system/backup")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "success")
+        self.assertEqual(response.json()["filename"], "backup_20260719.tar.gz")
+        
+        # Test GET backups
+        backup_manager = sys.modules.get('backup_manager')
+        if not backup_manager:
+            import backup_manager
+        backup_manager.BACKUP_DIR = "/mock/backups"
+        
+        with patch('glob.glob', return_value=["/mock/backups/backup_20260719.tar.gz"]):
+            with patch('os.stat') as mock_stat:
+                mock_stat.return_value.st_size = 500
+                mock_stat.return_value.st_mtime = 12345.0
+                response = client.get("/api/system/backups")
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json()["status"], "success")
+                self.assertEqual(len(response.json()["backups"]), 1)
+                self.assertEqual(response.json()["backups"][0]["filename"], "backup_20260719.tar.gz")
+
+        # Test POST restore
+        response = client.post("/api/system/backup/restore/backup_20260719.tar.gz")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "success")
+        mock_restore.assert_called_once_with("/mock/backups/backup_20260719.tar.gz")
+
+    @patch('notification_manager.send_smtp_email', return_value=True)
+    @patch('notification_manager.send_whatsapp_webhook', return_value=True)
+    def test_notifications_endpoints(self, mock_wa, mock_email):
+        from fastapi.testclient import TestClient
+        client = TestClient(main.app)
+        
+        # Test GET /api/system/notifications
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_conn.cursor.return_value = mock_cursor
+        mock_cursor.fetchall.return_value = [
+            ("notif_email_enabled", "true"),
+            ("notif_whatsapp_enabled", "true")
+        ]
+        database.get_db_connection.return_value = mock_conn
+        
+        response = client.get("/api/system/notifications")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "success")
+        self.assertEqual(response.json()["settings"]["notif_email_enabled"], "true")
+        
+        # Test POST /api/system/notifications
+        database.save_setting.reset_mock()
+        payload = {
+            "notif_email_enabled": "true",
+            "notif_email_recipient": "test@gmail.com",
+            "notif_smtp_host": "smtp.gmail.com",
+            "notif_smtp_port": "587",
+            "notif_smtp_user": "user",
+            "notif_smtp_pass": "pass",
+            "notif_whatsapp_enabled": "true",
+            "notif_whatsapp_webhook": "http://webhook"
+        }
+        response = client.post("/api/system/notifications", json=payload)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "success")
+        mock_cursor.execute.assert_any_call(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+            ("notif_email_recipient", "test@gmail.com")
+        )
+
+        # Test POST /api/system/notifications/test
+        response = client.post("/api/system/notifications/test")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "success")
+        self.assertTrue(response.json()["email_sent"])
+        self.assertTrue(response.json()["whatsapp_sent"])
 
 if __name__ == "__main__":
     unittest.main()

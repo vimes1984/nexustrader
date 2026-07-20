@@ -194,11 +194,61 @@ def query_gemini_robust(api_key: str, prompt, model: str = "gemini-flash-latest"
     except Exception:
         pass
         
+    goal_val = 1000.0
+    try:
+        if 'settings' in locals() and "daily_income_goal" in settings:
+            goal_val = float(settings["daily_income_goal"])
+    except Exception:
+        pass
+
     # Overwrite if database overrides exist
     if api_key_override:
         api_key = api_key_override
     use_model = config_model if config_model else model
     
+    # Dynamic daily goal replacement helper
+    def replace_goal_references(text: str, goal_val: float) -> str:
+        if not isinstance(text, str):
+            return text
+        goal_str = f"{int(goal_val):,}"
+        replacements = [
+            ("$1,000 USD/day", f"${goal_str} USD/day"),
+            ("$1,000 USD a day", f"${goal_str} USD a day"),
+            ("$1,000/day", f"${goal_str}/day"),
+            ("$1,000 USD average daily profit", f"${goal_str} USD average daily profit"),
+            ("earn $1,000 USD a day", f"earn ${goal_str} USD a day"),
+            ("target of $1,000 USD a day", f"target of ${goal_str} USD a day"),
+            ("earn $1,000 USD a day safely", f"earn ${goal_str} USD a day safely"),
+            ("targeting $1,000 USD/day", f"targeting ${goal_str} USD/day"),
+            ("average $1,000/day", f"average ${goal_str}/day"),
+            ("scale bot earnings to $1,000 USD/day", f"scale bot earnings to ${goal_str} USD/day"),
+            ("scale NexusTrader earnings to $1,000 USD/day", f"scale NexusTrader earnings to ${goal_str} USD/day"),
+            ("achieve $1,000 USD/day", f"achieve ${goal_str} USD/day"),
+            ("scale earnings to $1,000 USD a day", f"scale earnings to ${goal_str} USD a day"),
+            ("achieve our $1,000 USD/day profit target", f"achieve our ${goal_str} USD/day profit target"),
+            ("hit $1,000/day", f"hit ${goal_str}/day"),
+            ("target of $1,000/day", f"target of ${goal_str}/day"),
+            ("closer to $1,000/day", f"closer to ${goal_str}/day"),
+            ("closer to $1,000 USD/day", f"closer to ${goal_str} USD/day")
+        ]
+        for old, new in replacements:
+            text = text.replace(old, new)
+            old_no_comma = old.replace(",000", "000")
+            if old_no_comma != old:
+                text = text.replace(old_no_comma, new)
+        return text
+
+    def walk_and_replace_goal(data, goal_val: float):
+        if isinstance(data, dict):
+            return {k: walk_and_replace_goal(v, goal_val) for k, v in data.items()}
+        elif isinstance(data, list):
+            return [walk_and_replace_goal(x, goal_val) for x in data]
+        elif isinstance(data, str):
+            return replace_goal_references(data, goal_val)
+        return data
+
+    prompt = walk_and_replace_goal(prompt, goal_val)
+
     # 2. Convert Gemini structure dict prompt to flat string if needed
     flat_prompt = ""
     if isinstance(prompt, dict):
@@ -228,9 +278,20 @@ def query_gemini_robust(api_key: str, prompt, model: str = "gemini-flash-latest"
         url = base_url if base_url else "https://api.openai.com/v1/chat/completions"
         if url and not url.endswith("/chat/completions"):
             url = url.rstrip("/") + "/chat/completions"
-            
-        if not use_model or use_model in ["gemini-2.0-flash", "gemini-flash-latest"]:
-            use_model = "gpt-4o"
+
+        # gpt-4o-mini has a much higher TPM limit (200K vs 30K) and is cheaper
+        if not use_model or use_model in ["gemini-2.0-flash", "gemini-flash-latest", "gpt-4o"]:
+            use_model = "gpt-4o-mini"
+
+        # Truncate prompt to stay well under token limits (~20K chars ≈ 5K tokens)
+        MAX_PROMPT_CHARS = 20_000
+        if len(flat_prompt) > MAX_PROMPT_CHARS:
+            logging.warning(
+                f"[OPENAI] Prompt too large ({len(flat_prompt):,} chars). "
+                f"Truncating to {MAX_PROMPT_CHARS:,} chars to avoid TPM limit."
+            )
+            flat_prompt = flat_prompt[:MAX_PROMPT_CHARS] + "\n\n[...context truncated to fit token limits...]"
+
         payload = {
             "model": use_model,
             "messages": [{"role": "user", "content": flat_prompt}],

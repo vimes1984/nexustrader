@@ -5,7 +5,8 @@ import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Mock database module before importing execution_engine
+# Mock database and ccxt modules before importing execution_engine
+sys.modules['ccxt'] = MagicMock()
 sys.modules['database'] = MagicMock()
 import database
 database.load_setting = MagicMock(return_value=None)
@@ -143,6 +144,74 @@ class TestExecutionEngine(unittest.TestCase):
         
         # Assert live equity includes BTC & ETH value: 50.0 + (0.1 * 50000) + (0.5 * 3000) = 6550.0
         self.assertEqual(self.engine.live_equity, 6550.0)
+
+    @patch('ccxt.kraken')
+    def test_sync_live_balance_with_eur_link_ada(self, mock_kraken):
+        mock_exchange = MagicMock()
+        mock_kraken.return_value = mock_exchange
+        
+        # Mock balance with ZEUR cash, XLINK, and XADA
+        mock_exchange.fetch_balance.return_value = {
+            'total': {
+                'ZEUR': 100.0,
+                'XLINK': 5.0,
+                'XADA': 20.0
+            }
+        }
+        
+        mock_exchange.fetch_tickers.return_value = {
+            'EUR/USD': {'last': 1.10},
+            'LINK/USD': {'last': 15.0},
+            'ADA/USD': {'last': 0.50},
+            'BTC/USD': {'last': 50000.0},
+            'ETH/USD': {'last': 3000.0},
+            'SOL/USD': {'last': 100.0},
+            'DOGE/USD': {'last': 0.1},
+            'XRP/USD': {'last': 0.5}
+        }
+        
+        self.engine.trading_mode = "live"
+        self.engine.config = {
+            "broker": "kraken",
+            "api_credentials": {
+                "api_key": "test-key",
+                "api_secret": "test-secret"
+            }
+        }
+        
+        self.engine.sync_live_balance()
+        
+        # Assert cash converted from EUR to USD: 100.0 * 1.10 = 110.0
+        self.assertAlmostEqual(self.engine.balance, 110.0)
+        
+        # Assert live equity includes cash + LINK + ADA value:
+        # Cash: 110.0
+        # LINK: 5.0 * 15.0 = 75.0
+        # ADA: 20.0 * 0.50 = 10.0
+        # Total: 195.0
+        self.assertAlmostEqual(self.engine.live_equity, 195.0)
+
+    def test_get_equity_with_eur_link_ada(self):
+        self.engine.trading_mode = "live"
+        self.engine.live_holdings = {
+            "ZEUR": 100.0,
+            "XLINK": 5.0,
+            "XADA": 20.0
+        }
+        self.engine.last_known_prices = {
+            "EUR": 1.10,
+            "LINK": 15.0,
+            "ADA": 0.50
+        }
+        
+        # Test calculation
+        equity = self.engine.get_equity(current_prices={})
+        
+        # Cash: 100.0 * 1.10 = 110.0
+        # LINK: 5.0 * 15.0 = 75.0
+        # ADA: 20.0 * 0.50 = 10.0
+        # Total: 195.0
+        self.assertAlmostEqual(equity, 195.0)
 
 if __name__ == "__main__":
     unittest.main()

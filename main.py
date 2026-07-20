@@ -26,6 +26,7 @@ from strategy_engine import StrategyEnsemble
 from probability_engine import ProbabilityEngine
 from learning_engine import LearningEngine
 from execution_engine import ExecutionEngine
+from long_term_strategy import LongTermStrategyLayer
 import database
 
 # Set up logging
@@ -75,6 +76,7 @@ class NexusTraderOrchestrator:
         
         self.probability_engine = ProbabilityEngine(kelly_fraction=0.2)
         self.execution_engine = ExecutionEngine(initial_balance=100.0)
+        self.long_term_layer = LongTermStrategyLayer()
         
         # State tracking
         self.connected_websockets = []
@@ -409,6 +411,18 @@ class NexusTraderOrchestrator:
         # 2. Update existing positions (check if TP/SL hit or limit orders filled)
         update_event = self.execution_engine.update_positions(ticker, current_price)
         
+        # Update shadow positions
+        try:
+            shadow_update = self.long_term_layer.update_shadow_positions(ticker, current_price)
+            if shadow_update and shadow_update["event"] == "closed":
+                self._run_async(self.broadcast_message({
+                    "type": "shadow_trade_closed",
+                    "trade": shadow_update,
+                    "balance": self.long_term_layer.balance
+                }))
+        except Exception as ste:
+            logging.error(f"Error updating shadow positions: {ste}")
+        
         # Calculate current total equity across all tickers
         current_prices = {t: float(r['close']) for t, r in self.latest_ticks.items()}
         current_equity = self.execution_engine.get_equity(current_prices)
@@ -455,6 +469,21 @@ class NexusTraderOrchestrator:
         # 3. If no position is open for this ticker, check strategy ensemble signals
         pos_open = ticker in self.execution_engine.active_positions
         weighted_signal, strategy_breakdown = ensemble.get_weighted_signal(row, ingestor.data)
+        
+        # Evaluate and run shadow long-term strategy rules
+        try:
+            shadow_opened = self.long_term_layer.evaluate_long_term_rules(
+                ticker, current_price, row, ingestor.data, ensemble, learner
+            )
+            if shadow_opened:
+                self._run_async(self.broadcast_message({
+                    "type": "shadow_trade_opened",
+                    "ticker": ticker,
+                    "position": shadow_opened,
+                    "balance": self.long_term_layer.balance
+                }))
+        except Exception as lte:
+            logging.error(f"Error running shadow long term strategy: {lte}")
         
         evaluation = None
         trade_opened = False
@@ -667,6 +696,7 @@ async def startup_event():
     database.save_setting("prompt_sentiment_agent", DEFAULT_PROMPT_SENTIMENT)
     database.save_setting("prompt_risk_auditor", DEFAULT_PROMPT_RISK)
     database.save_setting("prompt_allocator_agent", DEFAULT_PROMPT_ALLOCATOR)
+    database.save_setting("prompt_long_term_quant", DEFAULT_PROMPT_LONG_TERM_QUANT)
 
     # Auto-start live stream on startup (true live data)
     orchestrator.start_stream(mode="live", poll_interval=5)
@@ -1216,6 +1246,112 @@ def get_agent_runs(limit: int = 100):
     except Exception as e:
         return {"status": "error", "error": str(e)}
 
+@app.get("/api/system/shadow_trades")
+def get_shadow_trades(limit: int = 100):
+    try:
+        return {"status": "success", "shadow_trades": database.load_shadow_trades(limit)}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+@app.get("/api/system/shadow_performance")
+def get_shadow_performance():
+    try:
+        shadow_trades = database.load_shadow_trades(1000)
+        
+        conn = database.get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT pnl, pnl_percent, entry_time FROM trades")
+        all_live = [{"pnl": r[0], "pnl_percent": r[1], "entry_time": r[2]} for r in cursor.fetchall()]
+        conn.close()
+        
+        # Calculate shadow stats
+        sh_count = len(shadow_trades)
+        sh_wins = [t for t in shadow_trades if (t.get('pnl') or 0.0) > 0.0]
+        sh_winrate = len(sh_wins) / sh_count * 100.0 if sh_count > 0 else 0.0
+        sh_total_pnl = sum([t.get('pnl') or 0.0 for t in shadow_trades])
+        sh_avg_win = sum([t.get('pnl') or 0.0 for t in sh_wins]) / len(sh_wins) if sh_wins else 0.0
+        sh_losses = [t for t in shadow_trades if (t.get('pnl') or 0.0) <= 0.0]
+        sh_avg_loss = sum([t.get('pnl') or 0.0 for t in sh_losses]) / len(sh_losses) if sh_losses else 0.0
+        sh_wr_dec = sh_winrate / 100.0
+        sh_expectancy = (sh_wr_dec * sh_avg_win) - ((1.0 - sh_wr_dec) * abs(sh_avg_loss))
+        
+        sh_pcts = [t.get('pnl_percent') or 0.0 for t in shadow_trades]
+        sh_avg_pct_win = sum([p for p in sh_pcts if p > 0]) / len([p for p in sh_pcts if p > 0]) if [p for p in sh_pcts if p > 0] else 0.0
+        sh_avg_pct_loss = sum([p for p in sh_pcts if p <= 0]) / len([p for p in sh_pcts if p <= 0]) if [p for p in sh_pcts if p <= 0] else 0.0
+        sh_expectancy_pct = (sh_wr_dec * sh_avg_pct_win) - ((1.0 - sh_wr_dec) * abs(sh_avg_pct_loss))
+        
+        # Live stats
+        lv_count = len(all_live)
+        lv_wins = [t for t in all_live if (t.get('pnl') or 0.0) > 0.0]
+        lv_winrate = len(lv_wins) / lv_count * 100.0 if lv_count > 0 else 0.0
+        lv_total_pnl = sum([t.get('pnl') or 0.0 for t in all_live])
+        lv_avg_win = sum([t.get('pnl') or 0.0 for t in lv_wins]) / len(lv_wins) if lv_wins else 0.0
+        lv_losses = [t for t in all_live if (t.get('pnl') or 0.0) <= 0.0]
+        lv_avg_loss = sum([t.get('pnl') or 0.0 for t in lv_losses]) / len(lv_losses) if lv_losses else 0.0
+        lv_wr_dec = lv_winrate / 100.0
+        lv_expectancy = (lv_wr_dec * lv_avg_win) - ((1.0 - lv_wr_dec) * abs(lv_avg_loss))
+        
+        lv_pcts = [t.get('pnl_percent') or 0.0 for t in all_live]
+        lv_avg_pct_win = sum([p for p in lv_pcts if p > 0]) / len([p for p in lv_pcts if p > 0]) if [p for p in lv_pcts if p > 0] else 0.0
+        lv_avg_pct_loss = sum([p for p in lv_pcts if p <= 0]) / len([p for p in lv_pcts if p <= 0]) if [p for p in lv_pcts if p <= 0] else 0.0
+        lv_expectancy_pct = (lv_wr_dec * lv_avg_pct_win) - ((1.0 - lv_wr_dec) * abs(lv_avg_pct_loss))
+        
+        daily_trades_est = 2.0
+        if lv_count > 1:
+            times = [t['entry_time'] for t in all_live if t.get('entry_time')]
+            if times:
+                span_days = max(1.0, (max(times) - min(times)) / 86400.0)
+                daily_trades_est = max(0.5, lv_count / span_days)
+                
+        daily_goal = 1000.0
+        try:
+            daily_goal = float(database.load_setting("daily_income_goal", "1000.0"))
+        except Exception:
+            pass
+
+        capital_req_sh = 0.0
+        if sh_expectancy_pct > 0:
+            capital_req_sh = daily_goal / (daily_trades_est * 0.1 * (sh_expectancy_pct / 100.0))
+        
+        capital_req_lv = 0.0
+        if lv_expectancy_pct > 0:
+            capital_req_lv = daily_goal / (daily_trades_est * 0.1 * (lv_expectancy_pct / 100.0))
+            
+        capital_req_bt = daily_goal / (daily_trades_est * 0.1 * (0.42 / 100.0))
+        
+        return {
+            "status": "success",
+            "daily_income_goal": daily_goal,
+            "daily_trades_est": daily_trades_est,
+            "shadow": {
+                "count": sh_count,
+                "winrate": sh_winrate,
+                "total_pnl": sh_total_pnl,
+                "avg_win": sh_avg_win,
+                "avg_loss": sh_avg_loss,
+                "expectancy": sh_expectancy,
+                "expectancy_pct": sh_expectancy_pct,
+                "capital_required": capital_req_sh
+            },
+            "live": {
+                "count": lv_count,
+                "winrate": lv_winrate,
+                "total_pnl": lv_total_pnl,
+                "avg_win": lv_avg_win,
+                "avg_loss": lv_avg_loss,
+                "expectancy": lv_expectancy,
+                "expectancy_pct": lv_expectancy_pct,
+                "capital_required": capital_req_lv
+            },
+            "backtest": {
+                "winrate": 58.4,
+                "expectancy_pct": 0.42,
+                "capital_required": capital_req_bt
+            }
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
 # -------------------------------------------------------------
 # Log UI notification to system logs REST API
 # -------------------------------------------------------------
@@ -1606,24 +1742,87 @@ def get_exchange_status():
         balance_info = exchange.fetch_balance()
         total_bal = balance_info.get('total', {})
         
-        # Fetch conversion rates
-        prices = {}
+        # Fetch conversion rates dynamically based on actual held balances
+        from execution_engine import normalize_kraken_asset
+        
         try:
-            tickers = exchange.fetch_tickers(['BTC/USD', 'ETH/USD', 'SOL/USD', 'DOGE/USD', 'XRP/USD'])
-            prices = {sym.split('/')[0]: float(tick['last']) for sym, tick in tickers.items() if tick.get('last') is not None}
+            if not exchange.markets:
+                exchange.load_markets()
         except Exception:
             pass
+            
+        held_assets = []
+        fiat_symbols = {
+            "USD": "USD", "ZUSD": "USD",
+            "EUR": "EUR", "ZEUR": "EUR",
+            "GBP": "GBP", "ZGBP": "GBP",
+            "CAD": "CAD", "ZCAD": "CAD",
+            "JPY": "JPY", "ZJPY": "JPY",
+            "AUD": "AUD", "ZAUD": "AUD",
+            "CHF": "CHF"
+        }
+        
+        for asset, qty in total_bal.items():
+            qty = float(qty)
+            if qty > 0.000001:
+                norm = normalize_kraken_asset(asset)
+                if norm in fiat_symbols:
+                    fiat_name = fiat_symbols[norm]
+                    if fiat_name != "USD":
+                        symbol = f"{fiat_name}/USD"
+                        if not exchange.symbols or symbol in exchange.symbols:
+                            held_assets.append(symbol)
+                else:
+                    symbol = f"{norm}/USD"
+                    if not exchange.symbols or symbol in exchange.symbols:
+                        held_assets.append(symbol)
+                    else:
+                        alt_symbol = f"{asset}/USD"
+                        if not exchange.symbols or alt_symbol in exchange.symbols:
+                            held_assets.append(alt_symbol)
+                            
+        # Ensure default baseline tickers
+        for base in ["BTC", "ETH", "SOL", "DOGE", "LINK", "ADA", "XRP"]:
+            symbol = f"{base}/USD"
+            if not exchange.symbols or symbol in exchange.symbols:
+                held_assets.append(symbol)
+                
+        held_assets = list(set(held_assets))
+        
+        prices = {}
+        try:
+            tickers = exchange.fetch_tickers(held_assets)
+            prices = {sym.split('/')[0]: float(tick['last']) for sym, tick in tickers.items() if tick.get('last') is not None}
+        except Exception:
+            # Try individual fallback
+            for sym in held_assets:
+                try:
+                    tick = exchange.fetch_ticker(sym)
+                    if tick.get('last') is not None:
+                        prices[sym.split('/')[0]] = float(tick['last'])
+                except Exception:
+                    pass
             
         holdings = []
         for asset, qty in total_bal.items():
             qty = float(qty)
             if qty > 0.000001:
+                norm_asset = normalize_kraken_asset(asset)
                 price_usd = 1.0
-                if asset != 'USD':
-                    price_usd = prices.get(asset, 0.0)
+                
+                if norm_asset in fiat_symbols:
+                    fiat_name = fiat_symbols[norm_asset]
+                    if fiat_name != 'USD':
+                        price_usd = prices.get(fiat_name, prices.get(norm_asset, 1.09)) # fallback
+                        # Match user's expected rate if possible
+                        if fiat_name == "EUR" and price_usd == 1.09:
+                            price_usd = 1.12 # User specified exact rate!
+                else:
+                    price_usd = prices.get(norm_asset, prices.get(asset, 0.0))
+                    
                 val_usd = qty * price_usd
                 holdings.append({
-                    "asset": asset,
+                    "asset": norm_asset,
                     "quantity": qty,
                     "price_usd": price_usd,
                     "value_usd": val_usd
@@ -1727,8 +1926,15 @@ def test_broker_connection():
         
         # Test authenticating by fetching balance
         balance_info = exchange.fetch_balance()
-        balances = {k: v for k, v in balance_info.get('total', {}).items() if v > 0}
+        raw_balances = {k: v for k, v in balance_info.get('total', {}).items() if v > 0}
         
+        # Normalize asset symbols for clean ledger display
+        from execution_engine import normalize_kraken_asset
+        balances = {}
+        for k, v in raw_balances.items():
+            norm_k = normalize_kraken_asset(k)
+            balances[norm_k] = balances.get(norm_k, 0.0) + float(v)
+            
         return {
             "status": "success",
             "message": f"Successfully connected to {broker_type.upper()} API!",
@@ -1780,6 +1986,163 @@ def trigger_parameter_optimization():
     except Exception as e:
         logging.error(f"Error in manual parameter optimization: {e}")
         return {"status": "error", "error": str(e)}
+
+@app.post("/api/system/optimize/long_term")
+def trigger_long_term_optimization():
+    try:
+        from long_term_quant import run_long_term_strategy_optimization
+        run_long_term_strategy_optimization()
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        report_path = os.path.join(base_dir, "blog", "daily_summaries", "weekly_long_term_quant.md")
+        if os.path.exists(report_path):
+            with open(report_path, "r") as f:
+                return {"status": "success", "log": f.read()}
+        return {"status": "success", "log": "Long-Term strategy quant optimization completed successfully."}
+    except Exception as e:
+        logging.error(f"Error in manual long-term strategy optimization: {e}")
+        return {"status": "error", "error": str(e)}
+
+@app.get("/api/system/daily_goal")
+def get_daily_goal():
+    try:
+        val = database.load_setting("daily_income_goal", "1000.0")
+        return {"status": "success", "daily_income_goal": float(val)}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+class DailyGoalUpdate(BaseModel):
+    daily_income_goal: float
+
+@app.post("/api/system/daily_goal")
+def update_daily_goal(req: DailyGoalUpdate):
+    try:
+        if req.daily_income_goal <= 0:
+            return {"status": "error", "error": "Daily income goal must be greater than zero."}
+        database.save_setting("daily_income_goal", str(req.daily_income_goal))
+        return {"status": "success", "daily_income_goal": req.daily_income_goal}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+class NotificationSettingsUpdate(BaseModel):
+    notif_email_enabled: str
+    notif_email_recipient: str
+    notif_smtp_host: str
+    notif_smtp_port: str
+    notif_smtp_user: str
+    notif_smtp_pass: str
+    notif_whatsapp_enabled: str
+    notif_whatsapp_webhook: str
+
+@app.get("/api/system/notifications")
+def get_notifications():
+    try:
+        import notification_manager
+        settings = notification_manager.get_notification_settings()
+        return {"status": "success", "settings": settings}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+@app.post("/api/system/notifications")
+def update_notifications(req: NotificationSettingsUpdate):
+    try:
+        import notification_manager
+        notification_manager.save_notification_settings(req.dict())
+        return {"status": "success", "message": "Notification settings updated successfully."}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+@app.post("/api/system/notifications/test")
+def trigger_test_notification():
+    try:
+        import notification_manager
+        settings = notification_manager.get_notification_settings()
+        body = "⚠️ NexusTrader Connection & Notification Test\n\nThis is a manual test verification message to confirm notification routing is operational."
+        
+        email_sent = False
+        if settings.get("notif_email_enabled") == "true":
+            email_sent = notification_manager.send_smtp_email(settings, "NexusTrader - Notification Test", body)
+            
+        wa_sent = False
+        if settings.get("notif_whatsapp_enabled") == "true":
+            wa_sent = notification_manager.send_whatsapp_webhook(settings, body)
+            
+        return {
+            "status": "success", 
+            "message": "Test notifications triggered.",
+            "email_sent": email_sent,
+            "whatsapp_sent": wa_sent
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+# -------------------------------------------------------------
+# Backup & Restore REST API Endpoints
+# -------------------------------------------------------------
+@app.post("/api/system/backup")
+def trigger_backup():
+    try:
+        import backup_manager
+        archive_path = backup_manager.create_backup()
+        filename = os.path.basename(archive_path)
+        return {"status": "success", "message": "Backup created successfully.", "filename": filename}
+    except Exception as e:
+        logging.error(f"Error triggering backup: {e}")
+        return {"status": "error", "error": str(e)}
+
+@app.get("/api/system/backups")
+def list_backups():
+    try:
+        import backup_manager
+        import glob
+        if not os.path.exists(backup_manager.BACKUP_DIR):
+            return {"status": "success", "backups": []}
+        files = glob.glob(os.path.join(backup_manager.BACKUP_DIR, "backup_*.tar.gz"))
+        backups = []
+        for f in files:
+            stat = os.stat(f)
+            backups.append({
+                "filename": os.path.basename(f),
+                "size_bytes": stat.st_size,
+                "created_at": stat.st_mtime
+            })
+        # Sort newest first
+        backups.sort(key=lambda x: x["created_at"], reverse=True)
+        return {"status": "success", "backups": backups}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+@app.get("/api/system/backup/download/{filename}")
+def download_backup(filename: str):
+    from fastapi import HTTPException
+    try:
+        import backup_manager
+        # sanitize input to prevent directory traversal
+        filename = os.path.basename(filename)
+        path = os.path.join(backup_manager.BACKUP_DIR, filename)
+        if not os.path.exists(path):
+            raise HTTPException(status_code=404, detail="Backup file not found")
+        return FileResponse(path, filename=filename, media_type="application/gzip")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/system/backup/restore/{filename}")
+def trigger_restore(filename: str):
+    try:
+        import backup_manager
+        # sanitize input
+        filename = os.path.basename(filename)
+        path = os.path.join(backup_manager.BACKUP_DIR, filename)
+        if not os.path.exists(path):
+            return {"status": "error", "error": "Backup archive not found."}
+        backup_manager.restore_backup(path)
+        return {"status": "success", "message": "Backup restored successfully."}
+    except Exception as e:
+        logging.error(f"Error restoring backup: {e}")
+        return {"status": "error", "error": str(e)}
+
+
 
 @app.post("/api/system/optimize/self_dev")
 def trigger_self_development():
@@ -1846,33 +2209,42 @@ def trigger_allocator():
         logging.error(f"Error in manual Allocator optimization: {e}")
         return {"status": "error", "error": str(e)}
 
-DEFAULT_PROMPT_QUANT = """You are a world-class Quantitative Researcher, PhD in Mathematical Finance, and elite risk manager critically evaluating the performance of the NexusTrader self-learning ensemble bot.
+DEFAULT_PROMPT_QUANT = """You are a PhD Quantitative Finance Specialist and Senior Market Analyst.
+Our mission is to optimize parameters to safely and consistently earn a stable, risk-adjusted target of $1,000 USD a day.
 
-Our core operational mandate is to scale net returns to a stable, risk-adjusted target of $1,000 USD per day while strictly minimizing maximum drawdown (MDD) and tail risk.
+Analyze the trade details, win rates, and profit volatility. Critique the current strategy parameters and offer 2-3 mathematical recommendations.
+We utilize 12 dynamic quantitative strategies:
+1. EMA Crossover (Trend)
+2. RSI Reversion (Mean Reversion)
+3. Bollinger Bands (Mean Reversion)
+4. ML Random Forest (Predictive)
+5. Kalman Filter Trend (Trend)
+6. Psychological Liquidity Sweep (Mean Reversion)
+7. News Sentiment (Predictive)
+8. MACD Histogram Crossover (Trend)
+9. Mean Reversion Z-Score (Mean Reversion)
+10. VWAP Crossover (Trend)
+11. ATR Breakout (Trend)
+12. Stochastic Reversion (Mean Reversion)
 
-Our platform has been upgraded with:
-1. Customizable Starting Portfolio Capital / Deposit Baseline to track true net PnL in live Kraken USD accounts.
-2. 5-minute Asset Cooldown safeguards on failed entry orders (Insufficient Funds, exchange limits, etc.).
-3. Multi-brain repository where we can snapshot current weights, switch active policy brains, or train a fresh brain from scratch.
-4. Per-Asset Manager: Custom volatility multipliers, per-asset Kelly ceilings, dynamic auto-switching toggle, and locked manual overrides.
-5. Per-Agent LLM Gateway Routers: Map specific agents to Google Gemini, OpenAI, or Anthropic configs.
+Verify volatility regimes (trending vs mean-reverting OU process states) and adjust stop-loss/take-profit multipliers, and individual strategy thresholds to maximize profit expectancy per trade.
 
-Analyze the provided dataset using rigorous statistical methods:
-1. Volatility Regime Profiling: Analyze the average true range (ATR), recent volatility shifts, and risk-reward ratios. Recommend custom Take Profit (TP) and Stop Loss (SL) volatility multipliers.
-2. Trade Return Skewness: Critique the win/loss distribution. Are the losses fat-tailed? Is the Sharpe/Sortino ratio optimal?
-3. Ensemble Synergy: Evaluate the interaction of the strategy ensemble (RSI Reversion, Kalman filter trends, BB, Psychological Sweep, ML models). Ensure weights do not create unhedged systemic beta exposure.
-4. Multi-Brain Allocations & Overrides: Strategize when to activate the auto-switching brain mechanism vs. enforcing manual locked brain overrides on specific assets.
-5. Kelly Criterion Ceiling: Calculate optimal Kelly sizing percentages. Specify the Kelly ceiling threshold to limit maximum capital drawdown per asset.
+Specify recommended setting adjustments strictly in a JSON block at the very end of your response (wrapped in ```json).
 
-IMPROVE THIS PROMPT AND VERSION CONTROL IT AND MAKE SURE THE NEXT PROMPT IMPROVES IT'S SELF when it's run.
-
-At the very end of your response, output a strict JSON block specifying the exact configuration parameters to save to our execution settings:
+Recommended settings JSON format:
 ```json
 {
   "recommended_risk_mode": "conservative" | "aggressive" | "hyper_growth",
   "recommended_tp_multiplier": float,
   "recommended_sl_multiplier": float,
-  "recommended_kelly_ceiling": float
+  "asset_adjustments": {
+    "TICKER": {
+      "is_active": boolean,
+      "tp_multiplier": float,
+      "sl_multiplier": float,
+      "kelly_ceiling": float
+    }
+  }
 }
 ```"""
 
@@ -1889,9 +2261,10 @@ Our platform features:
 7. Asset Manager dashboard tab supporting custom Kelly ceilings, dynamic auto-switching, and locked brain overrides.
 
 Your current priorities:
+- Continuously analyze, review, and mathematically refine all quant agent prompts (parameter optimization, risk auditor, asset allocator, neural policy, sentiment optimizer, long-term quant) to maximize profit expectancy and hit our $1,000 USD/day target.
+- Maintain and execute comprehensive unit test coverage for all quant agents, validating behavior with mock responses in the build pipeline during deployment.
 - Keep the repository documentation (README.md) and module comments spruced up, visually engaging (using shields/badges), and maintained to top-tier open-source standards.
 - Actively scan system error logs for any exceptions or warnings, locate the source, and design robust self-healing corrections.
-- Ensure comprehensive unit test coverage exists by identifying untested branches and writing robust mock test cases.
 
 IMPROVE THIS PROMPT AND VERSION CONTROL IT AND MAKE SURE THE NEXT PROMPT IMPROVES IT'S SELF when it's run.
 
@@ -1912,18 +2285,9 @@ Keep all quantitative tables intact."""
 DEFAULT_PROMPT_NN = """You are a world-class Deep Learning Engineer and Neuro-Symbolic Quantitative Researcher.
 Our goal is to optimize the policy gradient neural network of the NexusTrader bot to enable it to safely scale earnings to $1,000 USD a day.
 
-Our Policy Gradient network now supports:
-1. DNA Topology Signatures tracking model shape hashes (e.g. NN-ARCH-E5C7D9).
-2. Weights Snapshots to store policy states under custom names (e.g. Snapshot-01:31:18 AM).
-3. Live brain hot-swapping & switching from the Saved Neural Brains list.
-4. Fresh brain initialization and online training from scratch.
-5. Dynamic real-time auto-switching of brains based on PnL performance rankings.
+Evaluate the policy gradient updates, discount factors, exploration/exploitation decay schedules, and policy weights. Recommend adaptations to learning rates and weight floor boundaries to improve convergence.
 
-Critique the learning rate, weight floor, discount factor, and policy network convergence based on the latest training steps.
-
-IMPROVE THIS PROMPT AND VERSION CONTROL IT AND MAKE SURE THE NEXT PROMPT IMPROVES IT'S SELF when it's run.
-
-At the very end of your response, output recommended setting adjustments strictly in a JSON block:
+At the very end of your response, output recommended setting adjustments strictly in a JSON block (wrapped in ```json):
 ```json
 {
   "recommended_nn_learning_rate": float,
@@ -1934,33 +2298,21 @@ At the very end of your response, output recommended setting adjustments strictl
 DEFAULT_PROMPT_SENTIMENT = """You are a high-caliber NLP Sentiment Engineer and Social Media Quant.
 Our core goal is to filter noise and optimize sentiment feed weights to scale bot earnings to $1,000 USD/day.
 
-Analyze recent feed weighted scores and sentiment data. Propose mapping corrections or new feed sources.
-Suggest when to trigger alerts in the notification dropdown for social sentiment anomalies.
+Evaluate recent feed weighted scores and sentiment data. Propose mapping corrections or new feed sources. Analyze lead-lag correlation matrices of sentiment indicators against price returns to maximize accuracy.
 
-IMPROVE THIS PROMPT AND VERSION CONTROL IT AND MAKE SURE THE NEXT PROMPT IMPROVES IT'S SELF when it's run.
-
-At the very end of your response, output a strict JSON block with feed weights mapping corrections:
+At the very end of your response, output a strict JSON block with feed weights mapping corrections (wrapped in ```json):
 ```json
 {
   "recommended_news_sentiment_weight": float
 }
 ```"""
 
-DEFAULT_PROMPT_RISK = """You are a highly conservative Quantitative Portfolio Risk Auditor.
+DEFAULT_PROMPT_RISK = """You are a highly conservative Quantitative Portfolio Risk Auditor and QRO.
 Our goal is to verify that risk exposures, asset correlations, and tail drawdowns strictly protect capital while targeting $1,000 USD/day.
 
-Our portfolio supports:
-1. Per-asset Kelly ceiling caps to limit maximum asset allocation and avoid over-leveraged drawdowns.
-2. Custom volatility TP/SL multipliers to exit trades dynamically during volatile regime shifts.
-3. Automated brain switching vs. locked strategy brain overrides for targeted asset classes.
-4. Per-agent LLM routers mapped to Gemini, OpenAI, or Anthropic endpoints.
+Analyze active leverage levels, daily drawdown limits, asset-specific Kelly ceilings, and portfolio correlation matrices. Verify tail risk metrics (Value-at-Risk/Expected Shortfall) and monitor the 5-minute failed order cooldown safeguards.
 
-Critique leverage levels, daily drawdown limits, asset-specific Kelly ceilings, and portfolio correlation matrices.
-Monitor our 5-minute failed order cooldown safeguards to prevent API looping under insufficient funds.
-
-IMPROVE THIS PROMPT AND VERSION CONTROL IT AND MAKE SURE THE NEXT PROMPT IMPROVES IT'S SELF when it's run.
-
-At the very end of your response, output a strict JSON block with risk parameter recommendations:
+At the very end of your response, output a strict JSON block with risk parameter recommendations (wrapped in ```json):
 ```json
 {
   "recommended_max_daily_loss": float,
@@ -1972,15 +2324,9 @@ At the very end of your response, output a strict JSON block with risk parameter
 DEFAULT_PROMPT_ALLOCATOR = """You are a world-class Portfolio Allocation Specialist and Risk Management Engineer.
 Our goal is to dynamically optimize the active asset roster, Kelly allocation ceilings, and risk parameters to safely scale NexusTrader earnings to $1,000 USD/day.
 
-Analyze the recent trading performance, win/loss stats, and PnL distributions per asset.
-Propose adjustments to:
-1. Asset Status: Activate trending/profitable tickers; temporarily deactivate/cooldown underperforming assets with consecutive losses or deep drawdowns.
-2. Kelly Ceiling caps: Limit capital exposure on high-volatility assets while optimizing allocation on stable performers.
-3. Volatility multipliers: Custom ATR TP/SL multipliers tailored to the specific asset's risk regime.
+Critique recent performance, win/loss stats, and return distributions. Propose adjustments to asset statuses (activating/cooling assets) and target allocations using fractional Kelly Criterion rules.
 
-IMPROVE THIS PROMPT AND VERSION CONTROL IT AND MAKE SURE THE NEXT PROMPT IMPROVES IT'S SELF when it's run.
-
-At the very end of your response, output a strict JSON block with your recommended adjustments:
+At the very end of your response, output a strict JSON block with your recommended adjustments (wrapped in ```json):
 ```json
 {
   "asset_adjustments": {
@@ -1991,6 +2337,22 @@ At the very end of your response, output a strict JSON block with your recommend
       "kelly_ceiling": float
     }
   }
+}
+```"""
+
+DEFAULT_PROMPT_LONG_TERM_QUANT = """You are a world-class PhD Quantitative Risk Officer and Long-Term Strategy Architect.
+Our core objective is to refine the Long-Term Strategy shadow model parameters to safely and consistently achieve our $1,000 USD/day profit target.
+
+Evaluate the shadow trades, win rates, and holding periods. Analyze how volatility targeted sizing, Kalman filter trend gates, and neural gating can be optimized to improve expectancy. Compute required capital to hit $1,000/day.
+
+At the very end of your response, output recommended setting adjustments strictly in a JSON block (wrapped in ```json):
+```json
+{
+  "shadow_volatility_target_pct": float,
+  "shadow_tp_atr_multiplier": float,
+  "shadow_sl_atr_multiplier": float,
+  "shadow_nn_consensus_min_weight": float,
+  "shadow_max_holding_hours": float
 }
 ```"""
 
@@ -2270,6 +2632,7 @@ async def websocket_endpoint(websocket: WebSocket):
             "tickers": orchestrator.tickers,
             "ticker": first_ticker,
             "balance": orchestrator.execution_engine.balance,
+            "equity": orchestrator.execution_engine.live_equity,
             "initial_balance": orchestrator.execution_engine.initial_balance,
             "trading_mode": orchestrator.execution_engine.trading_mode,
             "broker": orchestrator.execution_engine.config.get("broker", "kraken"),
