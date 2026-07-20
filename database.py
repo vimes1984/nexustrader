@@ -215,9 +215,20 @@ def init_db():
         timestamp REAL,
         ticker TEXT,
         weights TEXT,
+        brain_name TEXT DEFAULT 'Default Brain',
         PRIMARY KEY (timestamp, ticker)
     )
     """)
+    
+    # Migrate weights_history table: add brain_name column if missing
+    try:
+        cursor.execute("PRAGMA table_info(weights_history)")
+        wh_cols = [row[1] for row in cursor.fetchall()]
+        if "brain_name" not in wh_cols:
+            logging.info("Migrating weights_history table: adding brain_name column...")
+            cursor.execute("ALTER TABLE weights_history ADD COLUMN brain_name TEXT DEFAULT 'Default Brain'")
+    except Exception as e:
+        logging.error(f"Error migrating weights_history table: {e}")
     
     # Create policy brains table
     cursor.execute("""
@@ -308,13 +319,13 @@ def init_db():
     conn.close()
     logging.info("Database initialized successfully.")
 
-def save_weights_history(timestamp: float, ticker: str, weights: dict):
+def save_weights_history(timestamp: float, ticker: str, weights: dict, brain_name: str = 'Default Brain'):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT OR REPLACE INTO weights_history (timestamp, ticker, weights) VALUES (?, ?, ?)",
-            (timestamp, ticker, json.dumps(weights))
+            "INSERT OR REPLACE INTO weights_history (timestamp, ticker, weights, brain_name) VALUES (?, ?, ?, ?)",
+            (timestamp, ticker, json.dumps(weights), brain_name)
         )
         conn.commit()
         conn.close()
@@ -326,17 +337,23 @@ def load_weights_history(ticker: str, limit: int = 100):
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT timestamp, weights FROM weights_history WHERE ticker = ? ORDER BY timestamp ASC LIMIT ?",
+            "SELECT timestamp, weights, brain_name FROM weights_history WHERE ticker = ? ORDER BY timestamp ASC LIMIT ?",
             (ticker, limit)
         )
         rows = cursor.fetchall()
         conn.close()
-        return [{"timestamp": r[0], "weights": json.loads(r[1])} for r in rows]
+        return [{
+            "timestamp": r[0],
+            "weights": json.loads(r[1]),
+            "brain_name": r[2] if len(r) > 2 else 'Default Brain'
+        } for r in rows]
     except Exception as e:
         logging.error(f"Error loading weights history: {e}")
         return []
 
 def save_tick(row, symbol):
+    if hasattr(row, "keys") and not isinstance(row, dict):
+        row = dict(row)
     """Saves a price tick to database."""
     conn = get_db_connection()
     cursor = conn.cursor()

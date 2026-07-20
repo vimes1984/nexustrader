@@ -88,7 +88,7 @@ class KillSwitch:
             self.daily_pnl = 0.0
             self.daily_reset_time = time.time()
 
-        if self.daily_pnl <= -self.max_daily_loss:
+        if abs(self.daily_pnl) >= self.max_daily_loss:
             self.tripped = True
             self.trigger_reason = "Daily loss limit: {:.2f} >= {:.2f}".format(-self.daily_pnl, self.max_daily_loss)
             return False, self.trigger_reason

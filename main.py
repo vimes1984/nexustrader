@@ -738,6 +738,214 @@ async def shutdown_event():
     orchestrator.stop_stream()
 
 # API Endpoints
+
+
+
+@app.get("/api/init")
+async def api_init_state(request: Request):
+    """Dashboard init - mirrors /api/status + trades + brains."""
+    import json as _json, time as _time, datetime as _dt, traceback as _tb
+    _db = __import__("database")
+    orc = orchestrator
+    ee = orc.execution_engine
+
+    # Tickers: same as /api/status
+    tickers = orc.tickers or _json.loads(_db.load_setting("active_tickers","[]"))
+    default_ticker = tickers[0] if tickers else "BTC-USD"
+
+    # Live prices from data_ingestions (mirrors /api/status)
+    current_prices = {}
+    ticker_prices = {}
+    for t in tickers:
+        if t in orc.data_ingestions:
+            p = orc.data_ingestions[t].live_price or 0.0
+            current_prices[t] = p
+            ticker_prices[t] = p
+
+    balance = ee.balance
+    equity = ee.get_equity(current_prices) if current_prices else balance
+
+    # Trades from DB
+    all_trades = _db.load_trades() or []
+
+    # Active brains
+    active_brains = []
+    for tn, learner in (getattr(orc, "learning_engines", {}) or {}).items():
+        try:
+            bn = getattr(learner, "active_brain_name", None)
+            if bn:
+                active_brains.append({"name": bn, "ticker": tn, "version": getattr(learner, "brain_version", 1)})
+        except Exception:
+            pass
+
+    # Positions
+    positions = []
+    try:
+        for sym, pos in getattr(ee, "active_positions", {}).items():
+            positions.append({
+                "symbol": sym, "direction": getattr(pos,"direction","BUY"),
+                "entry_price": getattr(pos,"entry_price",0),
+                "current_price": getattr(pos,"current_price",0),
+                "quantity": getattr(pos,"quantity",0),
+                "entry_time": getattr(pos,"entry_time",int(_time.time())),
+                "unrealized_pnl": getattr(pos,"unrealized_pnl",0),
+                "unrealized_pnl_pct": getattr(pos,"unrealized_pnl_pct",0),
+                "age_seconds": int(_time.time())-getattr(pos,"entry_time",int(_time.time())),
+            })
+    except Exception:
+        pass
+
+    return {
+        "status":"ok", "balance":balance, "equity":equity,
+        "trades":all_trades, "total_pnl":sum(t.get("pnl",0)or 0 for t in all_trades),
+        "tickers":tickers, "ticker":default_ticker, "ticker_prices":ticker_prices,
+        "active_brains":active_brains,
+        "initial_balance":float(_db.load_setting("initial_balance","219.74")),
+        "lifetime_steps":int(_db.load_setting("lifetime_steps","0")),
+        "model_dna":_db.load_setting("model_dna","genesis"),
+        "positions":positions,
+        "risk_mode":_db.load_setting("risk_mode","conservative"),
+        "trading_mode":_db.load_setting("trading_mode","paper"),
+        "live_holdings":getattr(orc,"live_holdings",{})or{},
+    }
+
+@app.get("/api/positions")
+async def api_positions():
+    """Open positions + fiat breakdown."""
+    import time as _time
+    positions = []
+    try:
+        ee = getattr(orchestrator, "execution_engine", None)
+        if ee:
+            open_pos = getattr(ee, "open_positions", {})
+            for sym, pos in open_pos.items():
+                positions.append({
+                    "symbol": sym,
+                    "direction": getattr(pos, "direction", "BUY"),
+                    "entry_price": getattr(pos, "entry_price", 0),
+                    "current_price": getattr(pos, "current_price", 0),
+                    "quantity": getattr(pos, "quantity", 0),
+                    "entry_time": getattr(pos, "entry_time", int(_time.time())),
+                    "unrealized_pnl": getattr(pos, "unrealized_pnl", 0),
+                    "unrealized_pnl_pct": getattr(pos, "unrealized_pnl_pct", 0),
+                    "age_seconds": int(_time.time()) - getattr(pos, "entry_time", int(_time.time())),
+                })
+    except Exception:
+        pass
+    fiat_breakdown = {}
+    crypto_count = 0
+    try:
+        live_holdings = getattr(orchestrator, "live_holdings", {}) or {}
+        for asset, amt in live_holdings.items():
+            if asset in ("USD", "EUR", "GBP", "JPY", "CHF", "CAD", "AUD"):
+                fiat_breakdown[asset] = amt
+            elif float(amt) > 0:
+                crypto_count += 1
+    except Exception:
+        pass
+    return {"positions": positions, "fiat_breakdown": fiat_breakdown, "crypto_asset_count": crypto_count}
+
+@app.get("/api/trades/all")
+async def api_trades_all():
+    """All completed trades."""
+    import database as _db
+    try:
+        trades = _db.get_trades(limit=100)
+        return {"trades": trades}
+    except Exception as e:
+        return {"trades": [], "error": str(e)}
+
+@app.get("/api/health")
+async def api_health():
+    """Lightweight health check - no heavy DB access."""
+    import sys, os
+    try:
+        import psutil
+        mem = round(psutil.Process().memory_info().rss / 1024 / 1024, 1)
+    except Exception:
+        mem = 0
+    return {
+        "status": "ok",
+        "uptime_seconds": getattr(orchestrator, "start_time", 0),
+        "pid": os.getpid(),
+        "python": sys.version.split()[0],
+        "memory_mb": mem,
+    }
+
+@app.post("/api/quant/prompt/save")
+async def quant_prompt_save(request: Request):
+    """Save per-agent prompt"""
+    _db = __import__("database")
+    try:
+        body = await request.json()
+        agent = body.get("agent", "")
+        prompt = body.get("prompt", "")
+        if not agent:
+            return {"status": "error", "error": "agent required"}
+        key = f"prompt_{agent}"
+        _db.save_setting(key, prompt)
+        return {"status": "saved", "agent": agent, "length": len(prompt)}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+@app.post("/api/quant/trigger")
+async def quant_trigger(request: Request):
+    """Log a quant agent trigger request (cron jobs handle actual execution)"""
+    _db = __import__("database")
+    try:
+        body = await request.json()
+        agent = body.get("agent", "unknown")
+        _db.save_setting("quant_trigger_" + agent, str(time.time()))
+        logging.info(f"[QUANT TRIGGER] Agent: {agent} — Queued for next cron run")
+        return {"status": "requested", "agent": agent}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+@app.get("/api/quant/status")
+def get_quant_status():
+    """Return status of all Quant Team agents"""
+    import glob as _glob, os as _os
+    agents = [
+        {"id":"quant-optimizer","name":"NexusQuant PhD","emoji":"📊","role":"Parameter Optimizer","description":"Analyses trade outcomes and win rates. Suggests ATR multipliers, signal thresholds, and risk limits.","schedule":"Daily 1:00 AM UTC","color":"var(--neon-purple)","report_glob":"blog/daily_summaries/quant_optimizer_*.md"},
+        {"id":"sentiment","name":"Sentiment Agent","emoji":"📡","role":"Market Sentiment Analyst","description":"Polls crypto news feeds, computes sentiment scores, feeds them into the state vector.","schedule":"Daily 2:00 AM UTC","color":"var(--neon-pink)","report_glob":"blog/daily_summaries/sentiment_*.md"},
+        {"id":"risk-auditor","name":"NexusAuditor","emoji":"🛡️","role":"Portfolio Risk Auditor","description":"Checks drawdown, position sizes, and correlation between open trades to flag risk issues.","schedule":"Daily 3:00 AM UTC","color":"var(--neon-red)","report_glob":"blog/daily_summaries/risk_audit_*.md"},
+        {"id":"allocator","name":"Allocation Agent","emoji":"⚖️","role":"Portfolio Allocator","description":"Rebalances asset allocation, adjusts Kelly ceilings, rotates capital to winning tickers.","schedule":"Daily 4:00 AM UTC","color":"var(--neon-blue)","report_glob":"blog/daily_summaries/allocator_*.md"},
+        {"id":"self-dev","name":"NexusDev Architect","emoji":"⚙️","role":"Autonomous Systems Developer","description":"Reviews codebase for bugs and improvements. Edits dashboard, config, and agent code. Never touches trading logic.","schedule":"Daily 5:00 AM UTC","color":"var(--neon-cyan)","report_glob":"blog/daily_summaries/self_dev_*.md"},
+        {"id":"asset-selector","name":"Asset Selector","emoji":"🔍","role":"Trading Universe Manager","description":"Scans Kraken for new high-volume USD pairs. Adds promising assets, disables delisted ones.","schedule":"Every 14 days (Sunday)","color":"var(--neon-green)","report_glob":"blog/daily_summaries/asset_selector_*.md"},
+        {"id":"self-improve","name":"Self-Improvement Agent","emoji":"🧬","role":"Strategy Evolution Engine","description":"Analyzes trade patterns, evolves ensemble weights, prunes dead strategies, tunes hyperparameters from data.","schedule":"Weekly Saturday 6:00 AM","color":"var(--neon-orange)","report_glob":"blog/daily_summaries/self_improve_*.md"},
+        {"id":"blogger","name":"NexusReporter AI","emoji":"📝","role":"Performance Journalist & Blogger","description":"Generates weekly performance reports with trade stats, weight changes, and portfolio health summaries.","schedule":"Weekly Sunday 23:59 UTC","color":"var(--neon-yellow)","report_glob":"blog/daily_summaries/weekly_report_*.md"},
+        {"id":"researcher","name":"Monthly Researcher","emoji":"🔬","role":"Deep Strategy Researcher","description":"Monthly deep-dive: Sharpe/Sortino/Calmar ratios, per-strategy alpha attribution, market regime analysis.","schedule":"1st of month 7:00 AM","color":"var(--neon-indigo)","report_glob":"blog/daily_summaries/monthly_research_*.md"}
+    ]
+    for a in agents:
+        reports = sorted(_glob.glob(a["report_glob"]), reverse=True)
+        if reports:
+            a["last_report"] = _os.path.getmtime(reports[0])
+            a["last_report_file"] = _os.path.basename(reports[0])
+            try:
+                with open(reports[0]) as f:
+                    a["last_report_summary"] = f.readline().strip().lstrip("#").strip()[:100]
+            except:
+                a["last_report_summary"] = "(unreadable)"
+        else:
+            a["last_report"] = None
+            a["last_report_file"] = None
+            a["last_report_summary"] = "No report yet — awaiting first run"
+    return {"agents": agents}
+
+
+@app.api_route("/api/quant/prompt", methods=["GET", "POST"])
+async def quant_prompt(request: Request):
+    """Get or set the Quant Team system prompt"""
+    _db = __import__("database")
+    if request.method == "GET":
+        prompt = _db.load_setting("quant_team_prompt", "")
+        return {"prompt": prompt}
+    else:
+        try:
+            body = await request.json()
+            prompt = body.get("prompt", "")
+            _db.save_setting("quant_team_prompt", prompt)
+            return {"status": "saved", "length": len(prompt)}
+        except Exception as e:
+            return {"status": "error", "error": str(e)}
 @app.get("/api/safety/status")
 def get_safety_status():
     """KillSwitch and drawdown tracker status."""
@@ -765,15 +973,84 @@ def get_safety_status():
 
 @app.get("/api/status")
 def get_status():
+    import datetime, os as _os
+    if not hasattr(get_status, "_start_time"):
+        get_status._start_time = time.time()
+
     current_prices = {}
     for t in orchestrator.tickers:
         if t in orchestrator.data_ingestions:
             current_prices[t] = orchestrator.data_ingestions[t].live_price or 0.0
-            
+    
+    ee = orchestrator.execution_engine
+    fiat_breakdown = {}
+    holdings = getattr(ee, "live_holdings", {})
+    if holdings:
+        for k, v in holdings.items():
+            if k in ("USD", "ZUSD"):
+                fiat_breakdown["USD"] = fiat_breakdown.get("USD", 0.0) + float(v)
+            elif k in ("EUR", "ZEUR"):
+                fiat_breakdown["EUR"] = fiat_breakdown.get("EUR", 0.0) + float(v)
+    
+    _db = __import__("database")
+    _all_trades = _db.load_trades()
+    
+    _today_start = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    _today_ts = _today_start.timestamp()
+    _today_trades = [t for t in _all_trades if t.get("exit_time", 0) >= _today_ts]
+    _today_pnl = sum(float(t.get("pnl", 0.0) or 0.0) for t in _today_trades)
+    _today_pnl_pct = (_today_pnl / ee.balance * 100) if ee.balance > 0 else 0.0
+    
+    _win_count = sum(1 for t in _all_trades if float(t.get("pnl", 0) or 0) > 0)
+    _loss_count = sum(1 for t in _all_trades if float(t.get("pnl", 0) or 0) < 0)
+    
+    _peak = ee.initial_balance
+    _max_dd = 0.0
+    _running = ee.initial_balance
+    for t in sorted(_all_trades, key=lambda x: x.get("exit_time", 0)):
+        _running += float(t.get("pnl", 0.0) or 0.0)
+        if _running > _peak:
+            _peak = _running
+        if _peak > 0:
+            _dd = (_peak - _running) / _peak * 100
+            if _dd > _max_dd:
+                _max_dd = _dd
+    
+    _dd_limit = float(_db.load_setting("max_drawdown", "5.0"))
+    
+    _health = "good"
+    _health_reason = "All systems operational"
+    if ee.balance <= 0:
+        _health = "critical"
+        _health_reason = "Balance exhausted"
+    elif _max_dd >= _dd_limit:
+        _health = "warning"
+        _health_reason = "Drawdown {0:.1f}% exceeds limit {1}%".format(_max_dd, _dd_limit)
+    elif len(ee.active_positions) > 5:
+        _health = "warning"
+        _health_reason = "{0} open positions".format(len(ee.active_positions))
+    
+    _uptime = int(time.time() - getattr(get_status, "_start_time", time.time()))
+    
     return {
-        "balance": orchestrator.execution_engine.balance,
-        "equity": orchestrator.execution_engine.get_equity(current_prices),
-        "positions": orchestrator.execution_engine.active_positions,
+        "balance": ee.balance,
+        "equity": ee.get_equity(current_prices),
+        "trading_mode": ee.trading_mode,
+        "total_pnl": round(float(_db.load_setting("total_pnl", "0.0") or 0.0), 2),
+        "closed_trades": len(_all_trades),
+        "open_positions": len(ee.active_positions),
+        "today_pnl": round(_today_pnl, 2),
+        "today_pnl_pct": round(_today_pnl_pct, 2),
+        "today_trade_count": len(_today_trades),
+        "win_count": _win_count,
+        "loss_count": _loss_count,
+        "max_drawdown_pct": round(_max_dd, 2),
+        "drawdown_limit": float(_dd_limit),
+        "health_status": _health,
+        "health_reason": _health_reason,
+        "uptime_seconds": _uptime,
+        "fiat_breakdown": fiat_breakdown,
+        "positions": ee.active_positions,
         "tickers": orchestrator.tickers
     }
 
@@ -1329,6 +1606,54 @@ def apply_optimization(opt_id: int):
     except Exception as e:
         return {"status": "error", "error": str(e)}
 
+
+@app.post("/api/optimizations/apply/all")
+async def apply_all_optimizations(request: Request):
+    """Apply all pending optimizations at once."""
+    import database as _db
+    import traceback as _tb
+    try:
+        # Load all pending optimizations
+        rows = _db._execute("SELECT id, action_type, ticker, params FROM optimizations WHERE status = 'pending' ORDER BY id")
+        if not rows:
+            return {"status": "ok", "count": 0, "msg": "No pending optimizations"}
+        
+        applied = []
+        for row in rows:
+            oid = row[0]
+            action = row[1]
+            ticker = row[2]
+            params_str = row[3]
+            try:
+                params = __import__("json").loads(params_str) if params_str else {}
+            except Exception:
+                params = {}
+            
+            try:
+                if action == "tp_sl":
+                    for key in ("tp_multiplier", "sl_multiplier"):
+                        if key in params:
+                            _db.save_setting(key, str(params[key]))
+                elif action == "threshold":
+                    if "signal_threshold" in params:
+                        _db.save_setting("signal_threshold", str(params["signal_threshold"]))
+                elif action == "learning_rate":
+                    if "nn_lr" in params:
+                        _db.save_setting("nn_lr", str(params["nn_lr"]))
+                elif action == "weights":
+                    if ticker and "weights" in params:
+                        _db.save_setting(f"policy_net_weights_{ticker}", __import__("json").dumps(params["weights"]))
+                
+                _db._execute("UPDATE optimizations SET status = 'applied', applied_at = datetime('now') WHERE id = ?", (oid,))
+                applied.append({"id": oid, "action": action, "ticker": ticker})
+            except Exception as e:
+                print(f"Failed to apply optimization {oid}: {e}")
+        
+        return {"status": "ok", "count": len(applied), "applied": applied}
+    except Exception as e:
+        _tb.print_exc()
+        return {"status": "error", "error": str(e)}
+
 @app.post("/api/optimizations/review")
 def review_pending_optimizations():
     """Ask OpenClaw to review pending optimizations and recommend which to apply."""
@@ -1347,28 +1672,25 @@ def review_pending_optimizations():
                 f"Rationale: {o['rationale']}"
             )
         
-        # Call OpenClaw Gateway API
-        gateway_url = "http://localhost:18789/api/chat/completions"
-        gateway_token = None
-        import json, os
-        config_path = os.path.expanduser("~/.openclaw/openclaw.json")
-        if os.path.exists(config_path):
-            with open(config_path) as f:
-                cfg = json.load(f)
-                gateway_token = cfg.get("gateway", {}).get("auth", {}).get("token", "")
+        # Call OpenClaw Gateway via bridge module
+        from openclaw_bridge import query_openclaw, DEFAULT_GATEWAY_URL, DEFAULT_GATEWAY_TOKEN
+        import json
+        
+        gateway_url = DEFAULT_GATEWAY_URL
+        gateway_token = DEFAULT_GATEWAY_TOKEN
         
         headers = {"Content-Type": "application/json"}
         if gateway_token:
             headers["Authorization"] = f"Bearer {gateway_token}"
         
         payload = {
-            "model": "deepseek/deepseek-v4-flash",
+            "model": "openclaw",
             "messages": [{"role": "user", "content": "\n".join(prompt_lines)}],
             "max_tokens": 1024
         }
         
         resp = http_req.post(gateway_url, json=payload, headers=headers, timeout=30)
-        review_text = resp.json().get("choices", [{}])[0].get("message", {}).get("content", "No response")
+        review_text = resp.json().get("choices", [{}])[0].get("message", {}).get("content", "No response. Gateway returned: " + str(resp.status_code))
         
         return {"status": "success", "review": review_text}
     except Exception as e:
@@ -2813,6 +3135,17 @@ async def websocket_endpoint(websocket: WebSocket):
     orchestrator.connected_websockets.append(websocket)
     try:
         # Send initial configuration and state (defaults to first ticker weights for basic UI compatibility)
+        if not orchestrator.tickers:
+            await websocket.send_json({"type":"init","status":"waiting","msg":"Tickers not yet loaded"})
+            # Keep connection alive until tickers load
+            import asyncio as _asyncio
+            for _ in range(30):
+                await _asyncio.sleep(1)
+                if orchestrator.tickers:
+                    break
+            if not orchestrator.tickers:
+                await websocket.close()
+                return
         first_ticker = orchestrator.tickers[0]
         ensemble = orchestrator.strategy_ensembles.get(first_ticker, None)
         
@@ -2976,6 +3309,6 @@ if __name__ == "__main__":
     else:
         logging.info("Headless environment detected (no DISPLAY). Running server on main thread...")
         try:
-            uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
+            uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info", access_log=False)
         except KeyboardInterrupt:
             logging.info("Shutting down server.")

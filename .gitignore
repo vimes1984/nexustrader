@@ -30,3 +30,8 @@ build/
 .vscode/
 .idea/
 antigravity_proxy.py
+*.bak*
+*.corrupted
+data/
+icon-*.png
+app_v2.js

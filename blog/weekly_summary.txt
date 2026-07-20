@@ -1,0 +1,19 @@
+NexusTrader Weekly Summary — Jul 13-20, 2026
+==============================================
+
+Result: Negative week. 10 trades, 1 win (10% WR).
+Net PnL: -$0.24 | Return: -0.26% | Balance: $90.84
+
+All 10 trades hit stop loss. Worst loss: ETH-USD -1.71%.
+Only DOT-USD had a profitable trade (+$0.007).
+8 trades clustered in a 90-min window on Jul 20 — classic whipsaw.
+
+Drawdown at 0.11% (limit 5%). System healthy.
+12 strategies active; network favors mean-reversion (Stochastic, BB).
+
+Recommendations:
+- Widen/improve stop-loss logic
+- Add entry confirmation filter
+- Investigate equity/balance discrepancy ($199 vs $91)
+- Monitor DOT-USD performance
+- Verify daemon stability (just 60s uptime)

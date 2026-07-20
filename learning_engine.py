@@ -264,16 +264,15 @@ class PolicyNetwork:
             new_b0 = self.b[0]
             self.b[0] = new_b0
 
-        # Migrate old action_dim=7 weights to new action_dim=12
-        if self.W[-1].shape[1] == 7:
-            logging.info("[WEIGHT MIGRATION] Expanding action_dim 7→12 (adding 5 new strategies)")
+        # Migrate old action_dim weights to current expected action_dim (6 strategies)
+        current_action_dim = self.W[-1].shape[1]
+        expected_dim = min(12, max(6, current_action_dim))  # clamp between 6-12
+        if expected_dim != current_action_dim and current_action_dim in (7, 12):
+            logging.info("[WEIGHT MIGRATION] Truncating action_dim {0}→{1} (6 strategies active)".format(current_action_dim, expected_dim))
             hidden_dim = self.W[-1].shape[0]
-            new_w_out = np.random.randn(hidden_dim, 12) * np.sqrt(2.0 / hidden_dim)
-            new_w_out[:, :7] = self.W[-1]
-            self.W[-1] = new_w_out
-            new_b_out = np.zeros((1, 12))
-            new_b_out[:, :7] = self.b[-1]
-            self.b[-1] = new_b_out
+            # Keep first 6 weights (EMACrossover, ML, Kalman, MACD, VWAP, ATRB)
+            self.W[-1] = self.W[-1][:, :6]
+            self.b[-1] = self.b[-1][:, :6]
 
         # Init optimizer momentum/velocity if missing
         self.m_W = [np.zeros_like(w) for w in self.W]

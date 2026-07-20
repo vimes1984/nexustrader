@@ -3,8 +3,9 @@ import logging
 from evaluation.position_sizing import compute_safe_fraction, estimate_metrics_from_trades
 
 class ProbabilityEngine:
-    def __init__(self, kelly_fraction=0.1, min_win_rate=0.45):
+    def __init__(self, kelly_fraction=0.1, min_win_rate=0.55):
         self.min_win_rate = min_win_rate
+        self.signal_history = {}
         self.set_risk_mode("conservative")
         # Cache for historical trade metrics (fetched once per risk mode change)
         self._cached_metrics = None
@@ -26,19 +27,19 @@ class ProbabilityEngine:
     def calculate_atr_bounds(self, price, atr, direction, symbol=None):
         """Calculates Volatility-Adjusted Take-Profit (TP) and Stop-Loss (SL) using ATR."""
         import database
-        tp_multiplier = 2.5
-        sl_multiplier = 1.5
+        tp_multiplier = 5.0
+        sl_multiplier = 3.0
         
         if symbol:
             try:
                 conn = database.get_db_connection()
                 cursor = conn.cursor()
                 cursor.execute("SELECT tp_multiplier, sl_multiplier FROM active_assets WHERE ticker = ?", (symbol,))
-                row = cursor.fetchone()
+                db_row = cursor.fetchone()
                 conn.close()
-                if row:
-                    tp_multiplier = float(row[0])
-                    sl_multiplier = float(row[1])
+                if db_row:
+                    tp_multiplier = float(db_row[0])
+                    sl_multiplier = float(db_row[1])
             except Exception:
                 tp_multiplier = float(database.load_setting("opt_tp_multiplier", "2.5"))
                 sl_multiplier = float(database.load_setting("opt_sl_multiplier", "1.5"))
@@ -71,25 +72,37 @@ class ProbabilityEngine:
         # Base probability mapping from weighted signal magnitude [0.0, 1.0]
         signal_magnitude = abs(weighted_signal)
         
-        # Sigmoid scaling from signal strength: map [0, 1] to base win rate [0.45, 0.65]
-        base_p = 0.5 + (signal_magnitude * 0.15)
+        # Sigmoid scaling: map [0, 1] to base win rate [0.40, 0.70]
+        base_p = 0.40 + (signal_magnitude * 0.30)
         
-        # Adjust based on RSI oversold/overbought extremity (mean-reversion support)
+        # Adjust based on RSI regime — require favorable regime for trade direction
         rsi = row.get('rsi', 50)
         rsi_adjustment = 0.0
         
         if weighted_signal > 0:  # BUY
-            if rsi < 30:
-                rsi_adjustment = 0.05  # Oversold boosts buy success odds
-            elif rsi > 70:
-                rsi_adjustment = -0.05 # Overbought reduces buy success odds
+            if rsi < 35:
+                rsi_adjustment = 0.10
+            elif rsi < 45:
+                rsi_adjustment = 0.05
+            elif rsi < 55:
+                rsi_adjustment = 0.0
+            elif rsi < 70:
+                rsi_adjustment = -0.08
+            else:
+                rsi_adjustment = -0.15
         elif weighted_signal < 0:  # SELL
-            if rsi > 70:
-                rsi_adjustment = 0.05  # Overbought boosts sell success odds
-            elif rsi < 30:
-                rsi_adjustment = -0.05 # Oversold reduces sell success odds
+            if rsi > 65:
+                rsi_adjustment = 0.10
+            elif rsi > 55:
+                rsi_adjustment = 0.05
+            elif rsi > 45:
+                rsi_adjustment = 0.0
+            elif rsi > 30:
+                rsi_adjustment = -0.08
+            else:
+                rsi_adjustment = -0.15
                 
-        p_win = np.clip(base_p + rsi_adjustment, 0.35, 0.75)
+        p_win = np.clip(base_p + rsi_adjustment, 0.30, 0.80)
         
         # Simple historical refinement if history is available
         if history_df is not None and len(history_df) > 50:
@@ -100,7 +113,7 @@ class ProbabilityEngine:
                 ]
                 if len(similar_signals) > 10:
                     # Look at next-5-period forward returns
-                    forward_returns = similar_signals['close'].shift(-5) > similar_signals['close']
+                    forward_returns = similar_signals['close'].shift(5) > similar_signals['close']
                     hist_win_rate = forward_returns.mean()
                     # Blend 70% model / 30% empirical historical win rate
                     p_win = 0.7 * p_win + 0.3 * hist_win_rate
@@ -147,10 +160,10 @@ class ProbabilityEngine:
                 conn = database.get_db_connection()
                 cursor = conn.cursor()
                 cursor.execute("SELECT kelly_ceiling FROM active_assets WHERE ticker = ?", (symbol,))
-                row = cursor.fetchone()
+                db_row = cursor.fetchone()
                 conn.close()
-                if row:
-                    max_cap = float(row[0])
+                if db_row:
+                    max_cap = float(db_row[0])
             except Exception:
                 pass
         
@@ -194,7 +207,37 @@ class ProbabilityEngine:
         except Exception:
             pass
         
-        is_viable = (p_win >= self.min_win_rate) and (ev > 0) and (final_fraction > 0)
+        # Entry quality check: RSI must align with direction
+        entry_ok = True
+        rsi_v = row.get('rsi', 50)
+        if direction == "BUY" and rsi_v > 65:
+            entry_ok = False
+        elif direction == "SELL" and rsi_v < 35:
+            entry_ok = False
+        
+        # Volume confirmation
+        volume = row.get('volume', 0)
+        avg_volume = row.get('avg_volume', 0)
+        if avg_volume > 0 and volume > 0 and volume / avg_volume < 0.5:
+            entry_ok = False
+        
+        # Dynamic min_win_rate based on recent performance
+        dyn_min = self.min_win_rate
+        try:
+            import database as _db2
+            recent_trades = _db2.load_trades()
+            recent_n = min(len(recent_trades), 10)
+            if recent_n >= 3:
+                wins = sum(1 for t in recent_trades[-recent_n:] if t.get('pnl', 0) > 0)
+                wr = wins / recent_n
+                if wr < 0.3:
+                    dyn_min = min(self.min_win_rate + 0.08, 0.70)
+                elif wr < 0.5:
+                    dyn_min = min(self.min_win_rate + 0.03, 0.65)
+        except:
+            pass
+        
+        is_viable = (p_win >= dyn_min) and (ev > 0) and (final_fraction > 0) and entry_ok
         
         return {
             "direction": direction,

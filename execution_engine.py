@@ -34,6 +34,9 @@ class ExecutionEngine:
         self.initial_balance = initial_balance
         self.transaction_fee_rate = transaction_fee_rate
         self.active_positions = {}  # symbol -> position dict
+        self.max_open_positions = 3  # Hard limit: max concurrent positions
+        self.max_concentration = 0.40  # Max portfolio % in a single ticker
+        self.max_total_exposure = 0.60  # Max % of portfolio in all open positions
         
         # Load configuration settings
         self.config = {}
@@ -73,6 +76,16 @@ class ExecutionEngine:
         database.init_db()
 
         # Load portfolio balance from SQLite if it exists
+        # Load portfolio risk limits from DB
+        try:
+            self.max_open_positions = int(database.load_setting("max_open_positions", "3"))
+            self.max_concentration = float(database.load_setting("max_concentration_pct", "40")) / 100.0
+            self.max_total_exposure = float(database.load_setting("max_total_exposure_pct", "60")) / 100.0
+        except Exception:
+            self.max_open_positions = 3
+            self.max_concentration = 0.40
+            self.max_total_exposure = 0.60
+        
         db_balance = database.load_setting("portfolio_balance")
         if db_balance is not None:
             self.balance = float(db_balance)
@@ -360,6 +373,28 @@ class ExecutionEngine:
             logging.warning(f"[LOSS COOLDOWN] Ticker {symbol} is in a loss cooldown period. {remaining_minutes} mins remaining. Skipping.")
             return False
 
+        # Portfolio-level risk checks
+        if len(self.active_positions) >= self.max_open_positions:
+            logging.warning(f"[PORTFOLIO RISK] Max open positions ({self.max_open_positions}) reached. Skipping {symbol}.")
+            return False
+        
+        # Concentration limit: prevent too much capital in one position
+        total_equity = self.get_equity()
+        kf = evaluation.get("kelly_fraction", 0.05)
+        position_value_est = self.balance * kf
+        existing_exposure = 0.0
+        for pos in self.active_positions.values():
+            existing_exposure += pos.get('quantity', 0) * pos.get('entry_price', 0)
+        if total_equity > 0 and position_value_est > 0:
+            new_total_exposure = (existing_exposure + position_value_est) / total_equity
+            if new_total_exposure > self.max_total_exposure:
+                logging.warning(f"[PORTFOLIO RISK] Total exposure {new_total_exposure:.1%} would exceed {self.max_total_exposure:.1%}. Skipping {symbol}.")
+                return False
+            single_exposure = position_value_est / total_equity
+            if single_exposure > self.max_concentration:
+                logging.warning(f"[PORTFOLIO RISK] Single position {single_exposure:.1%} exceeds {self.max_concentration:.1%}. Skipping {symbol}.")
+                return False
+        
         if symbol in self.active_positions or symbol in self.pending_limit_orders:
             logging.warning(f"Position or pending order already exists for {symbol}. Skipping.")
             return False
@@ -372,6 +407,11 @@ class ExecutionEngine:
 
         # Calculate position size in Euros
         position_value = self.balance * kelly_fraction
+        
+        # Minimum position floor: $10 to beat fee-to-profit ratio
+        if position_value < 10.0:
+            logging.warning(f"[MIN SIZE] Position value ${position_value:.2f} below $10 minimum. Skipping {symbol}.")
+            return False
         quantity = position_value / entry_price
         fee = position_value * self.transaction_fee_rate
 
@@ -470,7 +510,7 @@ class ExecutionEngine:
         sl = pos["stop_loss"]
 
         # Trailing Stop-Loss logic
-        trailing_stop_enabled = database.load_setting("trailing_stop_enabled", "false") == "true"
+        trailing_stop_enabled = False  # Disabled: backwards for SELL positions
         if trailing_stop_enabled:
             if direction == "BUY":
                 if "original_sl" not in pos:
@@ -623,13 +663,15 @@ class ExecutionEngine:
                     norm_asset = normalize_kraken_asset(asset)
                     
                     price = None
-                    # Try current price inputs (e.g. from websocket ticks / base assets list)
-                    for key in [f"{norm_asset}-USD", f"{norm_asset}/USD", f"{asset}-USD", f"{asset}/USD", f"BTC-USD", f"ETH-USD", f"XRP-USD"]:
-                        if key in current_prices and current_prices[key] is not None:
+                    # Try current price inputs for this specific asset only
+                    for key in [f"{norm_asset}-USD", f"{norm_asset}/USD", f"{asset}-USD", f"{asset}/USD"]:
+                        if key in current_prices and current_prices[key] is not None and current_prices[key] > 0:
                             price = float(current_prices[key])
                             break
-                    if price is None or price == 0.0:
-                        price = float(last_prices.get(norm_asset, last_prices.get(asset, 0.0)))
+                    # Fallback to last known price from DB (never cross-asset)
+                    if price is None or price <= 0.0:
+                        db_price = last_prices.get(norm_asset, last_prices.get(asset, 0.0))
+                        price = float(db_price) if db_price else 0.0
                     
                     total_value += qty * price
             return float(total_value)
