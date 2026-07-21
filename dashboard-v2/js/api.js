@@ -119,6 +119,9 @@ const API = {
   notifConfig()               { return this.get('/api/system/notifications'); },
   setNotifConfig(data)        { return this.post('/api/system/notifications', data); },
   testNotif()                 { return this.post('/api/system/notifications/test'); },
+  alerts(limit)               { return this.get('/api/system/alerts', {limit: limit || 50}); },
+  acknowledgeAlert(id)        { return this.post(`/api/system/alerts/acknowledge/${id}`); },
+  resolveAlert(id)            { return this.post(`/api/system/alerts/resolve/${id}`); },
 
   // ── Optimizations ──
   optimizations()             { return this.get('/api/system/optimizations'); },

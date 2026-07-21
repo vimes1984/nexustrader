@@ -183,7 +183,7 @@ def save_setting(key, value):
     if not should_apply_agent_mutation(AGENT_NAME):
         log_blocked_mutation(AGENT_NAME, key, value)
         return
-    _db.save_setting_directly(key, str(value))
+    _db.save_setting(key, str(value))
 
 
 def optimize_own_prompt(settings):

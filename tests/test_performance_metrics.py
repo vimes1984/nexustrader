@@ -21,7 +21,8 @@ class TestPerformanceMetrics(unittest.TestCase):
     def test_no_divide_by_zero(self):
         trades = [{"pnl": 100}, {"pnl": 200}]
         m = calculate_metrics([], trades)
-        self.assertEqual(m.profit_factor, float('inf'))
+        # Profit factor capped at 100.0 for JSON serialization safety
+        self.assertEqual(m.profit_factor, 100.0)
 
     def test_max_drawdown(self):
         eq = [100.0, 110.0, 99.0, 105.0, 89.1, 120.0]

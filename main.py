@@ -2966,6 +2966,40 @@ def trigger_test_notification():
         return {"status": "error", "error": str(e)}
 
 # -------------------------------------------------------------
+# Alert API Endpoints
+# -------------------------------------------------------------
+@app.get("/api/system/alerts")
+def get_alerts_api(limit: int = 50):
+    """Fetch recent alerts for dashboard bell display."""
+    try:
+        import notification_manager as _nm
+        alerts = _nm.get_alerts(limit=limit)
+        return {"status": "success", "alerts": alerts, "count": len(alerts)}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.post("/api/system/alerts/acknowledge/{alert_id}")
+def acknowledge_alert_api(alert_id: int):
+    try:
+        import notification_manager as _nm
+        _nm.acknowledge_alert(alert_id)
+        return {"status": "success", "message": f"Alert {alert_id} acknowledged."}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+@app.post("/api/system/alerts/resolve/{alert_id}")
+def resolve_alert_api(alert_id: int):
+    try:
+        import notification_manager as _nm
+        _nm.resolve_alert(alert_id)
+        return {"status": "success", "message": f"Alert {alert_id} resolved."}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
+# -------------------------------------------------------------
 # Backup & Restore REST API Endpoints
 # -------------------------------------------------------------
 @app.post("/api/system/backup")
