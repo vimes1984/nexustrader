@@ -1,95 +1,95 @@
 /**
- * assets.js — Assets Manager tab: ticker listing, activation, exchange status
+ * assets.js v3 — Asset management tab
  */
 const Assets = {
   init() {
-    document.addEventListener('nt:tabChange', (e) => {
-      if (e.detail === 'assets') this.refresh();
-    });
-    byId('btn-add-asset')?.addEventListener('click', () => this.showAddForm());
+    document.addEventListener('nt:tabChange', (e) => { if (e.detail === 'assets') this.load(); });
+    byId('btn-add-asset')?.addEventListener('click', () => this.addAsset());
     byId('btn-refresh-exchange')?.addEventListener('click', () => this.checkExchange());
+    byId('assets-tbody')?.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-action]');
+      if (btn) {
+        const ticker = btn.dataset.ticker;
+        if (btn.dataset.action === 'remove') this.removeAsset(ticker);
+        else if (btn.dataset.action === 'toggle') this.toggleAsset(ticker, btn.dataset.active === 'true');
+      }
+    });
   },
 
-  async refresh() {
-    await Promise.all([this.loadAssets(), this.checkExchange()]);
-  },
-
-  // ACTUAL API: [{ticker, is_active, tp_multiplier, sl_multiplier, kelly_ceiling, brains}]
-  async loadAssets() {
+  async load() {
+    const tbody = byId('assets-tbody'); if (!tbody) return;
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text-muted)">Loading...</td></tr>';
     try {
-      const data = await API.assets();
-      const tbody = byId('assets-tbody');
-      if (!tbody) return;
-      if (!Array.isArray(data) || data.length === 0) {
-        if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="color:var(--text-secondary);text-align:center">No assets configured</td></tr>';
+      const data = await API.assetList();
+      const tickers = Array.isArray(data) ? data : (data?.tickers || data?.assets || []);
+      if (!tickers.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text-muted)">No tracked assets</td></tr>';
         return;
       }
-      tbody.innerHTML = data.map(a =>
-        '<tr>' +
-          '<td><b>' + (a.ticker || '?') + '</b></td>' +
-          '<td>' + (a.ticker || '?') + '</td>' +
-          '<td><span style="color:' + (a.is_active ? 'var(--neon-green)' : 'var(--text-secondary)') + '">' + (a.is_active ? 'Active' : 'Inactive') + '</span></td>' +
-          '<td style="font-size:12px;color:var(--text-secondary)">TP:' + (a.tp_multiplier || '-') + ' SL:' + (a.sl_multiplier || '-') + '</td>' +
-          '<td>' +
-            '<button class="btn btn-sm" onclick="Assets.toggleAsset(\'' + a.ticker + '\',' + (!a.is_active) + ')">' + (a.is_active ? 'Deactivate' : 'Activate') + '</button> ' +
-            '<button class="btn btn-sm btn-danger" onclick="Assets.deleteAsset(\'' + a.ticker + '\')">Remove</button>' +
-          '</td>' +
-        '</tr>'
-      ).join('');
-    } catch (e) {
-      App.toast('Failed to load assets: ' + e.message, 'error');
+      tbody.innerHTML = tickers.map(t => {
+        const ticker = typeof t === 'string' ? t : (t.ticker || t.symbol || t.name || '?');
+        const name = t.name || ticker;
+        const isActive = t.is_active !== false;
+        const added = t.added_at || t.created || '';
+        const addedDate = added ? new Date(added).toLocaleDateString() : '—';
+        return `<tr>
+          <td style="font-weight:600">${ticker}</td>
+          <td style="color:var(--text-secondary)">${name}</td>
+          <td><span style="color:${isActive?'var(--neon-green)':'var(--neon-red)'};font-size:11px">${isActive ? '● Active' : '○ Inactive'}</span></td>
+          <td style="color:var(--text-muted);font-size:10px">${addedDate}</td>
+          <td>
+            <button class="btn btn-sm" data-action="toggle" data-ticker="${ticker}" data-active="${isActive}">${isActive ? 'Deactivate' : 'Activate'}</button>
+            <button class="btn btn-sm btn-danger" data-action="remove" data-ticker="${ticker}">Remove</button>
+          </td>
+        </tr>`;
+      }).join('');
+    } catch(e) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--neon-red)">Failed to load assets</td></tr>';
     }
   },
 
-  showAddForm() {
-    const ticker = prompt('Ticker symbol (e.g., ADA-USD):');
+  async addAsset() {
+    const ticker = window.prompt('Ticker symbol (e.g., ADA-USD):');
     if (!ticker) return;
-    this.saveAsset({ ticker: ticker, is_active: true });
+    App.toast('Adding ' + ticker + '...', 'info');
+    try {
+      await API.addAsset(ticker);
+      App.toast(ticker + ' added', 'success');
+      this.load();
+    } catch(e) { App.toast('Add failed: ' + e.message, 'error'); }
   },
 
-  async saveAsset(data) {
-    if (!data || !data.ticker) return App.toast('Ticker required', 'error');
+  async removeAsset(ticker) {
+    if (!confirm('Remove ' + ticker + ' from tracking?')) return;
     try {
-      await API.saveAsset(data);
-      App.toast('Asset "' + data.ticker + '" saved', 'success');
-      this.loadAssets();
-    } catch (e) {
-      App.toast('Save failed: ' + e.message, 'error');
-    }
+      await API.removeAsset(ticker);
+      App.toast(ticker + ' removed', 'success');
+      this.load();
+    } catch(e) { App.toast('Remove failed: ' + e.message, 'error'); }
   },
 
-  async toggleAsset(ticker, active) {
+  async toggleAsset(ticker, currentlyActive) {
     try {
-      await API.saveAsset({ ticker: ticker, is_active: active });
-      App.toast(ticker + ' ' + (active ? 'activated' : 'deactivated'), 'success');
-      this.loadAssets();
-    } catch (e) {
-      App.toast('Toggle failed: ' + e.message, 'error');
-    }
-  },
-
-  async deleteAsset(ticker) {
-    if (!confirm('Remove "' + ticker + '" from tracking?')) return;
-    try {
-      await API.deleteAsset(ticker);
-      App.toast('"' + ticker + '" removed', 'success');
-      this.loadAssets();
-    } catch (e) {
-      App.toast('Delete failed: ' + e.message, 'error');
-    }
+      if (currentlyActive) {
+        await API.saveSetting('ticker_active_' + ticker, '0');
+      } else {
+        await API.saveSetting('ticker_active_' + ticker, '1');
+      }
+      App.toast(ticker + ' ' + (currentlyActive ? 'deactivated' : 'activated'), 'success');
+      this.load();
+    } catch(e) { App.toast('Toggle failed: ' + e.message, 'error'); }
   },
 
   async checkExchange() {
+    App.toast('Checking exchange...', 'info');
     try {
-      const data = await API.exchangeStatus();
+      const data = await API.checkExchange();
       const el = byId('exchange-status');
-      if (!el) return;
-      if (data.connected) {
-        el.innerHTML = '<span style="color:var(--neon-green)">● Connected to ' + (data.exchange || 'Kraken') + '</span>';
-      } else {
-        el.innerHTML = '<span style="color:var(--neon-red)">● Disconnected' + (data.error ? ': ' + data.error.slice(0, 60) : '') + '</span>';
-      }
-    } catch (e) { /* silent */ }
+      if (el) el.textContent = data.status || 'Checked';
+      App.toast('Exchange check: ' + (data.status || 'OK'), 'success');
+      this.load();
+    } catch(e) { App.toast('Exchange check failed: ' + e.message, 'error'); }
   },
 };
-document.addEventListener('DOMContentLoaded', () => { Assets.init(); if (typeof lucide !== 'undefined') setTimeout(() => lucide.createIcons(), 200); });
+
+document.addEventListener('DOMContentLoaded', () => Assets.init());

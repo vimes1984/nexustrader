@@ -1,150 +1,122 @@
 /**
- * neural.js — Training Tab: brain management, neural architecture, historical training
+ * neural.js v3 — Training tab: brains list, historical pipeline, architecture
  */
 const Neural = {
   init() {
-    document.addEventListener('nt:tabChange', (e) => {
-      if (e.detail === 'neural') this.refresh();
-    });
+    document.addEventListener('nt:tabChange', (e) => { if (e.detail === 'neural') this.refresh(); });
     byId('btn-train-brain')?.addEventListener('click', () => this.trainBrain());
     byId('btn-run-training')?.addEventListener('click', () => this.runTraining());
-    byId('btn-run-nn-tests')?.addEventListener('click', () => this.runNnTests());
-    byId('btn-save-arch')?.addEventListener('click', () => this.saveArchitecture());
+    byId('btn-save-arch')?.addEventListener('click', () => this.saveArch());
+    byId('btn-run-nn-tests')?.addEventListener('click', () => this.runTests());
+
+    // Brains list delegated clicks
+    byId('neural-brains-list')?.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-action]');
+      if (btn) {
+        const action = btn.dataset.action;
+        const ticker = btn.dataset.ticker;
+        if (action === 'train') this.trainBrain(ticker);
+        else if (action === 'activate') this.activateBrain(ticker);
+      }
+    });
   },
 
   async refresh() {
-    await Promise.all([this.loadBrains(), this.loadArchitecture()]);
+    await this.loadBrains();
+    this.loadArch();
   },
 
   async loadBrains() {
+    const el = byId('neural-brains-list'); if (!el) return;
+    el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted)">Loading brains...</div>';
     try {
       const data = await API.brains();
-      const container = byId('neural-brains-list');
-      if (!container) return;
-      // API returns {brains: [...]} or flat array
-      const brains = data.brains || data || [];
-      if (!brains || !brains.length) {
-        container.innerHTML = '<p style="color:var(--text-secondary);text-align:center;padding:20px">No brains configured — train your first brain to get started</p>';
+      if (!data?.brains?.length) {
+        el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted)">No trained brains yet. Run historical training first.</div>';
         return;
       }
-      container.innerHTML = brains.map(b => {
-        const name = b.name || b.id || b.ticker || 'Unknown';
-        const ticker = b.ticker || 'BTC-USD';
-        return '<div class="glass-panel" style="padding:12px;margin-bottom:8px">' +
-          '<div style="display:flex;justify-content:space-between;align-items:center">' +
-            '<div>' +
-              '<b>' + name + '</b>' +
-              '<span style="color:var(--text-secondary);margin-left:8px;font-size:11px">' + ticker + '</span>' +
-            '</div>' +
-            '<div style="display:flex;gap:8px">' +
-              '<button class="btn btn-sm activate-brain-btn" data-ticker="' + ticker + '" data-name="' + name + '">Activate</button>' +
-              '<button class="btn btn-sm btn-danger delete-brain-btn" data-name="' + name + '">Delete</button>' +
-            '</div>' +
-          '</div>' +
-          '<div style="font-size:10px;color:var(--text-secondary);margin-top:4px">' +
-            'Architecture: ' + (b.arch || 'PolicyNetwork') + ' | LR: ' + (b.lr || '0.01') + ' | Episodes: ' + (b.episodes || 0) +
-          '</div>' +
-        '</div>';
-      }).join('');
-      // Delegate click handlers
-      container.querySelectorAll('.activate-brain-btn').forEach(btn => {
-        btn.addEventListener('click', () => this.activateBrain(btn.dataset.ticker, btn.dataset.name));
-      });
-      container.querySelectorAll('.delete-brain-btn').forEach(btn => {
-        btn.addEventListener('click', () => this.deleteBrain(btn.dataset.name));
-      });
-    } catch (e) {
-      App.toast('Failed to load brains: ' + e.message, 'error');
+      el.innerHTML = data.brains.map(b => `
+        <div class="glass-panel" style="padding:10px 12px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <span style="font-weight:600;font-size:13px">${b.ticker || b.name || 'Unknown'}</span>
+            <span style="font-size:10px;color:var(--text-muted);margin-left:8px">${b.action_dim || b.dim || '?'} actions</span>
+            ${b.active ? '<span style="font-size:10px;color:var(--neon-green);margin-left:6px">● Active</span>' : ''}
+          </div>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-sm" data-action="train" data-ticker="${b.ticker || ''}">🔄 Train</button>
+            ${!b.active ? `<button class="btn btn-sm btn-primary" data-action="activate" data-ticker="${b.ticker || ''}">Activate</button>` : ''}
+          </div>
+        </div>`).join('');
+    } catch(e) {
+      el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--neon-red)">Failed to load brains</div>';
     }
   },
 
-  async loadArchitecture() {
+  async trainBrain(ticker) {
+    const target = ticker || App.state.activeTicker;
+    App.toast('Training brain for ' + target + '...', 'info');
     try {
-      const data = await API.nnArchitecture();
-      // API returns {architecture, hidden_dim, hidden_layers, learning_rate, dropout, optimizer}
-      if (!data) return;
-      const archEl = byId('arch-type');
-      if (archEl) archEl.value = data.architecture || data.type || 'mlp';
-      setElVal('arch-hidden-dim', data.hidden_dim || 12);
-      setElVal('arch-hidden-layers', data.hidden_layers || 1);
-      setElVal('arch-lr', data.learning_rate || 0.01);
-      setElVal('arch-dropout', data.dropout || 0.0);
-      const optEl = byId('arch-optimizer');
-      if (optEl) optEl.value = data.optimizer || 'Adam';
-    } catch (e) {
-      const el = byId('nn-arch-form');
-      if (el) el.innerHTML = '<p style="color:var(--neon-red)">Failed to load architecture: ' + e.message + '</p>';
-    }
-  },
-
-  async trainBrain() {
-    const ticker = App.state.activeTicker || 'BTC-USD';
-    App.toast('Training brain for ' + ticker + '...', 'info');
-    try {
-      await API.trainBrain(ticker);
-      App.toast('Brain trained for ' + ticker, 'success');
+      const data = await API.trainBrain(target);
+      App.toast(data.message || 'Training started for ' + target, 'success');
       this.loadBrains();
-    } catch (e) { App.toast('Training failed: ' + e.message, 'error'); }
+    } catch(e) { App.toast('Train failed: ' + e.message, 'error'); }
   },
 
-  async activateBrain(ticker, name) {
+  async activateBrain(ticker) {
     try {
-      await API.activateBrain(ticker, name);
-      App.toast('Brain "' + name + '" activated for ' + ticker, 'success');
-    } catch (e) { App.toast('Activation failed: ' + e.message, 'error'); }
-  },
-
-  async deleteBrain(name) {
-    if (!window.confirm('Delete brain "' + name + '"?')) return;
-    try {
-      await API.deleteBrain(name);
-      App.toast('Brain "' + name + '" deleted', 'success');
+      await API.setAutoSwitch({ ticker });
+      App.toast('Brain activated for ' + ticker, 'success');
       this.loadBrains();
-    } catch (e) { App.toast('Delete failed: ' + e.message, 'error'); }
+    } catch(e) { App.toast('Activation failed: ' + e.message, 'error'); }
   },
 
   async runTraining() {
-    const ticker = App.state.activeTicker || 'BTC-USD';
-    const daysStr = window.prompt('Days of history?', '30');
-    const days = parseInt(daysStr) || 30;
-    const epochsStr = window.prompt('Training epochs?', '20');
-    const epochs = parseInt(epochsStr) || 20;
-    App.toast('Starting ' + days + 'd training for ' + ticker + '...', 'info');
+    App.toast('Running historical training pipeline... This may take a minute.', 'info');
     try {
-      const r = await API.runTraining(ticker, days, epochs);
-      App.toast('Training completed: ' + (r.message || 'done'), 'success');
+      const data = await API.train();
+      App.toast('Training complete: ' + (data.samples || data.message || 'OK'), 'success');
       this.loadBrains();
-    } catch (e) { App.toast('Training failed: ' + e.message, 'error'); }
+    } catch(e) { App.toast('Training failed: ' + e.message, 'error'); }
   },
 
-  async runNnTests() {
-    App.toast('Running NN tests...', 'info');
+  loadArch() {
     try {
-      const r = await API.runNnTests();
-      App.toast(r.message || 'Tests complete', 'success');
-    } catch (e) { App.toast('NN tests failed: ' + e.message, 'error'); }
+      // Architecture settings are loaded from DB; populate defaults from status
+      API.brainSpecs().then(data => {
+        if (data) {
+          setInput('arch-hidden-dim', data.hidden_dim ?? data.hidden ?? '12');
+          setInput('arch-hidden-layers', data.hidden_layers ?? data.layers ?? '1');
+          setInput('arch-lr', data.learning_rate ?? data.lr ?? '0.01');
+          setInput('arch-dropout', data.dropout ?? '0.0');
+          byId('arch-type').value = data.type || 'simple';
+          byId('arch-optimizer').value = data.optimizer || 'Adam';
+        }
+      }).catch(() => {});
+    } catch(e) {}
   },
 
-  async saveArchitecture() {
+  async saveArch() {
     try {
       const data = {
-        type: byId('arch-type')?.value || 'mlp',
-        hidden_dim: parseInt(byId('arch-hidden-dim')?.value) || 12,
-        hidden_layers: parseInt(byId('arch-hidden-layers')?.value) || 1,
-        learning_rate: parseFloat(byId('arch-lr')?.value) || 0.01,
-        dropout: parseFloat(byId('arch-dropout')?.value) || 0,
-        optimizer: byId('arch-optimizer')?.value || 'Adam',
+        type: getInput('arch-type'),
+        hidden_dim: parseInt(getInput('arch-hidden-dim')),
+        hidden_layers: parseInt(getInput('arch-hidden-layers')),
+        learning_rate: parseFloat(getInput('arch-lr')),
+        dropout: parseFloat(getInput('arch-dropout')),
+        optimizer: getInput('arch-optimizer'),
       };
-      await API.setNnArchitecture(data);
+      await API.saveArch(data);
       App.toast('Architecture saved', 'success');
-    } catch (e) { App.toast('Save failed: ' + e.message, 'error'); }
+    } catch(e) { App.toast('Save failed: ' + e.message, 'error'); }
+  },
+
+  async runTests() {
+    App.toast('Running NN tests...', 'info');
+    try {
+      const data = await API.runNnTests();
+      App.toast('Tests: ' + (data.passed || 0) + '/' + (data.total || 0) + ' passed', data.failures ? 'warn' : 'success');
+    } catch(e) { App.toast('Tests failed: ' + e.message, 'error'); }
   },
 };
 
-// Helper: set element value safely
-function setElVal(id, val) {
-  const el = byId(id);
-  if (el) el.value = val ?? '';
-}
-
-document.addEventListener('DOMContentLoaded', () => { Neural.init(); if (typeof lucide !== 'undefined') setTimeout(() => lucide.createIcons(), 200); });
+document.addEventListener('DOMContentLoaded', () => { Neural.init(); lucide?.createIcons(); });

@@ -5,46 +5,30 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NexusTrader — AI Neuro-Quantitative Suite</title>
   <meta name="description" content="Algorithmic trading bot with real-time probability estimation, RL optimization, and LLaMA-powered analysis.">
-  <link rel="stylesheet" href="/dashboard-v2/css/main.css?v=1784669110">
-  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#0a0f1e">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <meta name="theme-color" content="#0a0f1e">
+  <link rel="stylesheet" href="/dashboard-v2/css/main.css?v=1784670227">
+  <link rel="manifest" href="/manifest.json">
   <link rel="apple-touch-icon" href="/dashboard/icon-192.png">
 
-  <!-- Chart Libraries (local) -->
+  <!-- Vendor Libraries (self-hosted) -->
   <script src="/dashboard-v2/vendor/lightweight-charts.standalone.production.js"></script>
   <script src="/dashboard-v2/vendor/chart.umd.min.js"></script>
-  <!-- Icons -->
   <script src="/dashboard-v2/vendor/lucide.min.js"></script>
-<style>
-/* Hide hamburger text fallback when lucide icon renders */
-#open-drawer-btn svg + .lucide-fallback { display: none; }
-#open-drawer-btn svg { width: 22px; height: 22px; color: var(--text-primary); }
 
-/* Dev Debug Mode */
-body.debug #fatal-error-display { display: block !important; }
-body.debug #js-indicator { display: block !important; }
-</style>
+  <style>#open-drawer-btn svg{width:22px;height:22px;color:var(--text-primary)}</style>
 </head>
 <body>
 
-
-  <!-- JS LOAD INDICATOR — if you see this but not "JS WORKING", JavaScript failed -->
-  <div id="js-indicator" style="background:rgba(244,63,94,0.2);color:var(--neon-red);text-align:center;padding:8px;font-weight:bold;font-size:14px">
-    ⚠️ JavaScript loading...
-  </div>
-  <script>
-    // This runs as soon as the script tag is parsed
-    document.getElementById('js-indicator').textContent = '✅ JS WORKING — Build ' + Date.now();
-    document.getElementById('js-indicator').style.background = 'rgba(16,185,129,0.2)';
-    document.getElementById('js-indicator').style.color = 'var(--neon-green)';
-  </script>
+<!-- JS Alive Indicator -->
+<div id="js-indicator" style="background:rgba(244,63,94,0.2);color:var(--neon-red);text-align:center;padding:6px;font-weight:700;font-size:13px">⚡ Booting NexusTrader...</div>
+<script>document.getElementById('js-indicator').textContent='✅ NEXUSTRADER LIVE — Build '+Date.now();document.getElementById('js-indicator').style.cssText='background:rgba(16,185,129,0.2);color:var(--neon-green);text-align:center;padding:6px;font-weight:700;font-size:13px'</script>
 
 <div class="dashboard-container">
 
-  <!-- ═══════════════ HEADER ═══════════════ -->
+  <!-- ═════════ HEADER ═════════ -->
   <header class="glass-panel dashboard-header">
     <div class="brand">
       <button id="open-drawer-btn" class="btn" style="background:transparent;border:none;padding:6px 8px;font-size:22px;line-height:1;cursor:pointer;color:var(--text-primary)" title="Menu">
@@ -52,36 +36,25 @@ body.debug #js-indicator { display: block !important; }
         <span class="lucide-fallback">☰</span>
       </button>
       <i data-lucide="cpu" style="color:var(--neon-blue);width:28px;height:28px"></i>
-      <div>
-        <h1>NexusTrader</h1>
-        <p>AI Neuro-Quantitative Suite</p>
-      </div>
+      <div><h1>NexusTrader</h1><p>AI Neuro-Quantitative Suite</p></div>
     </div>
-
     <div class="controls-bar">
       <select id="risk-mode-select">
         <option value="conservative">Conservative</option>
         <option value="aggressive" selected>Aggressive</option>
         <option value="hyper_growth">Hyper-Growth</option>
       </select>
-
       <span style="font-size:11px;color:var(--text-secondary)">Speed</span>
       <input type="range" id="speed-slider" min="0.05" max="1.5" step="0.05" value="0.2" style="width:80px">
       <span id="speed-label" style="font-size:11px;font-family:var(--font-mono)">0.20s</span>
-
       <button class="btn" id="play-pause-btn">
         <i data-lucide="pause" style="width:14px;height:14px"></i>
         <span id="play-pause-text">Pause</span>
       </button>
-
       <button class="btn" id="reset-btn" style="border-color:rgba(244,63,94,0.3)">
-        <i data-lucide="rotate-ccw" style="color:var(--neon-red);width:14px;height:14px"></i>
-        Reset
+        <i data-lucide="rotate-ccw" style="color:var(--neon-red);width:14px;height:14px"></i> Reset
       </button>
-
-      <!-- Dev Toggle -->
       <button class="btn btn-sm" id="btn-dev-toggle" style="font-family:monospace;font-size:10px;padding:4px 8px;opacity:0.5" title="Toggle Debug Mode">🐛</button>
-      <!-- Notification Bell -->
       <div class="notification-dropdown-container">
         <button class="btn" id="notification-bell-btn" style="position:relative">
           <i data-lucide="bell" style="width:14px;height:14px"></i>
@@ -95,121 +68,60 @@ body.debug #js-indicator { display: block !important; }
           <div id="notification-list"></div>
         </div>
       </div>
-
-      <div class="status-badge" id="bot-status">
-        <span class="dot"></span>
-        <span id="status-text">Connecting…</span>
-      </div>
-      <div class="status-badge" id="safety-badge" style="display:none;background:rgba(244,63,94,0.1);border-color:var(--neon-red);color:var(--neon-red)">
-        <span class="dot"></span>
-        <span id="safety-text">KillSwitch</span>
-      </div>
+      <div class="status-badge" id="bot-status"><span class="dot"></span><span id="status-text">Connecting…</span></div>
+      <div class="status-badge" id="safety-badge" style="display:none;background:rgba(244,63,94,0.1);border-color:var(--neon-red);color:var(--neon-red)"><span class="dot"></span><span id="safety-text">KillSwitch</span></div>
     </div>
   </header>
 
-  <!-- ═══════════════ NAV DRAWER OVERLAY ═══════════════ -->
+  <!-- ═════════ NAV DRAWER ═════════ -->
   <div id="nav-drawer-overlay"></div>
-
-  <!-- ═══════════════ NAV DRAWER ═══════════════ -->
   <div id="nav-drawer">
     <div class="flex-between" style="border-bottom:1px solid var(--border-color);padding-bottom:12px;margin-bottom:16px">
       <div style="display:flex;align-items:center;gap:8px">
         <i data-lucide="activity" style="width:18px;height:18px;color:var(--neon-blue)"></i>
         <span style="font-weight:700;font-size:14px;letter-spacing:1px">NEXUSTRADER</span>
       </div>
-      <button id="close-drawer-btn" class="btn" style="background:transparent;border:none;padding:4px">
-        <i data-lucide="x" style="width:18px;height:18px"></i>
-      </button>
+      <button id="close-drawer-btn" class="btn" style="background:transparent;border:none;padding:4px"><i data-lucide="x" style="width:18px;height:18px"></i></button>
     </div>
-
     <nav style="display:flex;flex-direction:column;gap:4px">
-      <button class="nav-tab active" data-tab="tab-dashboard">
-        <i data-lucide="layout-dashboard" style="width:16px;height:16px"></i> Dashboard
-      </button>
-      <button class="nav-tab" data-tab="tab-neural">
-        <i data-lucide="brain-circuit" style="width:16px;height:16px"></i> Training
-      </button>
-      <button class="nav-tab" data-tab="tab-assets">
-        <i data-lucide="coins" style="width:16px;height:16px;color:var(--neon-blue)"></i> Assets
-      </button>
-      <button class="nav-tab" data-tab="tab-strategy">
-        <i data-lucide="trending-up" style="width:16px;height:16px;color:var(--neon-green)"></i> Strategy
-      </button>
-      <button class="nav-tab" data-tab="tab-llm">
-        <i data-lucide="brain-circuit" style="width:16px;height:16px;color:var(--neon-green)"></i> LLM
-      </button>
-      <button class="nav-tab" data-tab="tab-agents">
-        <i data-lucide="bot" style="width:16px;height:16px"></i> AI Agents
-      </button>
-      <button class="nav-tab" data-tab="tab-settings">
-        <i data-lucide="sliders" style="width:16px;height:16px"></i> Trading System
-      </button>
-      <button class="nav-tab" data-tab="tab-notifications">
-        <i data-lucide="bell" style="width:16px;height:16px;color:var(--neon-blue)"></i> Notifications
-      </button>
-      <button class="nav-tab" data-tab="tab-optimizations">
-        <i data-lucide="zap" style="width:16px;height:16px;color:var(--neon-blue)"></i> Optimizations
-      </button>
-      <button class="nav-tab" data-tab="tab-architecture">
-        <i data-lucide="network" style="width:16px;height:16px"></i> Architecture
-      </button>
-      <button class="nav-tab" data-tab="tab-logs">
-        <i data-lucide="terminal" style="width:16px;height:16px"></i> System Logs
-      </button>
+      <button class="nav-tab active" data-tab="tab-dashboard"><i data-lucide="layout-dashboard" style="width:16px;height:16px"></i> Dashboard</button>
+      <button class="nav-tab" data-tab="tab-neural"><i data-lucide="brain-circuit" style="width:16px;height:16px"></i> Training</button>
+      <button class="nav-tab" data-tab="tab-assets"><i data-lucide="coins" style="width:16px;height:16px;color:var(--neon-blue)"></i> Assets</button>
+      <button class="nav-tab" data-tab="tab-strategy"><i data-lucide="trending-up" style="width:16px;height:16px;color:var(--neon-green)"></i> Strategy</button>
+      <button class="nav-tab" data-tab="tab-llm"><i data-lucide="brain-circuit" style="width:16px;height:16px;color:var(--neon-green)"></i> LLM</button>
+      <button class="nav-tab" data-tab="tab-agents"><i data-lucide="bot" style="width:16px;height:16px"></i> AI Agents</button>
+      <button class="nav-tab" data-tab="tab-settings"><i data-lucide="sliders" style="width:16px;height:16px"></i> Trading System</button>
+      <button class="nav-tab" data-tab="tab-optimizations"><i data-lucide="zap" style="width:16px;height:16px;color:var(--neon-blue)"></i> Optimizations</button>
+      <button class="nav-tab" data-tab="tab-architecture"><i data-lucide="network" style="width:16px;height:16px"></i> Architecture</button>
+      <button class="nav-tab" data-tab="tab-logs"><i data-lucide="terminal" style="width:16px;height:16px"></i> System Logs</button>
     </nav>
   </div>
 
-  <!-- ═══════════════ SIMULATION PROGRESS ═══════════════ -->
+  <!-- ═════════ SIMULATION PROGRESS ═════════ -->
   <div id="sim-progress-container" class="glass-panel" style="display:none;padding:8px 14px;margin-bottom:12px;align-items:center;gap:10px">
     <i data-lucide="loader-2" class="animate-spin" style="width:14px;height:14px;color:var(--neon-purple)"></i>
-    <span style="font-size:11px;color:var(--text-primary);font-weight:600">Simulation Progress:</span>
-    <div style="flex:1;height:6px;background:rgba(255,255,255,0.05);border-radius:3px;overflow:hidden">
-      <div id="sim-progress-bar" style="width:0%;height:100%;background:linear-gradient(90deg,var(--neon-blue),var(--neon-purple));transition:width 0.1s"></div>
-    </div>
+    <span style="font-size:11px;font-weight:600">Simulation:</span>
+    <div style="flex:1;height:6px;background:rgba(255,255,255,0.05);border-radius:3px;overflow:hidden"><div id="sim-progress-bar" style="width:0%;height:100%;background:linear-gradient(90deg,var(--neon-blue),var(--neon-purple));transition:width 0.1s"></div></div>
     <span id="sim-progress-label" style="font-size:11px;font-family:var(--font-mono);color:var(--text-secondary)">0%</span>
   </div>
 
-  <!-- ═══════════════ KPI GRID (Global) ═══════════════ -->
+  <!-- ═════════ KPI GRID ═════════ -->
   <div class="kpi-grid">
-    <div class="glass-panel kpi-card">
-      <div class="kpi-title">Portfolio Value</div>
-      <div class="kpi-value" id="val-equity">$0.00</div>
-      <div class="kpi-sub" id="val-unrealized-pnl">No active trade</div>
-    </div>
-    <div class="glass-panel kpi-card">
-      <div class="kpi-title">Cash Balance</div>
-      <div class="kpi-value" id="val-balance">$0.00</div>
-      <div class="kpi-sub">Ready to deploy</div>
-    </div>
-    <div class="glass-panel kpi-card">
-      <div class="kpi-title">Win Rate</div>
-      <div class="kpi-value" id="val-winrate">0.0%</div>
-      <div class="kpi-sub" id="val-trade-count">0 trades</div>
-    </div>
-    <div class="glass-panel kpi-card">
-      <div class="kpi-title">Total P&L</div>
-      <div class="kpi-value" id="val-total-pnl">$0.00</div>
-      <div class="kpi-sub" id="val-total-pnl-percent">0.00%</div>
-    </div>
+    <div class="glass-panel kpi-card"><div class="kpi-title">Portfolio Value</div><div class="kpi-value" id="val-equity">$0.00</div><div class="kpi-sub" id="val-unrealized-pnl">No active trade</div></div>
+    <div class="glass-panel kpi-card"><div class="kpi-title">Cash Balance</div><div class="kpi-value" id="val-balance">$0.00</div><div class="kpi-sub">Ready to deploy</div></div>
+    <div class="glass-panel kpi-card"><div class="kpi-title">Win Rate</div><div class="kpi-value" id="val-winrate">0.0%</div><div class="kpi-sub" id="val-trade-count">0 trades</div></div>
+    <div class="glass-panel kpi-card"><div class="kpi-title">Total P&L</div><div class="kpi-value" id="val-total-pnl">$0.00</div><div class="kpi-sub" id="val-total-pnl-percent">0.00%</div></div>
   </div>
 
-  <!-- ═══════════════ TICKER SWITCHER ═══════════════ -->
+  <!-- ═════════ TICKER SWITCHER ═════════ -->
   <div class="ticker-switcher" id="ticker-switcher-bar"></div>
 
-  <!-- ═══════════════ TAB: DASHBOARD ═══════════════ -->
+  <!-- ═══════════════════ TAB: DASHBOARD ═══════════════════ -->
   <div id="tab-dashboard" class="tab-content active">
-    <!-- Price Header -->
     <div class="glass-panel flex-between" style="padding:10px 16px;margin-bottom:12px">
-      <div>
-        <span id="chart-ticker-title" style="font-weight:700;font-size:16px">BTC-USD</span>
-      </div>
-      <div>
-        <span id="ticker-price" style="font-size:22px;font-weight:700;font-family:var(--font-mono)">$0.00</span>
-        <span id="ticker-change" style="font-size:12px;margin-left:8px">0.00%</span>
-      </div>
+      <span id="chart-ticker-title" style="font-weight:700;font-size:16px">BTC-USD</span>
+      <div><span id="ticker-price" style="font-size:22px;font-weight:700;font-family:var(--font-mono)">$0.00</span><span id="ticker-change" style="font-size:12px;margin-left:8px">0.00%</span></div>
     </div>
-
-    <!-- Chart Type Toggle -->
     <div class="flex-between" style="margin-bottom:8px">
       <div class="chart-type-toggles">
         <button class="btn btn-sm chart-type-btn active" data-type="candles">📊 Candles</button>
@@ -217,273 +129,158 @@ body.debug #js-indicator { display: block !important; }
       </div>
       <span id="chart-data-info" style="font-size:10px;color:var(--text-secondary)"></span>
     </div>
-    <!-- Main Chart -->
     <div class="glass-panel chart-container" id="main-chart"></div>
 
-    <div class="two-col">
-      <!-- Left: Probability + Position -->
+    <div class="two-col" style="margin-top:12px">
       <div>
-        <!-- Probability Panel -->
+        <!-- Probability -->
         <div class="glass-panel" style="padding:14px 16px;margin-bottom:12px">
           <div class="section-title">Trade Probability</div>
-          <div style="margin-bottom:8px">
-            <span style="font-size:11px;color:var(--text-secondary)">Probability</span>
-            <span id="prob-value" style="font-size:20px;font-weight:700;margin-left:8px;font-family:var(--font-mono)">0%</span>
-          </div>
-          <div class="prob-gauge-bg mb-sm">
-            <div class="prob-gauge-fill" id="prob-gauge" style="width:0%"></div>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div style="margin-bottom:8px"><span style="font-size:11px;color:var(--text-secondary)">Probability</span><span id="prob-value" style="font-size:20px;font-weight:700;margin-left:8px;font-family:var(--font-mono)">0%</span></div>
+          <div class="prob-gauge-bg mb-sm"><div class="prob-gauge-fill" id="prob-gauge" style="width:0%"></div></div>
+          <div class="prob-grid">
             <div><span style="font-size:10px;color:var(--text-secondary)">EV</span><br><span id="val-ev" style="font-family:var(--font-mono)">$0.00</span></div>
-            <div><span style="font-size:10px;color:var(--text-secondary)">Risk/Reward</span><br><span id="val-rr" style="font-family:var(--font-mono)">0.0</span></div>
+            <div><span style="font-size:10px;color:var(--text-secondary)">R/R</span><br><span id="val-rr" style="font-family:var(--font-mono)">0.0</span></div>
             <div><span style="font-size:10px;color:var(--text-secondary)">Kelly</span><br><span id="val-kelly" style="font-family:var(--font-mono)">0%</span></div>
             <div><span style="font-size:10px;color:var(--text-secondary)">Signal</span><br><span id="val-sig-strength" style="font-family:var(--font-mono)">0%</span></div>
           </div>
-          <div style="margin-top:8px">
-            <span id="viability-badge" class="viability-badge">PENDING</span>
-          </div>
+          <div style="margin-top:8px"><span id="viability-badge" class="viability-badge">PENDING</span></div>
         </div>
-
-        <!-- Position Details -->
-        <div class="glass-panel" style="padding:14px 16px;margin-bottom:12px">
-          <div class="section-title">Active Position</div>
-          <div id="position-details-container" style="color:var(--text-secondary)">No active position</div>
-        </div>
+        <!-- Position -->
+        <div class="glass-panel" style="padding:14px 16px"><div class="section-title">Active Position</div><div id="position-details-container" style="color:var(--text-secondary)">No active position</div></div>
       </div>
-
-      <!-- Right: Weights + Trade Log -->
       <div>
-        <!-- Strategy Weights -->
+        <!-- Weights -->
         <div class="glass-panel" style="padding:14px 16px;margin-bottom:12px">
           <div class="section-title">Strategy Weights</div>
-          <div style="max-height:200px;overflow-y:auto;margin-bottom:8px" id="weights-container">
-            <span style="color:var(--text-secondary)">Loading…</span>
-          </div>
+          <div style="max-height:200px;overflow-y:auto;margin-bottom:8px" id="weights-container"><span style="color:var(--text-secondary)">Loading…</span></div>
           <canvas id="weights-chart" style="max-height:120px"></canvas>
         </div>
-
-        <!-- Trade Log -->
+        <!-- Trades -->
         <div class="glass-panel" style="padding:14px 16px">
           <div class="section-title">Recent Trades</div>
-          <div class="scroll-y" style="max-height:300px">
-            <table class="trade-table">
-              <thead><tr><th>Time</th><th>Ticker</th><th>Dir</th><th>Entry</th><th>Exit</th><th>P&L</th></tr></thead>
-              <tbody id="recent-trades-list"></tbody>
-            </table>
-          </div>
+          <div class="scroll-y" style="max-height:300px"><table class="trade-table"><thead><tr><th>Time</th><th>Ticker</th><th>Dir</th><th>Entry</th><th>Exit</th><th>P&L</th></tr></thead><tbody id="recent-trades-list"></tbody></table></div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- ═══════════════ TAB: TRAINING (NEURAL) ═══════════════ -->
+  <!-- ═══════════════════ TAB: TRAINING ═══════════════════ -->
   <div id="tab-neural" class="tab-content">
     <div class="two-col">
       <div>
-        <!-- Brains -->
         <div class="glass-panel" style="padding:14px 16px;margin-bottom:12px">
           <div class="section-title">Policy Brains</div>
           <div id="neural-brains-list" class="scroll-y" style="max-height:300px"></div>
-          <button class="btn btn-primary mt-sm" id="btn-train-brain">
-            <i data-lucide="brain" style="width:14px;height:14px"></i> Train Active Brain
-          </button>
+          <button class="btn btn-primary mt-sm" id="btn-train-brain"><i data-lucide="brain" style="width:14px;height:14px"></i> Train Active Brain</button>
         </div>
-
-        <!-- Historical Training -->
         <div class="glass-panel" style="padding:14px 16px;margin-bottom:12px">
           <div class="section-title">Historical Pipeline</div>
-          <p style="font-size:11px;color:var(--text-secondary);margin-bottom:8px">
-            Run look-ahead labeling on historical data to train the policy network offline.
-          </p>
-          <button class="btn btn-primary" id="btn-run-training">
-            <i data-lucide="play" style="width:14px;height:14px"></i> Run Training Pipeline
-          </button>
+          <p style="font-size:11px;color:var(--text-secondary);margin-bottom:8px">Run look-ahead labeling on historical data to train the policy network offline.</p>
+          <button class="btn btn-primary" id="btn-run-training"><i data-lucide="play" style="width:14px;height:14px"></i> Run Training Pipeline</button>
         </div>
       </div>
       <div>
-        <!-- NN Architecture -->
-        <div class="glass-panel" style="padding:14px 16px;margin-bottom:12px" id="nn-arch-form">
+        <div class="glass-panel" style="padding:14px 16px">
           <div class="section-title">Neural Architecture</div>
-          <div class="form-group">
-            <label>Type</label>
-            <select id="arch-type">
-              <option value="simple">PolicyNetwork (Simple)</option>
-              <option value="sequential">SequentialPolicyNet</option>
-              <option value="transformer">TransformerPolicyNet</option>
-            </select>
-          </div>
+          <div class="form-group"><label>Type</label><select id="arch-type"><option value="simple">PolicyNetwork (Simple)</option><option value="sequential">SequentialPolicyNet</option><option value="transformer">TransformerPolicyNet</option></select></div>
           <div class="form-grid">
             <div class="form-group"><label>Hidden Dim</label><input type="number" id="arch-hidden-dim" value="12"></div>
             <div class="form-group"><label>Hidden Layers</label><input type="number" id="arch-hidden-layers" value="1"></div>
             <div class="form-group"><label>Learning Rate</label><input type="number" id="arch-lr" value="0.01" step="0.001"></div>
             <div class="form-group"><label>Dropout</label><input type="number" id="arch-dropout" value="0.0" step="0.05"></div>
-            <div class="form-group"><label>Optimizer</label>
-              <select id="arch-optimizer"><option>Adam</option><option>SGD</option><option>RMSprop</option></select>
-            </div>
+            <div class="form-group"><label>Optimizer</label><select id="arch-optimizer"><option>Adam</option><option>SGD</option><option>RMSprop</option></select></div>
           </div>
-          <div class="card-row mt-sm">
-            <button class="btn btn-primary" id="btn-save-arch">Save Architecture</button>
-            <button class="btn" id="btn-run-nn-tests">Run Tests</button>
-          </div>
+          <div class="card-row mt-sm"><button class="btn btn-primary" id="btn-save-arch">Save Architecture</button><button class="btn" id="btn-run-nn-tests">Run Tests</button></div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- ═══════════════ TAB: ASSETS ═══════════════ -->
+  <!-- ═══════════════════ TAB: ASSETS ═══════════════════ -->
   <div id="tab-assets" class="tab-content">
-    <div class="glass-panel" style="padding:14px 16px;margin-bottom:12px">
+    <div class="glass-panel" style="padding:14px 16px">
       <div class="flex-between mb-sm">
         <div class="section-title" style="margin-bottom:0;border:none">Tracked Assets</div>
-        <div>
-          <span id="exchange-status" style="font-size:11px;margin-right:10px"></span>
-          <button class="btn btn-sm" id="btn-refresh-exchange">Check Exchange</button>
-          <button class="btn btn-sm btn-primary" id="btn-add-asset">+ Add Asset</button>
-        </div>
+        <div><span id="exchange-status" style="font-size:11px;margin-right:10px"></span><button class="btn btn-sm" id="btn-refresh-exchange">Check Exchange</button><button class="btn btn-sm btn-primary" id="btn-add-asset">+ Add Asset</button></div>
       </div>
-      <div class="scroll-y" style="max-height:400px">
-        <table class="trade-table">
-          <thead><tr><th>Ticker</th><th>Name</th><th>Status</th><th>Added</th><th>Actions</th></tr></thead>
-          <tbody id="assets-tbody"></tbody>
-        </table>
-      </div>
+      <div class="scroll-y" style="max-height:400px"><table class="trade-table"><thead><tr><th>Ticker</th><th>Name</th><th>Status</th><th>Added</th><th>Actions</th></tr></thead><tbody id="assets-tbody"></tbody></table></div>
     </div>
   </div>
 
-  <!-- ═══════════════ TAB: STRATEGY ═══════════════ -->
+  <!-- ═══════════════════ TAB: STRATEGY ═══════════════════ -->
   <div id="tab-strategy" class="tab-content">
-        <div class="section-header" style="margin-bottom:12px">
-          <h2 style="color:var(--neon-blue)">🎯 Strategy Signal Monitor</h2>
-          <button class="btn btn-sm" id="btn-refresh-strategy">🔄 Refresh</button>
-        </div>
-        <div id="strategy-panel"></div>
-      </div>
-    <div class="glass-panel" style="padding:14px 16px">
-      <div class="section-title">Active Strategy Signals</div>
-      <div id="strategy-panel"></div>
+    <div class="flex-between" style="margin-bottom:12px">
+      <h2 style="color:var(--neon-blue);font-size:16px">🎯 Strategy Signal Monitor</h2>
+      <button class="btn btn-sm" id="btn-refresh-strategy">🔄 Refresh</button>
     </div>
+    <div id="strategy-panel"></div>
   </div>
 
-  <!-- ═══════════════ TAB: LLM ═══════════════ -->
+  <!-- ═══════════════════ TAB: LLM ═══════════════════ -->
   <div id="tab-llm" class="tab-content">
-        <div class="section-header" style="margin-bottom:12px">
-          <h2 style="color:var(--neon-blue)">🔮 LLM Integration</h2>
-        </div>
-        <div class="grid-2col">
-          <div>
-            <div class="glass-panel" style="padding:16px">
-              <h3>Connection Status</h3>
-              <div style="margin-top:8px">
-                <div>Status: <span id="llm-status-text" style="font-weight:700">Checking...</span></div>
-                <div style="font-size:11px;margin-top:4px">Model: <span id="llm-status-model" style="color:var(--text-secondary)">—</span></div>
-                <div style="font-size:11px">Speed: <span id="llm-status-speed" style="color:var(--text-secondary)">—</span></div>
-              </div>
-              <div style="margin-top:12px">
-                <div style="font-size:11px;margin-bottom:4px">Last Sentiment:</div>
-                <div>Direction: <span id="llm-sentiment-dir" style="font-weight:700">—</span></div>
-                <div>Score: <span id="llm-sentiment-score" style="color:var(--text-secondary)">—</span></div>
-              </div>
-            </div>
-          </div>
-          <div>
-            <div class="glass-panel" style="padding:16px;margin-bottom:10px">
-              <h3>Configuration</h3>
-              <div class="form-group"><label>Host</label><input id="llm-host" placeholder="192.168.0.77"></div>
-              <div class="form-group"><label>Port</label><input id="llm-port" placeholder="8080"></div>
-              <div class="form-group toggle">
-                <span>Enable LLaMA</span>
-                <label><input type="checkbox" id="llm-enabled"><span class="track"></span></label>
-              </div>
-              <div class="form-group toggle">
-                <span>Fallback to OpenClaw</span>
-                <label><input type="checkbox" id="llm-fallback"><span class="track"></span></label>
-              </div>
-              <div style="display:flex;gap:8px;margin-top:10px">
-                <button class="btn btn-sm" id="btn-llm-save">💾 Save Config</button>
-                <button class="btn btn-sm" id="btn-llm-refresh">🔄 Refresh</button>
-              </div>
-            </div>
-            <div class="glass-panel" style="padding:16px">
-              <h3>Actions</h3>
-              <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
-                <button class="btn btn-sm" id="btn-llm-test">🧪 Test Query</button>
-                <button class="btn btn-sm" id="btn-llm-sentiment">📈 Sentiment Analysis</button>
-                <button class="btn btn-sm" id="btn-llm-regime">🔄 Regime Detection</button>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="glass-panel" style="padding:16px;margin-top:10px" id="llm-result">
-          <p style="color:var(--text-secondary)">Results appear here...</p>
-        </div>
-      </div>
+    <h2 style="color:var(--neon-blue);font-size:16px;margin-bottom:12px">🔮 LLM Integration</h2>
     <div class="two-col">
       <div>
-        <div class="glass-panel" style="padding:14px 16px;margin-bottom:12px" id="llm-status-card">
-          <span style="color:var(--text-secondary)">Loading…</span>
-        </div>
-        <div class="glass-panel" style="padding:14px 16px;margin-bottom:12px">
-          <div class="section-title">LLM Config</div>
-          <div class="form-grid">
-            <div class="form-group"><label>Host</label><input type="text" id="llm-host" placeholder="192.168.0.77"></div>
-            <div class="form-group"><label>Port</label><input type="number" id="llm-port" value="8080"></div>
-            <div class="form-group"><label>Model</label><input type="text" id="llm-model-name" placeholder="Llama-3.2-3B"></div>
-            <div class="form-group"><label>Temperature</label><input type="number" id="llm-temperature" value="0.7" step="0.05"></div>
+        <div class="glass-panel" style="padding:16px;margin-bottom:12px">
+          <div class="section-title">Connection Status</div>
+          <div style="margin-top:8px">
+            <div>Status: <span id="llm-status-text" style="font-weight:700">Checking...</span></div>
+            <div style="font-size:11px;margin-top:4px">Model: <span id="llm-status-model" style="color:var(--text-secondary)">—</span></div>
+            <div style="font-size:11px">Speed: <span id="llm-status-speed" style="color:var(--text-secondary)">—</span></div>
           </div>
-          <button class="btn btn-primary mt-sm" id="btn-llm-save-config">Save Config</button>
+          <div style="margin-top:12px">
+            <div style="font-size:11px;margin-bottom:4px">Last Sentiment:</div>
+            <div>Direction: <span id="llm-sentiment-dir" style="font-weight:700">—</span></div>
+            <div>Score: <span id="llm-sentiment-score" style="color:var(--text-secondary)">—</span></div>
+          </div>
+        </div>
+        <div class="glass-panel" style="padding:16px">
+          <div class="section-title">Actions</div>
+          <div class="card-row" style="margin-top:8px">
+            <button class="btn btn-sm" id="btn-llm-test">🧪 Test Query</button>
+            <button class="btn btn-sm" id="btn-llm-sentiment">📈 Sentiment Analysis</button>
+            <button class="btn btn-sm" id="btn-llm-regime">🔄 Regime Detection</button>
+          </div>
         </div>
       </div>
       <div>
-        <div class="glass-panel" style="padding:14px 16px;margin-bottom:12px">
-          <div class="section-title">Actions</div>
-          <div class="card-row">
-            <button class="btn btn-primary" id="btn-llm-test">Test Query</button>
-            <button class="btn" id="btn-llm-sentiment">Sentiment Analysis</button>
-            <button class="btn" id="btn-llm-regime">Regime Detection</button>
-          </div>
-        </div>
-        <div class="glass-panel" style="padding:14px 16px">
-          <div class="section-title">Result</div>
-          <div id="llm-result" style="font-size:11px;color:var(--text-secondary);max-height:400px;overflow-y:auto">No results yet</div>
+        <div class="glass-panel" style="padding:16px;margin-bottom:12px">
+          <div class="section-title">Configuration</div>
+          <div class="form-group"><label>Host</label><input id="llm-host" placeholder="192.168.0.77"></div>
+          <div class="form-group"><label>Port</label><input id="llm-port" placeholder="8080"></div>
+          <div class="form-group toggle"><span>Enable LLaMA</span><label><input type="checkbox" id="llm-enabled"><span class="track"></span></label></div>
+          <div class="form-group toggle"><span>Fallback to OpenClaw</span><label><input type="checkbox" id="llm-fallback"><span class="track"></span></label></div>
+          <div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-sm" id="btn-llm-save">💾 Save Config</button><button class="btn btn-sm" id="btn-llm-refresh">🔄 Refresh</button></div>
         </div>
       </div>
     </div>
+    <div class="glass-panel" style="padding:16px;margin-top:10px" id="llm-result"><p style="color:var(--text-secondary)">Results appear here...</p></div>
   </div>
 
-  <!-- ═══════════════ TAB: AI AGENTS ═══════════════ -->
+  <!-- ═══════════════════ TAB: AI AGENTS ═══════════════════ -->
   <div id="tab-agents" class="tab-content">
-        <div class="section-header" style="margin-bottom:12px">
-          <h2 style="color:var(--neon-blue)">🤖 Quant Team Agents</h2>
-          <div style="display:flex;gap:8px">
-            <button class="btn btn-sm" id="btn-trigger-all">⚡ Trigger All</button>
-            <button class="btn btn-sm" id="btn-refresh-agents">🔄 Refresh</button>
-          </div>
-        </div>
-        <div id="agents-container"></div>
-        
-        <div class="section-header" style="margin:16px 0 8px 0">
-          <h3 style="color:var(--neon-green)">📝 Agent Prompts</h3>
-          <button class="btn btn-sm" id="btn-save-prompts">💾 Save Current Prompt</button>
-        </div>
-        <div id="prompts-tab-container" class="glass-panel" style="padding:16px"></div>
-        
-        <div class="section-header" style="margin:16px 0 8px 0">
-          <h3 style="color:var(--neon-yellow)">⚙️ Agent LLM Config</h3>
-        </div>
-        <div class="glass-panel" style="padding:16px">
-          <div class="grid-2col">
-            <div class="form-group"><label>Provider</label><input id="agent-llm-provider" placeholder="anthropic"></div>
-            <div class="form-group"><label>Model</label><input id="agent-llm-model" placeholder="claude-sonnet-4-20250514"></div>
-          </div>
-          <div class="form-group"><label>Base URL</label><input id="agent-llm-url" placeholder="https://api.anthropic.com"></div>
-          <div class="form-group toggle">
-            <span>Enable Agents</span>
-            <label><input type="checkbox" id="agent-llm-enabled"><span class="track"></span></label>
-          </div>
-          <button class="btn btn-sm" id="btn-save-agent-llm" style="margin-top:8px">💾 Save LLM Config</button>
-        </div>
+    <div class="flex-between" style="margin-bottom:12px">
+      <h2 style="color:var(--neon-blue);font-size:16px">🤖 Quant Team Agents</h2>
+      <div style="display:flex;gap:8px"><button class="btn btn-sm" id="btn-trigger-all">⚡ Trigger All</button><button class="btn btn-sm" id="btn-refresh-agents">🔄 Refresh</button></div>
+    </div>
+    <div id="agents-container"></div>
+    <div class="flex-between" style="margin:16px 0 8px 0"><h3 style="color:var(--neon-green);font-size:14px">📝 Agent Prompts</h3><button class="btn btn-sm" id="btn-save-prompts">💾 Save Current Prompt</button></div>
+    <div id="prompts-tab-container" class="glass-panel" style="padding:16px"></div>
+    <div style="margin:16px 0 8px 0"><h3 style="color:var(--neon-yellow);font-size:14px">⚙️ Agent LLM Config</h3></div>
+    <div class="glass-panel" style="padding:16px">
+      <div class="form-grid">
+        <div class="form-group"><label>Provider</label><input id="agent-llm-provider" placeholder="anthropic"></div>
+        <div class="form-group"><label>Model</label><input id="agent-llm-model" placeholder="claude-sonnet-4-20250514"></div>
+        <div class="form-group"><label>Base URL</label><input id="agent-llm-url" placeholder="https://api.anthropic.com"></div>
       </div>
-<div id="tab-settings" class="tab-content">
+      <div class="form-group toggle"><span>Enable Agents</span><label><input type="checkbox" id="agent-llm-enabled"><span class="track"></span></label></div>
+      <button class="btn btn-sm" id="btn-save-agent-llm" style="margin-top:8px">💾 Save LLM Config</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════ TAB: TRADING SYSTEM ═══════════════════ -->
+  <div id="tab-settings" class="tab-content">
     <div class="two-col">
       <div>
         <div class="glass-panel" style="padding:14px 16px;margin-bottom:12px">
@@ -491,14 +288,11 @@ body.debug #js-indicator { display: block !important; }
           <div class="form-grid">
             <div class="form-group"><label>Max Position Size ($)</label><input type="number" id="config-max-position"></div>
             <div class="form-group"><label>Max Drawdown (%)</label><input type="number" id="config-max-drawdown"></div>
-            <div class="form-group"><label>Cooldown (minutes)</label><input type="number" <div class="form-group"><label>TP Multiplier</label><input type="number" id="config-tp" step="0.1"></div>
-        <div class="form-group"><label>SL Multiplier</label><input type="number" id="config-sl" step="0.1"></div>
-        <div class="form-group"><label>Cooldown (min)</label><input type="number" id="config-cooldown"></div>
+            <div class="form-group"><label>Cooldown (min)</label><input type="number" id="config-cooldown"></div>
+            <div class="form-group"><label>TP Multiplier</label><input type="number" id="config-tp" step="0.1"></div>
+            <div class="form-group"><label>SL Multiplier</label><input type="number" id="config-sl" step="0.1"></div>
           </div>
-          <div class="card-row mt-sm">
-            <button class="btn btn-primary" id="btn-save-config">Save Config</button>
-            <button class="btn" id="btn-reset-cooldowns">Reset Cooldowns</button>
-          </div>
+          <div class="card-row mt-sm"><button class="btn btn-primary" id="btn-save-config">Save Config</button><button class="btn" id="btn-reset-cooldowns">Reset Cooldowns</button></div>
         </div>
 
         <div class="glass-panel broker-config-panel">
@@ -510,32 +304,23 @@ body.debug #js-indicator { display: block !important; }
             <div class="form-group"><label>API Secret</label><input type="password" id="config-broker-secret" placeholder="Your API secret"></div>
             <div class="form-group"><label>Trading Mode</label><select id="config-trading-mode"><option value="paper">Paper Trading</option><option value="live">Live Trading</option></select></div>
           </div>
-          <div class="card-row mt-sm">
-            <button class="btn btn-primary" id="btn-save-broker">Save Broker Config</button>
-            <button class="btn btn-success" id="btn-test-broker">Test Connection</button>
-          </div>
+          <div class="card-row mt-sm"><button class="btn btn-primary" id="btn-save-broker">Save Broker Config</button><button class="btn btn-success" id="btn-test-broker">Test Connection</button></div>
         </div>
 
-        <div class="glass-panel" style="padding:14px 16px;margin-bottom:12px">
+        <div class="glass-panel" style="padding:14px 16px">
           <div class="section-title">Daily Profit Goal</div>
-          <div class="form-grid">
-            <div class="form-group"><label>Target ($)</label><input type="number" id="daily-goal-amount"></div>
-            <div class="form-group toggle" style="align-self:end">
-              <label style="margin:0"><input type="checkbox" id="daily-goal-enabled"><span class="track"></span></label>
-            </div>
-          </div>
+          <div class="form-group"><label>Target ($)</label><input type="number" id="daily-goal-amount"></div>
+          <div class="form-group toggle"><span>Enable Goal</span><label><input type="checkbox" id="daily-goal-enabled"><span class="track"></span></label></div>
           <div id="daily-goal-status" style="font-size:11px;color:var(--text-secondary);margin-bottom:8px"></div>
           <button class="btn btn-primary" id="btn-set-daily-goal">Set Goal</button>
         </div>
       </div>
-
       <div>
         <div class="glass-panel" style="padding:14px 16px;margin-bottom:12px">
           <div class="section-title">Backtest</div>
           <button class="btn btn-primary mb-sm" id="btn-backtest">Run Backtest</button>
           <div id="backtest-results" style="font-size:11px;max-height:300px;overflow-y:auto"></div>
         </div>
-
         <div class="glass-panel" style="padding:14px 16px">
           <div class="section-title">Backups</div>
           <button class="btn btn-primary" id="btn-create-backup">Create Backup</button>
@@ -544,60 +329,34 @@ body.debug #js-indicator { display: block !important; }
     </div>
   </div>
 
-  <!-- ═══════════════ TAB: NOTIFICATIONS ═══════════════ -->
-  <div id="tab-notifications" class="tab-content">
-    <div class="glass-panel" style="padding:14px 16px">
-      <div class="section-title">Email Notification Settings</div>
-      <div class="form-grid">
-        <div class="form-group"><label>SMTP Host</label><input type="text" id="notif-smtp-host" placeholder="127.0.0.1"></div>
-        <div class="form-group"><label>SMTP Port</label><input type="number" id="notif-smtp-port" value="1025"></div>
-        <div class="form-group"><label>SMTP User</label><input type="text" id="notif-smtp-user"></div>
-        <div class="form-group"><label>SMTP Password</label><input type="password" id="notif-smtp-pass"></div>
-        <div class="form-group"><label>Recipient Email</label><input type="text" id="notif-email-recipient"></div>
-      </div>
-      <div class="form-group toggle mb-sm">
-        <span style="font-size:12px">Enable Email Alerts</span>
-        <label style="margin:0"><input type="checkbox" id="notif-email-enabled"><span class="track"></span></label>
-      </div>
-      <div class="card-row">
-        <button class="btn btn-primary" id="btn-save-notif">Save Settings</button>
-        <button class="btn" id="btn-test-notif">Send Test</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ═══════════════ TAB: OPTIMIZATIONS ═══════════════ -->
+  <!-- ═══════════════════ TAB: OPTIMIZATIONS ═══════════════════ -->
   <div id="tab-optimizations" class="tab-content">
-    <div class="glass-panel" style="padding:14px 16px;margin-bottom:12px">
+    <div class="glass-panel" style="padding:14px 16px">
       <div class="section-title">Optimization Suggestions</div>
       <div id="optimizations-list" class="scroll-y" style="max-height:400px"></div>
       <div class="card-row mt-sm">
         <button class="btn btn-primary" id="btn-apply-all-opts">Apply All</button>
         <button class="btn" id="btn-review-opts">Review</button>
         <button class="btn" id="btn-opt-params">Optimize Parameters</button>
-        <button class="btn" id="btn-opt-longterm">Long-Term Optimization</button>
+        <button class="btn" id="btn-opt-longterm">📈 Long-Term Optimize</button>
+        <button class="btn btn-sm btn-danger" id="btn-flush-opts">🗑️ Flush All</button>
       </div>
     </div>
   </div>
 
-  <!-- ═══════════════ TAB: ARCHITECTURE ═══════════════ -->
+  <!-- ═══════════════════ TAB: ARCHITECTURE ═══════════════════ -->
   <div id="tab-architecture" class="tab-content">
-        <div class="section-header" style="margin-bottom:12px">
-          <h2 style="color:var(--neon-blue)">🏗️ System Architecture</h2>
-          <button class="btn btn-sm" id="btn-refresh-arch">🔄 Refresh</button>
-        </div>
-        <div id="architecture-diagram"></div>
-      </div>
+    <div class="flex-between" style="margin-bottom:12px">
+      <h2 style="color:var(--neon-blue);font-size:16px">🏗️ System Architecture</h2>
+      <button class="btn btn-sm" id="btn-refresh-arch">🔄 Refresh</button>
+    </div>
     <div id="architecture-diagram"></div>
   </div>
 
-  <!-- ═══════════════ TAB: SYSTEM LOGS ═══════════════ -->
+  <!-- ═══════════════════ TAB: SYSTEM LOGS ═══════════════════ -->
   <div id="tab-logs" class="tab-content">
     <div class="glass-panel" style="padding:14px 16px">
-      <div class="flex-between mb-sm">
-        <div class="section-title" style="margin-bottom:0;border:none">System Logs</div>
-        <button class="btn btn-sm" id="btn-refresh-logs">Refresh</button>
-      </div>
+      <div class="flex-between mb-sm"><div class="section-title" style="margin-bottom:0;border:none">System Logs</div><button class="btn btn-sm" id="btn-refresh-logs">🔄 Refresh</button></div>
       <div id="system-logs" class="scroll-y" style="max-height:500px;font-family:var(--font-mono)"></div>
     </div>
   </div>
@@ -607,35 +366,33 @@ body.debug #js-indicator { display: block !important; }
 <!-- Toast Container -->
 <div id="toast-container"></div>
 
-<!-- ═══════════════ SCRIPTS ═══════════════ -->
-<script src="/dashboard-v2/js/api.js?v=1784669110"></script>
-<script src="/dashboard-v2/js/router.js?v=1784669110"></script>
-<script src="/dashboard-v2/js/dashboard.js?v=1784669110"></script>
-<script src="/dashboard-v2/js/neural.js?v=1784669110"></script>
-<script src="/dashboard-v2/js/assets.js?v=1784669110"></script>
-<script src="/dashboard-v2/js/llm.js?v=1784669110"></script>
-<script src="/dashboard-v2/js/agents.js?v=1784669110"></script>
-<script src="/dashboard-v2/js/settings.js?v=1784669110"></script>
-<script src="/dashboard-v2/js/logs.js?v=1784669110"></script>
+<!-- Fatal Error Display -->
+<div id="fatal-error-display" style="display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(244,63,94,0.95);color:white;padding:12px;z-index:99999;font-family:monospace;font-size:12px;max-height:200px;overflow-y:auto"></div>
 
+<script>
+// Global error trap
+window.onerror = function(m,u,l,c,e) {
+  var el = document.getElementById('fatal-error-display');
+  el.style.display='block';
+  el.innerHTML+='<div>❌ '+m+'<br><small>'+u+':'+l+'</small></div>';
+};
+window.addEventListener('unhandledrejection',function(e) {
+  var el = document.getElementById('fatal-error-display');
+  el.style.display='block';
+  el.innerHTML+='<div>❌ Promise: '+(e.reason||'unknown')+'</div>';
+});
+</script>
 
-  <div id="fatal-error-display" style="display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(244,63,94,0.9);color:white;padding:12px;z-index:99999;font-family:monospace;font-size:12px;max-height:200px;overflow-y:auto"></div>
-  <script>
-    var _origOnerror = window.onerror;
-    window.onerror = function(msg, url, line, col, error) {
-      var el = document.getElementById('fatal-error-display');
-      el.style.display = 'block';
-      el.innerHTML += '<div>❌ ' + msg + '<br><small>' + url + ':' + line + '</small></div>';
-      if (_origOnerror) _origOnerror.apply(this, arguments);
-      return false;
-    };
-    // Also catch unhandled rejections
-    window.addEventListener('unhandledrejection', function(e) {
-      var el = document.getElementById('fatal-error-display');
-      el.style.display = 'block';
-      el.innerHTML += '<div>❌ Promise: ' + (e.reason || 'unknown') + '</div>';
-    });
-  </script>
+<!-- Application Scripts (order matters!) -->
+<script src="/dashboard-v2/js/api.js?v=1784670227"></script>
+<script src="/dashboard-v2/js/router.js?v=1784670227"></script>
+<script src="/dashboard-v2/js/dashboard.js?v=1784670227"></script>
+<script src="/dashboard-v2/js/neural.js?v=1784670227"></script>
+<script src="/dashboard-v2/js/assets.js?v=1784670227"></script>
+<script src="/dashboard-v2/js/llm.js?v=1784670227"></script>
+<script src="/dashboard-v2/js/agents.js?v=1784670227"></script>
+<script src="/dashboard-v2/js/settings.js?v=1784670227"></script>
+<script src="/dashboard-v2/js/logs.js?v=1784670227"></script>
 
 </body>
 </html>

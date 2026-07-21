@@ -1,157 +1,127 @@
 /**
- * api.js — Unified API client for NexusTrader Dashboard v2
- * Single source of truth for all backend communication.
+ * api.js — API client for NexusTrader Dashboard v3
+ * All backend communication goes through this module.
  */
-
 const API = {
-  BASE: '',
+  base: '',
 
-  /** Generic JSON request with timeout + error handling */
-  async request(method, path, body = null, timeoutMs = 15000) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      const opts = {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        signal: controller.signal,
-      };
-      if (body && method !== 'GET') opts.body = JSON.stringify(body);
-      const res = await fetch(API.BASE + path, opts);
-      if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-      return await res.json();
-    } finally {
-      clearTimeout(timer);
+  async _fetch(path, opts = {}) {
+    const url = this.base + path;
+    const res = await fetch(url, {
+      headers: { 'Content-Type': 'application/json', ...opts.headers },
+      ...opts,
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`);
     }
+    return res.json();
   },
 
-  get(path)  { return this.request('GET', path); },
-  post(path, body) { return this.request('POST', path, body); },
-  put(path, body)  { return this.request('PUT', path, body); },
+  get(path) { return this._fetch(path); },
+  post(path, body) { return this._fetch(path, { method: 'POST', body: JSON.stringify(body || {}) }); },
+  put(path, body) { return this._fetch(path, { method: 'PUT', body: JSON.stringify(body || {}) }); },
+  delete(path) { return this._fetch(path, { method: 'DELETE' }); },
 
-  // ── Status & Init ──
-  status()             { return this.get('/api/status'); },
-  initState()          { return this.get('/api/init'); },
-  health()             { return this.get('/api/health'); },
-  safetyStatus()       { return this.get('/api/safety/status'); },
-
-  // ── Trading ──
-  trades(ticker, limit = 50) { return this.get(`/api/trades?ticker=${ticker}&limit=${limit}`); },
-  allTrades()                 { return this.get('/api/trades/all'); },
-  signals()                   { return this.get('/api/trading/signals'); },
-  reasoning()                 { return this.get('/api/trading/reasoning'); },
-  positions()                 { return this.get('/api/positions'); },
-  history(ticker)             { return this.get(`/api/history?ticker=${ticker}`); },
+  // ── Core ──
+  status()                    { return this.get('/api/status'); },
+  initState()                 { return this.get('/api/status'); },
+  history(ticker)             { return this.get(`/api/history?ticker=${encodeURIComponent(ticker)}`); },
   portfolioHistory()          { return this.get('/api/portfolio/history'); },
+  tickers()                   { return this.get('/api/tickers'); },
+  positions()                 { return this.get('/api/positions'); },
+  trades()                    { return this.get('/api/trades'); },
+  allTrades()                 { return this.get('/api/trades/all'); },
+  shadowTrades()              { return this.get('/api/trades/shadow'); },
+  shadowPerformance()         { return this.get('/api/trades/shadow/performance'); },
   weights()                   { return this.get('/api/weights'); },
   weightsHistory()            { return this.get('/api/weights/history'); },
+  safetyStatus()              { return this.get('/api/safety/status'); },
+  signals()                   { return this.get('/api/trading/signals'); },
+  health()                    { return this.get('/api/health'); },
+
+  // ── Control ──
   control(action)             { return this.post('/api/control', { action }); },
+  setRiskMode(mode)           { return this.post('/api/risk/mode', { mode }); },
 
-  // ── Neural / Brains ──
+  // ── Training ──
+  train()                     { return this.post('/api/training/run'); },
+  trainingStatus()            { return this.get('/api/training/status'); },
+  trainBrain(ticker)          { return this.post('/api/neural/train', { ticker }); },
   brains()                    { return this.get('/api/neural/brains'); },
-  brainSpecs()                { return this.get('/api/neural/brain/specs'); },
-  activateBrain(ticker, brain) { return this.post('/api/neural/brain/activate', { ticker, brain }); },
+  saveBrain(ticker, weights)  { return this.post('/api/neural/save', { ticker, weights }); },
+  brainSpecs()                { return this.get('/api/neural/specs'); },
+  setAutoSwitch(data)         { return this.post('/api/neural/brain/auto_switch', data); },
   autoSwitchStatus()          { return this.get('/api/neural/brain/auto_switch'); },
-  setAutoSwitch(enabled)      { return this.post('/api/neural/brain/auto_switch', { enabled }); },
-  saveBrain(data)             { return this.post('/api/neural/brain/save', data); },
-  deleteBrain(name)           { return this.post('/api/neural/brain/delete', { name }); },
-  trainBrain(ticker)          { return this.post('/api/neural/brain/train', { ticker }); },
-  nnArchitecture()            { return this.get('/api/nn/architecture'); },
-  setNnArchitecture(data)     { return this.post('/api/nn/architecture', data); },
-  runNnTests()                { return this.post('/api/nn/tests'); },
-
-  // ── Historical Training ──
-  runTraining(ticker, days = 30, epochs = 20) {
-    return this.post('/api/training/run', { ticker, days, epochs });
-  },
+  runNnTests()                { return this.post('/api/neural/tests'); },
+  saveArch(data)              { return this.post('/api/neural/architecture', data); },
 
   // ── Assets ──
-  assets()                    { return this.get('/api/assets'); },
-  saveAsset(data)             { return this.post('/api/assets/save', data); },
-  deleteAsset(ticker)         { return this.post('/api/assets/delete', { ticker }); },
-  exchangeStatus()            { return this.get('/api/exchange/status'); },
+  assetList()                 { return this.get('/api/tickers'); },
+  addAsset(ticker)            { return this.post('/api/tickers/add', { ticker }); },
+  removeAsset(ticker)         { return this.post('/api/tickers/remove', { ticker }); },
+  checkExchange()             { return this.get('/api/exchange/check'); },
 
   // ── LLM ──
   llmStatus()                 { return this.get('/api/llm/status'); },
+  llmConfig()                 { return this.get('/api/llm/config'); },
+  setLlmConfig(data)          { return this.post('/api/llm/config', data); },
   llmTest(data)               { return this.post('/api/llm/test', data); },
   llmSentiment(ticker)        { return this.post('/api/llm/sentiment', { ticker }); },
   llmRegime(ticker)           { return this.post('/api/llm/regime', { ticker }); },
-  llmConfig()                 { return this.get('/api/llm/config'); },
-  setLlmConfig(data)          { return this.post('/api/llm/config', data); },
 
-  // ── Quant Team / Agents ──
+  // ── Agents ──
   quantStatus()               { return this.get('/api/quant/status'); },
   triggerQuant(agent)         { return this.post('/api/quant/trigger', { agent }); },
-  saveQuantPrompt(data)       { return this.post('/api/quant/prompt/save', data); },
-  agentRuns()                 { return this.get('/api/system/agent_runs'); },
+  agentRuns()                 { return this.get('/api/agents/runs'); },
   agentLlm()                  { return this.get('/api/system/agent_llm'); },
   setAgentLlm(data)           { return this.post('/api/system/agent_llm', data); },
   prompts()                   { return this.get('/api/system/prompts'); },
   savePrompt(data)            { return this.post('/api/system/prompts', data); },
+  saveQuantPrompt(data)       { return this.post('/api/quant/prompt/save', data); },
 
-  // ── Broker ──
+  // ── Settings ──
+  settings()                  { return this.get('/api/status'); },
+  saveSetting(key, value)     { return this.post('/api/system/settings', { key, value }); },
+  setSchedule(data)           { return this.post('/api/schedule', data); },
+  schedule()                  { return this.get('/api/schedule'); },
   brokerConfig()              { return this.get('/api/system/broker_config'); },
   setBrokerConfig(data)       { return this.post('/api/system/broker_config', data); },
-
-  // ── System / Settings ──
-  systemConfig()              { return this.get('/api/system/config'); },
-  setSystemConfig(data)       { return this.post('/api/system/config', data); },
-  saveSetting(data)           { return this.post('/api/system/save_setting', data); },
-  setRiskMode(mode)           { return this.post('/api/system/risk_mode', { mode }); },
-  testBroker()                { return this.get('/api/system/test_broker'); },
-  resetCooldowns()            { return this.post('/api/system/reset_cooldowns'); },
+  testBroker()                { return this.post('/api/system/broker_test'); },
   dailyGoal()                 { return this.get('/api/system/daily_goal'); },
   setDailyGoal(data)          { return this.post('/api/system/daily_goal', data); },
+  backtest()                  { return this.post('/api/backtest'); },
+  createBackup()              { return this.post('/api/backup/create'); },
+  backups()                   { return this.get('/api/backups'); },
 
   // ── Notifications ──
-  notifications()             { return this.get('/api/system/notifications'); },
-  setNotifications(data)      { return this.post('/api/system/notifications', data); },
-  testNotification()          { return this.post('/api/system/notifications/test'); },
-  logNotification(data)       { return this.post('/api/system/log_notification', data); },
+  notifConfig()               { return this.get('/api/notifications/config'); },
+  setNotifConfig(data)        { return this.post('/api/notifications/config', data); },
+  testNotif()                 { return this.post('/api/notifications/test'); },
 
-  // ── Optimization ──
+  // ── Optimizations ──
   optimizations()             { return this.get('/api/system/optimizations'); },
   applyOptimization(id)       { return this.post(`/api/optimizations/apply/${id}`); },
   applyAllOptimizations()     { return this.post('/api/optimizations/apply/all'); },
-  reviewOptimization()        { return this.post('/api/optimizations/review'); },
-  optimizeParameters()        { return this.post('/api/system/optimize/parameters'); },
-  optimizeLongTerm()          { return this.post('/api/system/optimize/long_term'); },
+  reviewOptimizations()       { return this.post('/api/optimizations/review'); },
+  optimizeParams()            { return this.post('/api/system/optimize/params'); },
+  optimizeLongTerm()          { return this.post('/api/system/optimize/longterm'); },
   triggerSelfDev()            { return this.post('/api/system/optimize/self_dev'); },
   triggerNnOptimize()         { return this.post('/api/system/optimize/nn'); },
   triggerSentiment()          { return this.post('/api/system/optimize/sentiment'); },
   triggerRiskAudit()          { return this.post('/api/system/optimize/risk_audit'); },
   triggerAllocator()          { return this.post('/api/system/optimize/allocator'); },
 
-  // ── Backtest ──
-  backtest(data)              { return this.post('/api/system/backtest', data); },
-
-  // ── Shadow Trading ──
-  shadowTrades()              { return this.get('/api/system/shadow_trades'); },
-  shadowPerformance()         { return this.get('/api/system/shadow_performance'); },
-
-  // ── Backups ──
-  createBackup()              { return this.post('/api/system/backup'); },
-  backups()                   { return this.get('/api/system/backups'); },
-  restoreBackup(filename)     { return this.post(`/api/system/backup/restore/${filename}`); },
-
-  // ── Gateway ──
+  // ── System / Logs ──
+  systemLogs(limit)           { return this.get(`/api/system/logs?limit=${limit || 200}`); },
+  logNotification(data)       { return this.post('/api/notify', data); },
   gatewayStatus()             { return this.get('/api/gateway/status'); },
-  gatewayPrompt(prompt)       { return this.post('/api/gateway/prompt', { prompt }); },
-
-  // ── Blog ──
+  gatewayPrompt(data)         { return this.post('/api/gateway/prompt', data); },
+  reasoning(data)             { return this.post('/api/gateway/reasoning', data); },
+  generateBlog(data)          { return this.post('/api/blog/generate', data); },
   blogConfig()                { return this.get('/api/blog/config'); },
   setBlogConfig(data)         { return this.post('/api/blog/config', data); },
-  generateBlog()              { return this.post('/api/blog/generate'); },
 
-  // ── Schedule ──
-  schedule()                  { return this.get('/api/system/schedule'); },
-  setSchedule(data)           { return this.post('/api/system/schedule', data); },
-
-  // ── Logs ──
-  systemLogs(limit = 200)     { return this.get(`/api/system/logs?limit=${limit}`); },
+  // ── Architecture ──
+  architecture()              { return this.get('/api/system/architecture'); },
 };
-
-// Export for module use
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = API;
-}
