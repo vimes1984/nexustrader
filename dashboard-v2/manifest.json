@@ -1,0 +1,14 @@
+{
+  "name": "NexusTrader — AI Neuro-Quantitative Suite",
+  "short_name": "NexusTrader",
+  "description": "Algorithmic trading bot with real-time probability estimation, RL optimization, and LLaMA-powered analysis.",
+  "start_url": "/dashboard-v2/",
+  "display": "standalone",
+  "background_color": "#0a0f1e",
+  "theme_color": "#0a0f1e",
+  "orientation": "any",
+  "icons": [
+    { "src": "/dashboard/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/dashboard/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

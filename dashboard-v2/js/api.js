@@ -38,6 +38,7 @@ const API = {
   weightsHistory()            { return this.get('/api/weights/history'); },
   safetyStatus()              { return this.get('/api/safety/status'); },
   signals()                   { return this.get('/api/trading/signals'); },
+  strategyStatus()            { return this.get('/api/trading/signals'); },
   health()                    { return this.get('/api/health'); },
 
   // ── Control ──
@@ -106,6 +107,9 @@ const API = {
   reviewOptimizations()       { return this.post('/api/optimizations/review'); },
   optimizeParams()            { return this.post('/api/system/optimize/params'); },
   optimizeLongTerm()          { return this.post('/api/system/optimize/longterm'); },
+  longTermOptimize()          { return this.post('/api/system/optimize/longterm'); },
+  flushOptimizations()        { return this.post('/api/optimizations/flush'); },
+  triggerOptimization()       { return this.post('/api/system/optimize/params'); },
   triggerSelfDev()            { return this.post('/api/system/optimize/self_dev'); },
   triggerNnOptimize()         { return this.post('/api/system/optimize/nn'); },
   triggerSentiment()          { return this.post('/api/system/optimize/sentiment'); },
@@ -123,5 +127,5 @@ const API = {
   setBlogConfig(data)         { return this.post('/api/blog/config', data); },
 
   // ── Architecture ──
-  architecture()              { return this.get('/api/system/architecture'); },
+  architecture()              { return this.get('/api/nn/architecture'); },
 };
