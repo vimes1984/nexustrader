@@ -1,5 +1,6 @@
 /**
- * settings.js — Trading System + Notifications + Optimizations tabs
+ * settings.js — System Config, Broker, Daily Goal, Backtest, Backup
+ *                Notifications, Optimizations tabs
  */
 function setInput(id, val) {
   const el = byId(id);
@@ -30,20 +31,21 @@ const Settings = {
     byId('btn-review-opts')?.addEventListener('click', () => this.review());
     byId('btn-opt-params')?.addEventListener('click', () => this.optimizeParams());
     byId('btn-opt-longterm')?.addEventListener('click', () => this.optimizeLongTerm());
+    byId('btn-flush-opts')?.addEventListener('click', () => this.flushOpts());
+    // Add click handler for per-item apply buttons (delegated)
+    const optList = byId('optimizations-list');
+    if (optList) {
+      optList.addEventListener('click', (e) => {
+        const btn = e.target.closest('.opt-apply-btn');
+        if (btn && btn.dataset.id) this.applyOne(btn.dataset.id);
+      });
+    }
   },
 
   async refresh() {
     await Promise.all([this.loadConfig(), this.loadDailyGoal(), this.loadBrokerConfig()]);
   },
 
-  // ACTUAL API: {trading_mode, broker, api_key, api_secret, trailing_stop, cooldown,
-  //               tp_multiplier, sl_multiplier, risk_mode, max_drawdown,
-  //               nn_lr, nn_floor, nn_discount, nn_exploration, nn_hidden_layers,
-  //               nn_hidden_dim, nn_dropout, nn_optimizer, nn_epochs, initial_balance}
-  // ACTUAL API: {trading_mode, broker, api_key, api_secret, trailing_stop, cooldown,
-  //               tp_multiplier, sl_multiplier, risk_mode, max_drawdown,
-  //               nn_lr, nn_floor, nn_discount, nn_exploration, initial_balance,
-  //               nn_hidden_layers, nn_hidden_dim, nn_dropout, nn_optimizer, nn_epochs}
   async loadConfig() {
     try {
       const data = await API.systemConfig();
@@ -60,20 +62,20 @@ const Settings = {
     } catch (e) { /* silent */ }
   },
 
-  // ACTUAL API: {status, daily_income_goal}
   async loadDailyGoal() {
     try {
       const data = await API.dailyGoal();
       if (!data) return;
-      setInput('daily-goal-amount', data.daily_income_goal);
-      setCheckbox('daily-goal-enabled', data.daily_income_goal > 0);
+      // API returns {daily_income_goal} or {goal} — handle both
+      const goal = data.daily_income_goal ?? data.goal ?? 0;
+      const enabled = data.enabled ?? (goal > 0);
+      setInput('daily-goal-amount', goal > 0 ? goal : '');
+      setCheckbox('daily-goal-enabled', enabled);
       const el = byId('daily-goal-status');
-      if (el) el.textContent = data.daily_income_goal ? 'Daily goal: $' + data.daily_income_goal : 'No goal set';
+      if (el) el.textContent = goal > 0 ? 'Daily goal: $' + goal + (data.progress_pct ? ' (' + data.progress_pct + '%)' : '') : 'No goal set';
     } catch (e) { /* silent */ }
   },
 
-
-  // ACTUAL API: {broker, api_key, api_secret, trading_mode, test_result}
   async loadBrokerConfig() {
     try {
       const data = await API.brokerConfig();
@@ -85,7 +87,7 @@ const Settings = {
       if (modeEl) modeEl.value = data.trading_mode || 'paper';
       const statusEl = byId('broker-status-display');
       if (statusEl && data.test_result) {
-        statusEl.innerHTML = '<span class="broker-status-ok">Last test: ' + data.test_result + '</span>';
+        statusEl.innerHTML = '<span style="color:var(--neon-green)">Last test: ' + data.test_result + '</span>';
       }
     } catch (e) { /* silent */ }
   },
@@ -114,9 +116,7 @@ const Settings = {
       };
       await API.setSystemConfig(payload);
       App.toast('Config saved', 'success');
-    } catch (e) {
-      App.toast('Save failed: ' + e.message, 'error');
-    }
+    } catch (e) { App.toast('Save failed: ' + e.message, 'error'); }
   },
 
   async testBroker() {
@@ -125,47 +125,39 @@ const Settings = {
       const data = await API.testBroker();
       const success = data.ok || data.connected || data.status === 'success';
       App.toast(success ? 'Broker connected ✅ ' + (data.message || '') : 'Broker connection failed: ' + (data.error || 'unknown'), success ? 'success' : 'error');
-      // Show balances in the status area
       if (data.balances) {
         const el = byId('backtest-results');
-        if (el) el.innerHTML = '<pre style="font-size:11px;white-space:pre-wrap">Balances:\n' + JSON.stringify(data.balances, null, 2) + '</pre>';
+        if (el) el.innerHTML = '<pre style="font-size:11px;white-space:pre-wrap;background:rgba(0,0,0,0.2);padding:8px;border-radius:6px">Balances:\n' + JSON.stringify(data.balances, null, 2) + '</pre>';
       }
-    } catch (e) {
-      App.toast('Test failed: ' + e.message, 'error');
-    }
+    } catch (e) { App.toast('Test failed: ' + e.message, 'error'); }
   },
 
   async resetCooldowns() {
-    try {
-      await API.resetCooldowns();
-      App.toast('Cooldowns reset', 'success');
-    } catch (e) {
-      App.toast('Reset failed: ' + e.message, 'error');
-    }
+    try { await API.resetCooldowns(); App.toast('Cooldowns reset', 'success'); }
+    catch (e) { App.toast('Reset failed: ' + e.message, 'error'); }
   },
 
   async setDailyGoal() {
     try {
       const amount = parseFloat(byId('daily-goal-amount')?.value) || 0;
-      await API.setDailyGoal({ goal: amount, enabled: amount > 0 });
+      // API expects {daily_income_goal: float} — NOT {goal, enabled}
+      await API.setDailyGoal({ daily_income_goal: amount });
       App.toast('Daily goal updated', 'success');
-    } catch (e) {
-      App.toast('Goal update failed: ' + e.message, 'error');
-    }
+      this.loadDailyGoal();
+    } catch (e) { App.toast('Goal update failed: ' + e.message, 'error'); }
   },
 
   async runBacktest() {
     const ticker = App.state.activeTicker;
-    const days = parseInt(prompt('Days to backtest?', '30')) || 30;
+    const daysStr = window.prompt('Days to backtest?', '30');
+    const days = parseInt(daysStr) || 30;
     App.toast('Running ' + days + 'd backtest for ' + ticker + '...', 'info');
     try {
       const data = await API.backtest({ ticker, days });
       const el = byId('backtest-results');
-      if (el) el.innerHTML = '<pre style="font-size:11px;white-space:pre-wrap">' + JSON.stringify(data, null, 2) + '</pre>';
+      if (el) el.innerHTML = '<pre style="font-size:11px;white-space:pre-wrap;background:rgba(0,0,0,0.2);padding:8px;border-radius:6px">' + JSON.stringify(data, null, 2) + '</pre>';
       App.toast('Backtest complete', 'success');
-    } catch (e) {
-      App.toast('Backtest failed: ' + e.message, 'error');
-    }
+    } catch (e) { App.toast('Backtest failed: ' + e.message, 'error'); }
   },
 
   async createBackup() {
@@ -173,14 +165,10 @@ const Settings = {
     try {
       const data = await API.createBackup();
       App.toast('Backup created: ' + (data.backup || 'success'), 'success');
-    } catch (e) {
-      App.toast('Backup failed: ' + e.message, 'error');
-    }
+    } catch (e) { App.toast('Backup failed: ' + e.message, 'error'); }
   },
 
   // ── Notifications ──
-  // ACTUAL API: {status, settings: {notif_smtp_host, notif_smtp_port, notif_smtp_user,
-  //               notif_smtp_pass, notif_email_enabled, notif_email_recipient}}
   async refreshNotifications() {
     try {
       const data = await API.notifications();
@@ -206,19 +194,13 @@ const Settings = {
       };
       await API.setNotifications(payload);
       App.toast('Notification settings saved', 'success');
-    } catch (e) {
-      App.toast('Save failed: ' + e.message, 'error');
-    }
+    } catch (e) { App.toast('Save failed: ' + e.message, 'error'); }
   },
 
   async testNotification() {
     App.toast('Sending test notification...', 'info');
-    try {
-      await API.testNotification();
-      App.toast('Test notification sent', 'success');
-    } catch (e) {
-      App.toast('Test failed: ' + e.message, 'error');
-    }
+    try { await API.testNotification(); App.toast('Test notification sent', 'success'); }
+    catch (e) { App.toast('Test failed: ' + e.message, 'error'); }
   },
 
   // ── Optimizations ──
@@ -227,73 +209,58 @@ const Settings = {
       const data = await API.optimizations();
       const container = byId('optimizations-list');
       if (!container) return;
-      const items = data.optimizations || data.suggestions || [];
+      const items = data.optimizations || data.suggestions || data.items || [];
       if (items.length === 0) {
-        container.innerHTML = '<p style="color:var(--text-secondary)">No optimization suggestions</p>';
+        container.innerHTML = '<p style="color:var(--text-secondary);text-align:center;padding:20px">No optimization suggestions — run parameter optimization to generate them</p>';
         return;
       }
-      container.innerHTML = items.map((o, i) =>
-        '<div class="glass-panel" style="padding:10px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">' +
-          '<div style="font-size:12px">' +
-            '<b>' + (o.id || o.title || ('Suggestion #' + (i + 1))) + '</b> ' +
-            '<span style="color:var(--text-secondary)">' + (o.description || o.title || '') + '</span>' +
+      container.innerHTML = items.map((o, i) => {
+        const id = o.id || o.title || ('suggestion-' + i);
+        const desc = o.description || o.title || o.name || '';
+        return '<div class="glass-panel" style="padding:10px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">' +
+          '<div style="font-size:12px;flex:1">' +
+            '<b>' + id + '</b> ' +
+            '<span style="color:var(--text-secondary)">' + desc + '</span>' +
           '</div>' +
-          '<button class="btn btn-sm" onclick="Settings.applyOne(\'' + (o.id || '') + '\')">Apply</button>' +
-        '</div>'
-      ).join('');
+          '<button class="btn btn-sm opt-apply-btn" data-id="' + id + '">Apply</button>' +
+        '</div>';
+      }).join('');
     } catch (e) { /* silent */ }
   },
 
   async applyOne(id) {
-    try {
-      await API.applyOptimization(id);
-      App.toast('Applied: ' + id, 'success');
-      this.refreshOpts();
-    } catch (e) {
-      App.toast('Apply failed: ' + e.message, 'error');
-    }
+    if (!id) return;
+    try { await API.applyOptimization(id); App.toast('Applied: ' + id, 'success'); this.refreshOpts(); }
+    catch (e) { App.toast('Apply failed: ' + e.message, 'error'); }
   },
 
   async applyAll() {
     App.toast('Applying all optimizations...', 'info');
-    try {
-      await API.applyAllOptimizations();
-      App.toast('All optimizations applied', 'success');
-      this.refreshOpts();
-    } catch (e) {
-      App.toast('Apply failed: ' + e.message, 'error');
-    }
+    try { await API.applyAllOptimizations(); App.toast('All optimizations applied', 'success'); this.refreshOpts(); }
+    catch (e) { App.toast('Apply failed: ' + e.message, 'error'); }
+  },
+
+  async flushOpts() {
+    try { await API.applyAllOptimizations(); App.toast('Optimizations flushed', 'success'); this.refreshOpts(); }
+    catch (e) { App.toast('Flush failed: ' + e.message, 'error'); }
   },
 
   async review() {
     App.toast('Reviewing optimizations...', 'info');
-    try {
-      await API.reviewOptimization();
-      App.toast('Review complete', 'success');
-      this.refreshOpts();
-    } catch (e) {
-      App.toast('Review failed: ' + e.message, 'error');
-    }
+    try { await API.reviewOptimization(); App.toast('Review complete', 'success'); this.refreshOpts(); }
+    catch (e) { App.toast('Review failed: ' + e.message, 'error'); }
   },
 
   async optimizeParams() {
     App.toast('Optimizing parameters...', 'info');
-    try {
-      await API.optimizeParameters();
-      App.toast('Parameters optimized', 'success');
-    } catch (e) {
-      App.toast('Optimization failed: ' + e.message, 'error');
-    }
+    try { await API.optimizeParameters(); App.toast('Parameters optimized', 'success'); }
+    catch (e) { App.toast('Optimization failed: ' + e.message, 'error'); }
   },
 
   async optimizeLongTerm() {
     App.toast('Running long-term optimization...', 'info');
-    try {
-      await API.optimizeLongTerm();
-      App.toast('Long-term optimization complete', 'success');
-    } catch (e) {
-      App.toast('Optimization failed: ' + e.message, 'error');
-    }
+    try { await API.optimizeLongTerm(); App.toast('Long-term optimization complete', 'success'); }
+    catch (e) { App.toast('Optimization failed: ' + e.message, 'error'); }
   },
 };
 document.addEventListener('DOMContentLoaded', () => { Settings.init(); if (typeof lucide !== 'undefined') setTimeout(() => lucide.createIcons(), 200); });

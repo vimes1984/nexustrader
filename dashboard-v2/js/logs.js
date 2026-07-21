@@ -15,22 +15,27 @@ const Logs = {
 
   async refresh() {
     try {
-      const data = await API.systemLogs(300);
       const el = byId('system-logs');
       if (!el) return;
-      if (data.logs && data.logs.length > 0) {
-        el.innerHTML = data.logs.slice(-200).map(l => `
-          <div style="font-family:monospace;font-size:11px;padding:2px 0;border-bottom:1px solid rgba(255,255,255,0.02)">
-            <span style="color:var(--text-secondary)">${l.timestamp || ''}</span>
-            <span style="color:${this.logColor(l.level)};margin:0 6px">[${l.level || 'INFO'}]</span>
-            <span>${l.message || l.text || ''}</span>
-          </div>
-        `).join('');
-      } else {
+      el.innerHTML = '<p style="color:var(--text-secondary)">Loading logs...</p>';
+      const data = await API.systemLogs(300);
+      if (!data || !data.logs || !data.logs.length) {
         el.innerHTML = '<p style="color:var(--text-secondary)">No logs available</p>';
+        return;
       }
+      el.innerHTML = data.logs.slice(-200).map(l => {
+        const ts = l.timestamp || l.time || '';
+        const level = (l.level || 'INFO').toUpperCase();
+        const msg = l.message || l.text || l.msg || '';
+        return '<div style="font-family:monospace;font-size:11px;padding:2px 0;border-bottom:1px solid rgba(255,255,255,0.02)">' +
+          '<span style="color:var(--text-secondary)">' + ts + '</span> ' +
+          '<span style="color:' + this.logColor(level) + ';margin:0 6px">[' + level + ']</span> ' +
+          '<span>' + msg.replace(/</g, '&lt;') + '</span>' +
+        '</div>';
+      }).join('');
     } catch (e) {
-      App.toast('Failed to load logs', 'error');
+      const el = byId('system-logs');
+      if (el) el.innerHTML = '<p style="color:var(--neon-red)">Failed to load logs: ' + e.message + '</p>';
     }
   },
 
@@ -41,43 +46,114 @@ const Logs = {
 
   async loadArchitecture() {
     try {
-      const data = await API.status();
       const el = byId('architecture-diagram');
       if (!el) return;
-      // Render a simple text-based architecture view
-      el.innerHTML = `
-        <div class="glass-panel" style="padding:16px;margin-bottom:8px">
-          <h3 style="color:var(--neon-blue);margin-bottom:8px">System Architecture</h3>
-          <pre style="font-size:11px;line-height:1.6;color:var(--text-secondary)">
-┌─────────────────────────────────────────────────┐
-│                 ${data.trading_mode || 'LIVE'} MODE                        │
-│  Tickers: ${(data.tickers || []).join(', ') || 'None'}              │
-│  Balance: $${(data.balance || 0).toFixed(2)}                        │
-│  Equity:  $${(data.equity || 0).toFixed(2)}                         │
-├─────────────────────────────────────────────────┤
-│  📡 Data Ingestion → ${(data.tickers || []).length} tickers via WebSocket    │
-│  🧠 Strategy Ensemble → 6 strategies per ticker     │
-│  ⚖️  Probability Engine → Kelly + EV + RR            │
-│  📊 Policy Network → RL weight optimization         │
-│  💰 Execution Engine → ${data.trading_mode === 'live' ? 'Live Kraken' : 'Simulated'}          │
-├─────────────────────────────────────────────────┤
-│  🤖 Quant Team: 9 agents (cron + manual)           │
-│  🔮 LLaMA: ${data.llm_connected ? 'Connected' : 'Disconnected'}                          │
-│  📈 Chart: Lightweight Charts + Chart.js            │
-└─────────────────────────────────────────────────┘</pre>
-        </div>`;
-    } catch (e) { /* silent */ }
+      el.innerHTML = '<p style="color:var(--text-secondary)">Loading architecture...</p>';
+      const data = await API.status();
+      if (!data) throw new Error('No data');
+      
+      const tickers = (data.tickers || []).join(', ') || 'none';
+      const time = new Date().toISOString().replace('T', ' ').slice(0, 19);
+      
+      el.innerHTML = 
+        '<div class="glass-panel" style="padding:20px;margin-bottom:10px">' +
+          '<h3 style="color:var(--neon-blue);margin:0 0 12px 0">🚀 NexusTrader System Architecture</h3>' +
+          '<pre style="font-size:11px;line-height:1.6;color:var(--text-secondary);margin:0;background:rgba(0,0,0,0.2);padding:16px;border-radius:8px">' +
+'┌────────────────────────────────────────────────────────────────┐\n' +
+'│                    NEXUSTRADER v1.1                            │\n' +
+'│              Mode: ' + (data.trading_mode || 'paper').toUpperCase().padEnd(41) + '│\n' +
+'│              Uptime: ' + String(Math.floor((data.uptime_seconds||0)/60)).padEnd(39) + '│\n' +
+'│              Updated: ' + time.padEnd(38) + '│\n' +
+'├────────────────────────────────────────────────────────────────┤\n' +
+'│                                                                │\n' +
+'│  📡 DATA INGESTION LAYER                                       │\n' +
+'│     Kraken WebSocket → ' + (data.tickers||[]).length + ' ticker(s) → Real-time OHLCV           │\n' +
+'│                                                                │\n' +
+'│  🔬 FEATURE ENGINE                                             │\n' +
+'│     RSI · MACD · BBands · ATR · OBV · VWAP · Stochastic       │\n' +
+'│     EMA Cross · Volume Profile · PPO · ADX · CCI              │\n' +
+'│                                                                │\n' +
+'│  🧠 STRATEGY ENSEMBLE (6 strategies per ticker)               │\n' +
+'│     MeanReversion · Momentum · TrendFollowing · Breakout      │\n' +
+'│     MLSignal · PatternRecognition                              │\n' +
+'│                                                                │\n' +
+'│  ⚖️  PROBABILITY ENGINE                                        │\n' +
+'│     Kelly Criterion · Expected Value · Risk/Reward            │\n' +
+'│     Signal Weighting · Regime Detection · Volatility Scaling  │\n' +
+'│                                                                │\n' +
+'│  🧬 POLICY NETWORK (Reinforcement Learning)                   │\n' +
+'│     NN-ARCH-C93B8F — 6 actions · Adaptive LR                  │\n' +
+'│     Experience Replay · Policy Gradient · TD Learning         │\n' +
+'│                                                                │\n' +
+'│  💰 EXECUTION ENGINE                                           │\n' +
+'│     ' + (data.trading_mode === 'live' ? 'LIVE KRAKEN EXECUTION'.padEnd(57) : 'Paper Trading (Simulation)'.padEnd(57)) + '│\n' +
+'│     Position Sizing · SL/TP · Trailing Stop · Cooldown Mgmt  │\n' +
+'│                                                                │\n' +
+'│  🛡️  RISK MANAGEMENT                                           │\n' +
+'│     KillSwitch · Max Drawdown · Correlation Hedge             │\n' +
+'│     Position Limits · Daily Goal Tracking · Circuit Breakers  │\n' +
+'│                                                                │\n' +
+'│  🤖 QUANT TEAM (AI Agents)                                    │\n' +
+'│     Quant Optimizer · Risk Auditor · Allocator · Asset Sel.   │\n' +
+'│     Developer · Strategist · Reviewer · Archival · Sentinel  │\n' +
+'│                                                                │\n' +
+'│  🔮 LLM INTEGRATION                                            │\n' +
+'│     ' + (data.llm_connected ? 'Llama 3.2 3B (chris-System:8080)'.padEnd(57) : 'DISCONNECTED'.padEnd(57)) + '│\n' +
+'│     Sentiment Analysis · Market Regime · Strategy Reasoning  │\n' +
+'│                                                                │\n' +
+'│  📊 DASHBOARD                                                  │\n' +
+'│     Lightweight Charts + Chart.js · Real-time WebSocket       │\n' +
+'│     Self-hosted (no CDN) · Nginx TLS 1.3 · FastAPI backend   │\n' +
+'│                                                                │\n' +
+'├────────────────────────────────────────────────────────────────┤\n' +
+'│                                                                │\n' +
+'│  📈 KEY METRICS                                                │\n' +
+'│     Balance: $' + ((data.balance||0)).toFixed(2).padEnd(47) + '│\n' +
+'│     Equity:  $' + ((data.equity||0)).toFixed(2).padEnd(47) + '│\n' +
+'│     Closed Trades: ' + String(data.closed_trades||0).padEnd(41) + '│\n' +
+'│     Win/Loss: ' + (data.win_count||0) + '/' + (data.loss_count||0).toString().padEnd(46) + '│\n' +
+'│     Max Drawdown: ' + String(data.max_drawdown_pct||0) + ' %'.padEnd(42) + '│\n' +
+'│     Health: ' + (data.health_status||'unknown').padEnd(49) + '│\n' +
+'│                                                                │\n' +
+'└────────────────────────────────────────────────────────────────┘</pre>' +
+        '</div>' +
+        '<div class="glass-panel" style="padding:16px;margin-bottom:8px">' +
+          '<h3 style="color:var(--neon-green);margin:0 0 8px 0">🔗 Service Map</h3>' +
+          '<pre style="font-size:11px;color:var(--text-secondary);margin:0">' +
+'nexustrader.local:443 (nginx)\n' +
+'  ├── /api/*         → FastAPI :8000 (NexusTrader bot)\n' +
+'  ├── /dashboard-v2/ → Static SPA (9 JS modules)\n' +
+'  └── WebSocket       → ws:// :8000/ws\n' +
+'\n' +
+'External Services:\n' +
+'  ├── 192.168.0.77:8080 → llama-server (Llama 3.2 3B)\n' +
+'  ├── 192.168.0.77:10250 → Proton Mail Bridge (socat)\n' +
+'  └── Kraken WebSocket → Real-time market data\n' +
+'</pre>' +
+        '</div>';
+    } catch (e) {
+      const el = byId('architecture-diagram');
+      if (el) el.innerHTML = '<p style="color:var(--neon-red)">Failed to load architecture: ' + e.message + '</p>';
+    }
   },
 
   async loadStrategy() {
     try {
-      const data = await API.signals();
       const el = byId('strategy-panel');
       if (!el) return;
-      el.innerHTML = data.signals
-        ? `<pre style="font-size:12px;white-space:pre-wrap;color:var(--text-secondary)">${JSON.stringify(data, null, 2)}</pre>`
-        : '<p style="color:var(--text-secondary)">No active signals</p>';
-    } catch (e) { /* silent */ }
+      el.innerHTML = '<p style="color:var(--text-secondary)">Loading strategy data...</p>';
+      const data = await API.signals();
+      if (!data || (Array.isArray(data) && !data.length) || (typeof data === 'object' && !Object.keys(data).length)) {
+        el.innerHTML = '<p style="color:var(--text-secondary)">No active signals — bot is idle waiting for entry conditions</p>';
+        return;
+      }
+      const display = Array.isArray(data) ? data : (data.signals || data);
+      el.innerHTML = '<pre style="font-size:12px;white-space:pre-wrap;color:var(--text-secondary);background:rgba(0,0,0,0.2);padding:12px;border-radius:8px;max-height:600px;overflow-y:auto">' + 
+        JSON.stringify(display, null, 2).replace(/</g, '&lt;') + '</pre>';
+    } catch (e) {
+      const el = byId('strategy-panel');
+      if (el) el.innerHTML = '<p style="color:var(--neon-red)">Failed to load strategy: ' + e.message + '</p>';
+    }
   },
 };
 document.addEventListener('DOMContentLoaded', () => { Logs.init(); if (typeof lucide !== 'undefined') setTimeout(() => lucide.createIcons(), 200); });
