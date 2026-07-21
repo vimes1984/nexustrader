@@ -147,16 +147,19 @@ class SimulatedTrader:
     """Replays historical candles through the strategy ensemble to collect
     training samples without touching live markets or real money.
     
-    For each candle:
-      1. Build state vector from indicators
-      2. Get weighted signal and strategy breakdown
-      3. Simulate a trade if signal exceeds threshold
-      4. Track PnL and record training sample
+    Uses look-ahead labeling: for each candle, computes the forward return
+    over the next N candles as the reward signal. This generates one sample
+    per candle (after warmup) instead of relying on sparse TP/SL hits.
     """
     
-    def __init__(self, orchestrator, ticker: str):
+    def __init__(self, orchestrator, ticker: str, lookahead: int = 12):
         self.orc = orchestrator
         self.ticker = ticker
+        self.lookahead = lookahead  # forward candles for reward calculation
+        
+        # Ensure ticker is initialized in the orchestrator before accessing ensembles
+        if hasattr(orchestrator, 'init_ticker') and ticker not in orchestrator.strategy_ensembles:
+            orchestrator.init_ticker(ticker)
         
         # Get the strategy ensemble and learning engine for this ticker
         self.ensemble = orchestrator.strategy_ensembles.get(ticker)
@@ -164,11 +167,10 @@ class SimulatedTrader:
         
         # Simulated state
         self.balance = 1000.0
-        self.position = None  # {'entry_price': float, 'size': float, 'direction': str}
         self.closed_trades = []
         self.samples = []
         
-        # Indicators buffer (rolling window for signal computation)
+        # Indicators buffer
         self.price_history = []
         self.indicator_buffer = []
         
@@ -278,95 +280,60 @@ class SimulatedTrader:
         return ema
     
     def simulate_trade(self, indicator: Dict, weighted_signal: float, 
-                       strategy_breakdown: Dict) -> Optional[TrainingSample]:
-        """Simulate a trade decision and record the outcome.
+                       strategy_breakdown: Dict, 
+                       future_candles: List[Dict] = None) -> Optional[TrainingSample]:
+        """Generate a training sample using look-ahead labeling.
         
-        Returns a TrainingSample if a trade was closed, None otherwise.
+        Instead of simulating live trades with TP/SL, this labels each candle
+        by looking at the forward return over `lookahead` candles.
+        
+        Returns a TrainingSample with:
+          - state: feature vector from this candle
+          - strategy_indices: which strategies were active
+          - alignment: whether signal direction matched actual outcome
+          - reward: forward return (normalized)
         """
-        close = indicator['close']
-        
-        # Position management
-        if self.position:
-            # Check TP/SL on existing position
-            entry = self.position['entry_price']
-            direction = self.position['direction']
-            
-            # Dynamic TP/SL based on ATR
-            atr = indicator['atr']
-            tp_pct = 0.03  # 3%
-            sl_pct = 0.015  # 1.5%
-            
-            if direction == 'long':
-                tp_price = entry * (1 + tp_pct)
-                sl_price = entry * (1 - sl_pct)
-                
-                if close >= tp_price or close <= sl_price:
-                    pnl = (close - entry) / entry * self.position['size'] * self.balance
-                    self.balance += pnl
-                    
-                    trade = {
-                        'symbol': self.ticker,
-                        'direction': direction,
-                        'entry_time': self.position['entry_time'],
-                        'exit_time': indicator['timestamp'],
-                        'entry_price': entry,
-                        'exit_price': close,
-                        'quantity': self.position['size'],
-                        'pnl': pnl,
-                        'pnl_percent': (close - entry) / entry * 100,
-                    }
-                    
-                    # Determine alignment for training
-                    # Positive alignment = the signal prediction matched the outcome
-                    alignment = 1.0 if pnl > 0 else -1.0
-                    if weighted_signal > 0 and pnl > 0:
-                        alignment = 1.0  # Bullish signal, profit → correct
-                    elif weighted_signal < 0 and pnl > 0:
-                        alignment = -1.0  # Bullish signal, profit from short → prediction wrong
-                    elif weighted_signal > 0 and pnl < 0:
-                        alignment = -1.0  # Bullish signal, loss → prediction wrong
-                    elif weighted_signal < 0 and pnl < 0:
-                        alignment = 0.5  # Bearish signal, loss → partially right direction
-                    
-                    # Build training sample
-                    state = self._build_state_vector(indicator)
-                    active_strategies = [
-                        i for i, (name, sig) in enumerate(strategy_breakdown.items())
-                        if abs(sig) > 0.3
-                    ]
-                    
-                    sample = TrainingSample(
-                        state=np.array(state),
-                        strategy_indices=active_strategies or [0],
-                        alignment=alignment,
-                        reward=pnl,
-                        ticker=self.ticker,
-                        timestamp=indicator['timestamp'],
-                    )
-                    
-                    self.closed_trades.append(trade)
-                    self.position = None
-                    return sample
-            
-            # Still holding
+        if not future_candles or len(future_candles) < self.lookahead:
             return None
         
-        # No position open — check if we should enter
-        signal_strength = abs(weighted_signal)
-        signal_threshold = 0.5
+        close = indicator['close']
         
-        if signal_strength >= signal_threshold:
-            direction = 'long' if weighted_signal > 0 else 'short'
-            size = min(0.1, self.balance * 0.02 / close)  # 2% position size
-            
-            self.position = {
-                'entry_price': close,
-                'size': size,
-                'direction': direction,
-                'entry_time': indicator['timestamp'],
-            }
+        # Compute forward return over lookahead candles
+        future_close = future_candles[self.lookahead - 1]['close']
+        forward_return = (future_close - close) / close
         
-        return None
+        # Normalize reward to [-1, 1] range via tanh
+        reward = np.tanh(forward_return * 20)  # 5% move → ~0.76 reward
+        
+        # Alignment: did the signal direction match the forward return?
+        if weighted_signal > 0 and forward_return > 0:
+            alignment = min(1.0, abs(forward_return) * 10)   # Strong bullish signal + up = great
+        elif weighted_signal < 0 and forward_return < 0:
+            alignment = min(1.0, abs(forward_return) * 10)   # Strong bearish signal + down = great
+        elif weighted_signal > 0 and forward_return < 0:
+            alignment = -min(1.0, abs(forward_return) * 10)  # Bullish signal but down = wrong
+        elif weighted_signal < 0 and forward_return > 0:
+            alignment = -min(1.0, abs(forward_return) * 10)  # Bearish signal but up = wrong
+        else:
+            alignment = 0.0  # Flat signal or flat market
+        
+        # Build training sample
+        state = self._build_state_vector(indicator)
+        active_strategies = [
+            i for i, (name, info) in enumerate(strategy_breakdown.items())
+            if isinstance(info, dict) and abs(info.get('signal', 0)) > 0.01
+        ]
+        
+        sample = TrainingSample(
+            state=np.array(state),
+            strategy_indices=active_strategies or [0],
+            alignment=alignment,
+            reward=reward,
+            ticker=self.ticker,
+            timestamp=indicator['timestamp'],
+        )
+        
+        return sample
     
     def _build_state_vector(self, indicator: Dict) -> np.ndarray:
         """Build the 8-element state vector like LearningEngine.get_state_vector()."""
@@ -492,54 +459,63 @@ class OfflineTrainer:
         return self.history
     
     def _train_batch(self, batch: List[TrainingSample]) -> Tuple[float, float, float]:
-        """Train on one minibatch. Returns (loss, avg_reward, entropy)."""
-        total_loss = 0.0
+        """Train on one minibatch using the policy network's own backward().
+        
+        The PolicyNetwork.backward(state, strategy_signals, trade_direction, reward)
+        handles forward pass, gradient computation, and weight update internally.
+        We adapt our training samples to match this interface.
+        """
+        if not batch:
+            return 0.0, 0.0, 0.0
+        
+        action_dim = self.engine.policy_net.action_dim
         
         for sample in batch:
-            # Forward pass
-            probs = self.engine.policy_net.forward(sample.state, training=True)
-            
-            # Policy gradient loss: -log(prob_selected) * alignment
-            # Average over active strategies
-            losses = []
+            # Build strategy_signals array matching action_dim
+            # strategy_indices tells us which strategies were active
+            strategy_signals = np.zeros(action_dim)
             for idx in sample.strategy_indices:
-                if idx < len(probs):
-                    losses.append(-np.log(max(probs[idx], 1e-8)) * sample.alignment)
+                if 0 <= idx < action_dim:
+                    strategy_signals[idx] = sample.alignment
             
-            loss = float(np.mean(losses)) if losses else 0.0
-            total_loss += loss
+            # Reward: use alignment * |reward| as the training signal
+            pnl_reward = sample.alignment * abs(sample.reward)
             
-            # Backward pass
-            d_out = np.zeros_like(probs)
-            for idx in sample.strategy_indices:
-                if idx < len(probs):
-                    d_out[idx] = -sample.alignment / max(probs[idx], 1e-8)
-            d_out = d_out / len(sample.strategy_indices)
+            # Trade direction: 1 for positive alignment, -1 for negative
+            trade_direction = 1 if sample.alignment > 0 else (-1 if sample.alignment < 0 else 0)
             
-            self.engine.policy_net.backward(d_out)
+            # Use the policy network's own training step
+            self.engine.policy_net.backward(
+                sample.state, 
+                strategy_signals.tolist(), 
+                trade_direction, 
+                pnl_reward
+            )
         
-        # Apply gradients
-        if hasattr(self.engine.policy_net, 'apply_gradients'):
-            self.engine.policy_net.apply_gradients()
-        
-        avg_loss = total_loss / len(batch)
+        # Compute metrics on the batch for logging (no separate forward needed)
         avg_reward = float(np.mean([s.reward for s in batch]))
         
-        # Entropy: -sum(p * log(p))
-        probs_all = self.engine.policy_net.forward(batch[0].state, training=False)
+        # Entropy estimate from a sample forward pass
+        probs_all = self.engine.policy_net.forward(batch[0].state)
         entropy = float(-np.sum(probs_all * np.log(probs_all + 1e-8)))
+        
+        # We don't have per-step loss from the black-box backward(), so estimate
+        avg_loss = 1.0 - abs(avg_reward)  # proxy: lower when rewards are stronger
         
         return avg_loss, avg_reward, entropy
     
     def _compute_val_loss(self, val_samples: List[TrainingSample]) -> float:
-        """Compute validation loss without updating weights."""
-        total_loss = 0.0
+        """Compute validation loss as mean alignment error (no weight updates)."""
+        if not val_samples:
+            return 0.0
+        total_err = 0.0
         for sample in val_samples:
-            probs = self.engine.policy_net.forward(sample.state, training=False)
-            for idx in sample.strategy_indices:
-                if idx < len(probs):
-                    total_loss += -np.log(max(probs[idx], 1e-8)) * sample.alignment
-        return total_loss / len(val_samples) if val_samples else 0.0
+            probs = self.engine.policy_net.forward(sample.state)
+            # Expected probability mass on active strategies should correlate with alignment
+            expected = max(0.0, sample.alignment)
+            actual = sum(probs[idx] for idx in sample.strategy_indices if 0 <= idx < len(probs))
+            total_err += abs(actual - expected)
+        return total_err / len(val_samples)
     
     def _save_policy_state(self) -> str:
         """Export current policy network weights as JSON."""
@@ -550,7 +526,7 @@ class OfflineTrainer:
     def _restore_policy_state(self, json_str: str):
         """Restore policy network weights from JSON."""
         if hasattr(self.engine.policy_net, 'from_json') and json_str:
-            self.engine.policy_net = type(self.engine.policy_net).from_json(json_str)
+            self.engine.policy_net.from_json(json_str)
     
     def summary(self) -> Dict:
         """Return training summary as a dict for dashboard display."""
@@ -605,6 +581,10 @@ class HistoricalPipeline:
         """
         _log.info(f"=== Pipeline: {ticker} ({since_days}d history, {epochs} epochs) ===")
         
+        # Ensure ticker is initialized in the orchestrator before running pipeline
+        if hasattr(self.orc, 'init_ticker') and ticker not in self.orc.strategy_ensembles:
+            self.orc.init_ticker(ticker)
+        
         # 1. Fetch historical data
         candles = self.fetcher.fetch_candles(ticker, since_days)
         if len(candles) < 100:
@@ -617,10 +597,16 @@ class HistoricalPipeline:
             json.dump(candles, f)
         _log.info(f"  Saved {len(candles)} candles to {data_path}")
         
-        # 2. Simulate trading
-        trader = SimulatedTrader(self.orc, ticker)
-        for candle in candles:
+        # 2. Simulate trading with look-ahead labeling
+        trader = SimulatedTrader(self.orc, ticker, lookahead=12)
+        warmup = 50  # candles needed for indicator calculation
+        
+        for i in range(len(candles) - trader.lookahead):
+            candle = candles[i]
             indicator = trader.add_indicator(candle)
+            
+            if i < warmup:
+                continue  # Skip warmup — not enough indicator data yet
             
             # Get strategy signal
             if trader.ensemble:
@@ -631,30 +617,13 @@ class HistoricalPipeline:
                 weighted_signal = 0.0
                 strategy_breakdown = {}
             
-            sample = trader.simulate_trade(indicator, weighted_signal, strategy_breakdown)
+            # Generate sample using look-ahead (current candle + next 12)
+            future = candles[i+1 : i+1+trader.lookahead]
+            sample = trader.simulate_trade(indicator, weighted_signal, strategy_breakdown, future)
             if sample:
                 trader.samples.append(sample)
         
-        # Force-close any open position at the end
-        if trader.position and candles:
-            last_close = candles[-1]['close']
-            entry = trader.position['entry_price']
-            pnl = (last_close - entry) / entry * trader.position['size'] * trader.balance
-            trader.closed_trades.append({
-                'symbol': ticker,
-                'direction': trader.position['direction'],
-                'entry_time': trader.position['entry_time'],
-                'exit_time': candles[-1]['timestamp'],
-                'entry_price': entry,
-                'exit_price': last_close,
-                'quantity': trader.position['size'],
-                'pnl': pnl,
-            })
-            trader.position = None
-        
-        _log.info(f"  Simulated {len(trader.closed_trades)} trades, "
-                 f"collected {len(trader.samples)} training samples "
-                 f"(final balance: ${trader.balance:.2f})")
+        _log.info(f"  Collected {len(trader.samples)} training samples from {len(candles)} candles")
         
         # 3. Train offline
         if trader.samples and trader.learner:
@@ -684,9 +653,7 @@ class HistoricalPipeline:
         return {
             'ticker': ticker,
             'candles': len(candles),
-            'trades': len(trader.closed_trades),
             'samples': len(trader.samples),
-            'final_balance': trader.balance,
             'training': summary,
         }
     

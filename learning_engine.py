@@ -266,13 +266,11 @@ class PolicyNetwork:
 
         # Migrate old action_dim weights to current expected action_dim (6 strategies)
         current_action_dim = self.W[-1].shape[1]
-        expected_dim = min(12, max(6, current_action_dim))  # clamp between 6-12
-        if expected_dim != current_action_dim and current_action_dim in (7, 12):
-            logging.info("[WEIGHT MIGRATION] Truncating action_dim {0}→{1} (6 strategies active)".format(current_action_dim, expected_dim))
-            hidden_dim = self.W[-1].shape[0]
-            # Keep first 6 weights (EMACrossover, ML, Kalman, MACD, VWAP, ATRB)
-            self.W[-1] = self.W[-1][:, :6]
-            self.b[-1] = self.b[-1][:, :6]
+        expected_dim = self.action_dim  # Use self.action_dim instead of recomputing
+        if expected_dim != current_action_dim:
+            logging.info(f"[WEIGHT MIGRATION] Truncating action_dim {current_action_dim}→{expected_dim}")
+            self.W[-1] = self.W[-1][:, :expected_dim]
+            self.b[-1] = self.b[-1][:, :expected_dim]
 
         # Init optimizer momentum/velocity if missing
         self.m_W = [np.zeros_like(w) for w in self.W]
