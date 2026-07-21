@@ -3551,6 +3551,250 @@ async def redirect_dashboard_trailing():
 
 app.mount("/dashboard", StaticFiles(directory=get_resource_path("dashboard")), name="dashboard")
 
+
+# ---------------------------------------------------------------------------
+# LLM Management API
+# ---------------------------------------------------------------------------
+
+@app.get("/api/llm/status")
+def api_llm_status():
+    """Return LLaMA server status and orchestrator LLM state."""
+    from llm_client import LLMClient
+    try:
+        llm_enabled = orchestrator.llm_enabled if hasattr(orchestrator, 'llm_enabled') else False
+        llm_client = orchestrator.llm_client if hasattr(orchestrator, 'llm_client') else None
+        
+        status = {
+            "llm_enabled": llm_enabled,
+            "server_connected": False,
+            "last_sentiment": orchestrator.llm_last_sentiment if hasattr(orchestrator, 'llm_last_sentiment') else None,
+            "last_sentiment_time": orchestrator.llm_last_sentiment_time if hasattr(orchestrator, 'llm_last_sentiment_time') else None,
+            "endpoint": getattr(llm_client, 'endpoint', 'unknown') if llm_client else 'not configured',
+            "model": "Llama-3.2-3B-Instruct-Q4_K_M",
+            "speed_toks": "~7.9",
+            "poll_interval_sec": orchestrator.llm_sentiment_interval if hasattr(orchestrator, 'llm_sentiment_interval') else 900,
+        }
+        
+        # Quick health check
+        if llm_client:
+            try:
+                import urllib.request
+                r = urllib.request.urlopen(llm_client.endpoint + '/health', timeout=3)
+                if r.getcode() == 200:
+                    status['server_connected'] = True
+            except Exception:
+                pass
+        
+        return status
+    except Exception as e:
+        logging.error(f"LLM status error: {e}")
+        return {"llm_enabled": False, "error": str(e)}
+
+@app.post("/api/llm/test")
+def api_llm_test():
+    """Test LLaMA connection with a simple ping."""
+    import urllib.request, json as _json
+    try:
+        llm_client = orchestrator.llm_client if hasattr(orchestrator, 'llm_client') else None
+        if not llm_client:
+            return {"ok": False, "error": "LLMClient not configured"}
+        
+        r = urllib.request.urlopen(llm_client.endpoint + '/health', timeout=5)
+        health = _json.loads(r.read())
+        
+        # Try a quick completion
+        result = llm_client._complete("Say OK", max_tokens=5)
+        
+        return {
+            "ok": True,
+            "health": health,
+            "test_response": result[:50] if result else None,
+            "endpoint": llm_client.endpoint,
+        }
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:200]}
+
+@app.post("/api/llm/sentiment")
+def api_llm_sentiment_force():
+    """Force immediate LLaMA sentiment analysis for active tickers."""
+    try:
+        llm_client = orchestrator.llm_client if hasattr(orchestrator, 'llm_client') else None
+        if not llm_client:
+            return {"ok": False, "error": "LLMClient not configured"}
+        
+        # Use recent trade data
+        trades = orchestrator.execution_engine.closed_trades[-5:] if hasattr(orchestrator.execution_engine, 'closed_trades') else []
+        headlines = orchestrator.latest_news_sentiment.get('headlines', ['Crypto market analysis requested']) if hasattr(orchestrator, 'latest_news_sentiment') else ['Crypto market analysis']
+        
+        ticker = orchestrator.tickers[0] if orchestrator.tickers else 'BTC-USD'
+        price = orchestrator.latest_ticks.get(ticker, {}).get('close', 0) if hasattr(orchestrator, 'latest_ticks') else 0
+        
+        result = llm_client.analyze_sentiment(
+            headlines=headlines[:5],
+            market_summary=f"{ticker} ${price:.0f}"
+        )
+        
+        return {"ok": True, "sentiment": result}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:200]}
+
+@app.post("/api/llm/regime")
+def api_llm_regime_force():
+    """Force immediate LLaMA regime classification."""
+    try:
+        llm_client = orchestrator.llm_client if hasattr(orchestrator, 'llm_client') else None
+        if not llm_client:
+            return {"ok": False, "error": "LLMClient not configured"}
+        
+        ticker = orchestrator.tickers[0] if orchestrator.tickers else 'BTC-USD'
+        price = orchestrator.latest_ticks.get(ticker, {}).get('close', 0) if hasattr(orchestrator, 'latest_ticks') else 0
+        
+        result = llm_client.classify_regime(
+            ticker_data={
+                'ticker': ticker,
+                'price': price,
+                'change_24h': 0,
+                'volume_24h': 0,
+                'rsi_14': 50,
+                'volatility_30d': 0.02,
+                'trend': 'unknown',
+                'near_support': False,
+                'near_resistance': False,
+            }
+        )
+        
+        return {"ok": True, "regime": result}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:200]}
+
+@app.get("/api/llm/config")
+def api_llm_config_get():
+    """Get LLM configuration."""
+    return {
+        "endpoint": getattr(getattr(orchestrator, 'llm_client', None), 'endpoint', 'http://192.168.0.77:8080'),
+        "poll_interval_sec": orchestrator.llm_sentiment_interval if hasattr(orchestrator, 'llm_sentiment_interval') else 900,
+        "timeout_sec": getattr(getattr(orchestrator, 'llm_client', None), 'timeout', 60),
+        "enabled": orchestrator.llm_enabled if hasattr(orchestrator, 'llm_enabled') else False,
+    }
+
+@app.post("/api/llm/config")
+def api_llm_config_save(request: Request):
+    """Save LLM configuration."""
+    import asyncio as _asyncio
+    try:
+        data = _asyncio.run(request.json()) if hasattr(request, 'json') else {}
+    except Exception:
+        data = {}
+    
+    changes = []
+    
+    # Update endpoint
+    if 'endpoint' in data and hasattr(orchestrator, 'llm_client') and orchestrator.llm_client:
+        orchestrator.llm_client.endpoint = data['endpoint'].rstrip('/')
+        changes.append('endpoint')
+    
+    # Update poll interval
+    if 'poll_interval_sec' in data:
+        orchestrator.llm_sentiment_interval = int(data['poll_interval_sec'])
+        changes.append('poll_interval')
+    
+    # Update timeout
+    if 'timeout_sec' in data and hasattr(orchestrator, 'llm_client') and orchestrator.llm_client:
+        orchestrator.llm_client.timeout = int(data['timeout_sec'])
+        changes.append('timeout')
+    
+    # Update enabled
+    if 'enabled' in data:
+        orchestrator.llm_enabled = bool(data['enabled'])
+        changes.append('enabled')
+    
+    return {"ok": True, "changes": changes}
+
+# ---------------------------------------------------------------------------
+# NN Architecture API
+# ---------------------------------------------------------------------------
+
+@app.get("/api/nn/architecture")
+def api_nn_architecture_get():
+    """Get current NN architecture setting."""
+    arch = database.load_setting("nn_architecture", "mlp")
+    return {
+        "architecture": arch,
+        "available": ["mlp", "lstm", "transformer"],
+        "description": {
+            "mlp": "8 features -> 12 hidden ReLU -> 6 strategy Softmax (default)",
+            "lstm": "TokenEmbedder(32 vocab -> 64d) -> 2-layer LSTM -> Softmax",
+            "transformer": "4-head MHA encoder (2 layers) -> Mean Pool -> Softmax",
+        }
+    }
+
+@app.post("/api/nn/architecture")
+def api_nn_architecture_set(request: Request):
+    """Set NN architecture. Requires bot restart to take effect."""
+    import asyncio as _asyncio
+    try:
+        data = _asyncio.run(request.json()) if hasattr(request, 'json') else {}
+    except Exception:
+        data = {}
+    
+    arch = data.get('architecture', 'mlp')
+    if arch not in ('mlp', 'lstm', 'transformer'):
+        return {"ok": False, "error": f"Invalid architecture: {arch}. Use mlp, lstm, or transformer."}
+    
+    database.save_setting("nn_architecture", arch)
+    return {"ok": True, "architecture": arch, "note": "Restart bot to apply new architecture."}
+
+@app.post("/api/nn/tests")
+def api_nn_tests_run():
+    """Run NN unit tests and return results."""
+    import subprocess, os
+    try:
+        base = os.path.dirname(os.path.abspath(__file__))
+        result = subprocess.run(
+            [os.path.join(base, 'venv', 'bin', 'python3'), '-m', 'unittest',
+             'tests.test_nn_tokenizer', 'tests.test_transformer', '-v'],
+            capture_output=True, text=True, timeout=30, cwd=base
+        )
+        return {
+            "ok": result.returncode == 0,
+            "passed": result.stdout.count(' ok\n') + result.stdout.count(' OK\n'),
+            "failed": result.stdout.count('FAIL') + result.stdout.count('ERROR'),
+            "output": result.stdout[-2000:] + result.stderr[-500:],
+        }
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:200]}
+
+@app.post("/api/training/run")
+def api_training_run(request: Request):
+    """Trigger a historical training pipeline run for a ticker."""
+    import asyncio as _asyncio
+    try:
+        data = _asyncio.run(request.json()) if hasattr(request, 'json') else {}
+    except Exception:
+        data = {}
+    
+    ticker = data.get('ticker', orchestrator.tickers[0] if orchestrator.tickers else 'BTC-USD')
+    since_days = int(data.get('days', 30))
+    epochs = int(data.get('epochs', 20))
+    
+    def run_training():
+        try:
+            from historical_pipeline import HistoricalPipeline
+            pipeline = HistoricalPipeline(orchestrator)
+            result = pipeline.run_ticker(ticker, since_days=since_days, epochs=epochs)
+            logging.info(f"Training complete for {ticker}: {result}")
+        except Exception as e:
+            logging.error(f"Training failed: {e}")
+    
+    import threading
+    t = threading.Thread(target=run_training, daemon=True)
+    t.start()
+    
+    return {
+        "ok": True,
+        "message": f"Training started for {ticker} ({since_days}d, {epochs} epochs). This runs in background.",
+        "ticker": ticker,
+    }
 if __name__ == "__main__":
     import sys
     is_headless = "--headless" in sys.argv

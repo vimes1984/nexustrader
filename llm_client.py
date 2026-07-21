@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 llm_client.py — LLaMA integration for NexusTrader
 
