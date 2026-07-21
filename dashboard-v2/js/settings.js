@@ -93,7 +93,13 @@ const Settings = {
     App.toast('Testing broker connection...', 'info');
     try {
       const data = await API.testBroker();
-      App.toast(data.ok ? 'Broker connected' : 'Broker connection failed: ' + (data.error || ''), data.ok ? 'success' : 'error');
+      const success = data.ok || data.connected || data.status === 'success';
+      App.toast(success ? 'Broker connected ✅ ' + (data.message || '') : 'Broker connection failed: ' + (data.error || 'unknown'), success ? 'success' : 'error');
+      // Show balances in the status area
+      if (data.balances) {
+        const el = byId('backtest-results');
+        if (el) el.innerHTML = '<pre style="font-size:11px;white-space:pre-wrap">Balances:\n' + JSON.stringify(data.balances, null, 2) + '</pre>';
+      }
     } catch (e) {
       App.toast('Test failed: ' + e.message, 'error');
     }
