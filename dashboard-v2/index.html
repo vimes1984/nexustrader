@@ -209,6 +209,14 @@ body.debug #js-indicator { display: block !important; }
       </div>
     </div>
 
+    <!-- Chart Type Toggle -->
+    <div class="flex-between" style="margin-bottom:8px">
+      <div class="chart-type-toggles">
+        <button class="btn btn-sm chart-type-btn active" data-type="candles">📊 Candles</button>
+        <button class="btn btn-sm chart-type-btn" data-type="line">📈 Line</button>
+      </div>
+      <span id="chart-data-info" style="font-size:10px;color:var(--text-secondary)"></span>
+    </div>
     <!-- Main Chart -->
     <div class="glass-panel chart-container" id="main-chart"></div>
 

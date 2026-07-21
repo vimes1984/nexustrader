@@ -7,6 +7,8 @@ const Dashboard = {
   chart: null,
   weightsChart: null,
   chartSeries: {},
+  chartType: 'candles', // 'candles' or 'line'
+  chartData: [],        // cached loaded data
 
   init() {
     this.initCharts();
@@ -15,6 +17,55 @@ const Dashboard = {
     document.addEventListener('nt:wsMessage', (e) => this.onWSMessage(e.detail));
     document.addEventListener('nt:tickerChange', (e) => this.onTickerChange(e.detail));
     document.addEventListener('nt:statusUpdate', (e) => this.onStatusUpdate(e.detail));
+    // Chart type toggle buttons
+    document.querySelectorAll('.chart-type-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.chart-type-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        this.chartType = btn.dataset.type;
+        this.redrawChart();
+      });
+    });
+  },
+
+  /** Redraw chart with current type and cached data */
+  redrawChart() {
+    if (!this.chart || !this.chartSeries.candles || !this.chartData.length) return;
+    this.chartSeries.candles.setData([]);
+    this.chartSeries.volume.setData([]);
+    if (this.chartType === 'line') {
+      // Line mode: use close prices only
+      const lineData = this.chartData.map(d => ({
+        time: d.time,
+        value: d.close,
+      }));
+      // Replace candlestick with line by setting flat candles
+      const flatData = this.chartData.map(d => ({
+        time: d.time,
+        open: d.close, high: d.close, low: d.close, close: d.close,
+      }));
+      this.chartSeries.candles.setData(flatData);
+      // Add line series overlay
+      this.chartSeries.candles.applyOptions({
+        upColor: '#3b82f6',
+        downColor: '#3b82f6',
+        borderUpColor: '#3b82f6',
+        borderDownColor: '#3b82f6',
+        wickUpColor: '#3b82f6',
+        wickDownColor: '#3b82f6',
+      });
+    } else {
+      // Candlestick mode
+      this.chartSeries.candles.applyOptions({
+        upColor: '#10b981',
+        downColor: '#f43f5e',
+        borderUpColor: '#10b981',
+        borderDownColor: '#f43f5e',
+        wickUpColor: '#10b981',
+        wickDownColor: '#f43f5e',
+      });
+      this.chartSeries.candles.setData(this.chartData);
+    }
   },
 
   /** Initialize Lightweight Charts */
@@ -201,14 +252,22 @@ const Dashboard = {
   async loadHistory(ticker) {
     if (ticker === 'portfolio' || !this.chart || !this.chartSeries.candles) return;
     try {
+      const infoEl = byId('chart-data-info');
+      if (infoEl) infoEl.textContent = 'Loading ' + ticker + '...';
+
       const data = await API.history(ticker);
-      if (!data || (Array.isArray(data) && !data.length)) return;
+      if (!data || (Array.isArray(data) && !data.length)) {
+        if (infoEl) infoEl.textContent = 'No data for ' + ticker;
+        return;
+      }
 
-      // Handle both {candles:[...]} and flat [{...}] response formats
       const rows = Array.isArray(data) ? data : (data.candles || data.data || []);
-      if (!rows.length) return;
+      if (!rows.length) {
+        if (infoEl) infoEl.textContent = 'Empty dataset';
+        return;
+      }
 
-      // Parse timestamp to Unix seconds (LightweightCharts needs number, not string)
+      // Parse timestamp to Unix seconds
       const toTime = (ts) => {
         if (typeof ts === 'number') return ts < 1e12 ? ts : ts / 1000;
         if (typeof ts === 'string') {
@@ -218,8 +277,6 @@ const Dashboard = {
         return null;
       };
 
-      // Check if data has OHLC or just close prices
-      const hasOHLC = rows[0].open !== undefined;
       const candleData = [];
       for (const c of rows) {
         const time = toTime(c.timestamp || c.time);
@@ -231,12 +288,26 @@ const Dashboard = {
         if (isNaN(open) || isNaN(close)) continue;
         candleData.push({ time, open, high, low, close });
       }
-      if (candleData.length) {
-        this.chartSeries.candles.setData(candleData);
+
+      if (!candleData.length) {
+        if (infoEl) infoEl.textContent = 'No valid candles';
+        return;
       }
 
-      // Volume
-      if (this.chartSeries.volume) {
+      // Sort by time ascending (required by lightweight-charts)
+      candleData.sort((a, b) => a.time - b.time);
+
+      // Cache data for chart type switching
+      this.chartData = candleData;
+      if (infoEl) infoEl.textContent = candleData.length + ' candles loaded';
+
+      // Render according to current chart type
+      this.redrawChart();
+
+      // Volume (the /api/history endpoint doesn't return volume, so skip)
+      // Volume is optional — only attempt if data has volume field
+      const hasVolume = rows.some(r => r.volume != null);
+      if (hasVolume && this.chartSeries.volume) {
         const volData = [];
         for (const v of rows) {
           const time = toTime(v.timestamp || v.time);
@@ -248,6 +319,8 @@ const Dashboard = {
       }
     } catch (e) {
       console.error('Failed to load history:', e);
+      const infoEl = byId('chart-data-info');
+      if (infoEl) infoEl.textContent = 'Chart error: ' + e.message;
     }
   },
 

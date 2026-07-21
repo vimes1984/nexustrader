@@ -37,6 +37,14 @@ const App = {
       lucide.createIcons();
     }
     App.emit('ready');
+    // Restore tab from URL hash
+    const hash = location.hash.replace('#', '');
+    if (hash && hash !== 'dashboard') {
+      const tabId = 'tab-' + hash;
+      if (document.getElementById(tabId)) {
+        this.switchTab(tabId);
+      }
+    }
     // Debug: log all nav-tab clicks to help diagnose nav issues
     document.querySelectorAll('.nav-tab').forEach((tab, i) => {
       const orig = tab.onclick;
@@ -127,10 +135,12 @@ const App = {
     }
     // Close drawer on outside click
     document.addEventListener('click', (e) => {
-      if (this.el.notificationDropdown.style.display === 'flex' &&
-          !e.target.closest('.notification-dropdown-container')) {
-        this.el.notificationDropdown.style.display = 'none';
-      }
+      try {
+        if (this.el.notificationDropdown && this.el.notificationDropdown.style.display === 'flex' &&
+            !e.target.closest('.notification-dropdown-container')) {
+          this.el.notificationDropdown.style.display = 'none';
+        }
+      } catch(_) { /* silent */ }
     });
   },
 
@@ -175,6 +185,10 @@ const App = {
 
       this.state.activeTab = tabId.replace('tab-', '');
       App.emit('tabChange', this.state.activeTab);
+      // Update URL hash for bookmarkability
+      if (typeof history !== 'undefined') {
+        history.replaceState(null, '', '#' + this.state.activeTab);
+      }
       // Re-render icons in the newly visible tab
       if (typeof lucide !== 'undefined') {
         setTimeout(() => lucide.createIcons(), 50);
@@ -236,6 +250,7 @@ const App = {
     try {
       const data = await API.initState();
       this.state.tickers = data.tickers || [];
+      this.state.tickerPrices = data.ticker_prices || {};
       this.state.tradingMode = data.trading_mode || 'live';
       this.state.riskMode = data.risk_mode || 'aggressive';
       this.state.activeTicker = this.state.tickers[0] || 'BTC-USD';
@@ -267,11 +282,15 @@ const App = {
     if (!container) return;
     container.innerHTML = '';
 
+    // Pre-load ticker prices
+    const prices = this.state.tickerPrices || {};
+
     this.state.tickers.forEach(t => {
       const btn = document.createElement('button');
       btn.className = 'ticker-tab';
       btn.dataset.ticker = t;
-      btn.innerHTML = `<span class="ticker-tab-name">${t}</span><span class="ticker-tab-price" id="tab-price-${t}">$0.00</span>`;
+      const price = prices[t] ? '$' + Number(prices[t]).toFixed(2) : '$0.00';
+      btn.innerHTML = '<span class="ticker-tab-name">' + t + '</span><span class="ticker-tab-price" id="tab-price-' + t + '">' + price + '</span>';
       btn.addEventListener('click', () => this.selectTicker(t));
       container.appendChild(btn);
     });
@@ -370,10 +389,14 @@ const App = {
       this.el.botStatus.style.borderColor = 'var(--neon-green)';
       this.el.botStatus.querySelector('.dot').style.background = 'var(--neon-green)';
       this.el.statusText.textContent = 'LIVE';
-    } else {
+    } else if (this.state.tradingMode === 'paper') {
       this.el.botStatus.style.borderColor = 'var(--neon-blue)';
       this.el.botStatus.querySelector('.dot').style.background = 'var(--neon-blue)';
-      this.el.statusText.textContent = this.state.isPaused ? 'Paused' : 'Simulating';
+      this.el.statusText.textContent = this.state.isPaused ? 'Paused' : 'Paper Trading';
+    } else {
+      this.el.botStatus.style.borderColor = 'var(--neon-yellow)';
+      this.el.botStatus.querySelector('.dot').style.background = 'var(--neon-yellow)';
+      this.el.statusText.textContent = this.state.tradingMode || 'Idle';
     }
   },
 
