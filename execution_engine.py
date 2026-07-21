@@ -632,11 +632,13 @@ class ExecutionEngine:
 
         return None
 
-    def get_equity(self, current_prices):
+    def get_equity(self, current_prices=None):
         """Calculates current total portfolio equity across all active positions.
         
-        current_prices: dict of symbol -> current_price
+        current_prices: dict of symbol -> current_price (default empty dict)
         """
+        if current_prices is None:
+            current_prices = {}
         if self.trading_mode == "live":
             holdings = getattr(self, "live_holdings", {})
             if not holdings:

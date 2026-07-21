@@ -3,6 +3,9 @@ import sqlite3
 import json
 import urllib.request
 import logging
+from mutation_guard import should_apply_agent_mutation, log_blocked_mutation
+
+AGENT_NAME = "agent_self_developer"
 import subprocess
 
 DB_PATH = os.path.expanduser("~/.nexustrader/nexustrader.db")
@@ -177,6 +180,9 @@ The "find" blocks MUST MATCH EXACTLY (whitespace, newlines, etc.) to the existin
 
 
 def save_setting(key, value):
+    if not should_apply_agent_mutation(AGENT_NAME):
+        log_blocked_mutation(AGENT_NAME, key, value)
+        return
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))

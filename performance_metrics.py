@@ -25,25 +25,7 @@ def calculate_metrics(equity_curve: List[float], trades: List[dict]) -> Performa
     m = PerformanceMetrics()
     m.trade_count = len(trades)
 
-    if not trades:
-        return m
-
-    pnls = [t.get("pnl", 0.0) for t in trades]
-    winners = [p for p in pnls if p > 0]
-    losers = [p for p in pnls if p <= 0]
-
-    m.total_pnl = sum(pnls)
-    m.win_rate = len(winners) / len(pnls) if pnls else 0.0
-    m.avg_trade_pnl = m.total_pnl / len(pnls) if pnls else 0.0
-    m.avg_winner = sum(winners) / len(winners) if winners else 0.0
-    m.avg_loser = sum(losers) / len(losers) if losers else 0.0
-
-    gross_profit = sum(winners)
-    gross_loss = abs(sum(losers))
-    m.profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else (float("inf") if gross_profit > 0 else 0.0)
-
-    m.expectancy = (m.win_rate * m.avg_winner) + ((1 - m.win_rate) * m.avg_loser)
-
+    # Process equity curve FIRST (before early return for empty trades)
     if equity_curve and len(equity_curve) > 1:
         peak = equity_curve[0]
         max_dd = 0.0
@@ -66,9 +48,29 @@ def calculate_metrics(equity_curve: List[float], trades: List[dict]) -> Performa
             r = (curr - prev) / prev if prev > 0 else 0.0
             returns.append(r)
         n = len(returns)
-        mean_r = sum(returns) / n
-        variance = sum((r - mean_r) ** 2 for r in returns) / n
-        std_r = math.sqrt(variance) if variance > 0 else 0.0
-        m.sharpe = (mean_r / std_r * math.sqrt(252)) if std_r > 0 else 0.0
+        if n > 1:
+            mean_r = sum(returns) / n
+            variance = sum((r - mean_r) ** 2 for r in returns) / (n - 1)
+            std_r = math.sqrt(variance) if variance > 0 else 0.0
+            m.sharpe = (mean_r / std_r * math.sqrt(252)) if std_r > 1e-10 else 0.0
+
+    if not trades:
+        return m
+
+    pnls = [t.get("pnl", 0.0) for t in trades]
+    winners = [p for p in pnls if p > 0]
+    losers = [p for p in pnls if p <= 0]
+
+    m.total_pnl = sum(pnls)
+    m.win_rate = len(winners) / len(pnls) if pnls else 0.0
+    m.avg_trade_pnl = m.total_pnl / len(pnls) if pnls else 0.0
+    m.avg_winner = sum(winners) / len(winners) if winners else 0.0
+    m.avg_loser = sum(losers) / len(losers) if losers else 0.0
+
+    gross_profit = sum(winners)
+    gross_loss = abs(sum(losers))
+    m.profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else (float("inf") if gross_profit > 0 else 0.0)
+
+    m.expectancy = (m.win_rate * m.avg_winner) + ((1 - m.win_rate) * m.avg_loser)
 
     return m

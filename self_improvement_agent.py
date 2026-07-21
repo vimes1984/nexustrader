@@ -3,6 +3,9 @@ import json
 import sqlite3
 import numpy as np
 import logging
+from mutation_guard import should_apply_agent_mutation, log_blocked_mutation
+
+AGENT_NAME = "self_improvement_agent"
 import urllib.request
 
 DB_PATH = os.path.expanduser("~/.nexustrader/nexustrader.db")
@@ -18,6 +21,9 @@ def load_settings():
     return {r[0]: r[1] for r in rows}
 
 def save_setting(key, value):
+    if not should_apply_agent_mutation(AGENT_NAME):
+        log_blocked_mutation(AGENT_NAME, key, value)
+        return
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))

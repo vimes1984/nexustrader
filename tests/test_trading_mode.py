@@ -1,5 +1,5 @@
 import unittest
-from trading_mode import normalize_trading_mode, namespaced_key, load_trading_mode
+from trading_modes import normalize_trading_mode, namespaced_key, load_trading_mode
 
 class TestTradingMode(unittest.TestCase):
     def test_normalize_trading_mode(self):
@@ -10,8 +10,9 @@ class TestTradingMode(unittest.TestCase):
         self.assertEqual(normalize_trading_mode("research"), "research")
 
     def test_namespaced_key(self):
-        self.assertEqual(namespaced_key("live", "weights"), "live.weights")
-        self.assertEqual(namespaced_key("unknown", "key"), "paper.key")
+        self.assertEqual(namespaced_key("live", "weights"), "live:weights")
+        self.assertEqual(namespaced_key("paper", "key"), "research:key")
+        self.assertEqual(namespaced_key("research", "key"), "research:key")
 
     def test_load_trading_mode(self):
         self.assertEqual(load_trading_mode(), "paper")

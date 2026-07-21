@@ -31,9 +31,16 @@ class TestPerformanceMetrics(unittest.TestCase):
         self.assertAlmostEqual(m.max_drawdown, 0.19)
 
     def test_sharpe_ratio(self):
-        eq = [100.0, 101.0, 102.01, 103.0301]
+        # Monotonic growth with small noise — positive Sharpe expected
+        eq = [100.0, 100.5, 101.2, 100.8, 102.5, 103.0, 102.9, 104.3]
         m = calculate_metrics(eq, [])
         self.assertTrue(m.sharpe > 0)
+
+    def test_zero_variance_sharpe(self):
+        # Perfectly flat equity curve — Sharpe should be 0 (no risk signal)
+        eq = [100.0, 100.0, 100.0]
+        m = calculate_metrics(eq, [])
+        self.assertEqual(m.sharpe, 0.0)
 
 if __name__ == "__main__":
     unittest.main()

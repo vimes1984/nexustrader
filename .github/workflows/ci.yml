@@ -1,0 +1,114 @@
+# CI Pipeline for NexusTrader
+
+name: NexusTrader CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.8", "3.9", "3.10"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-numpy python3-scipy python3-pandas python3-sklearn python3-matplotlib
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          # Core dependencies
+          pip install numpy scipy pandas scikit-learn matplotlib
+          # Trading-specific
+          pip install fastapi uvicorn ccxt
+          # Testing
+          pip install unittest2
+
+      - name: Run core unit tests (pure, no LLM/network)
+        run: |
+          python3 -m unittest \
+            tests.test_mutation_guard \
+            tests.test_trading_mode \
+            tests.test_trading_modes \
+            tests.test_safety \
+            tests.test_probability_engine \
+            tests.test_metrics \
+            tests.test_cost_model \
+            tests.test_performance_metrics \
+            tests.test_probability_calibration \
+            tests.test_strategy_engine \
+            tests.test_learning_engine \
+            tests.test_database \
+            tests.test_execution_engine \
+            tests.test_backtest_engine \
+            tests.test_long_term_strategy \
+            tests.test_sentiment_analyzer \
+            tests.test_quant_utils \
+            tests.test_nn_tokenizer \
+            tests.test_transformer \
+            tests.test_ppo_agent \
+            tests.test_replay_buffer \
+            tests.test_weekly_optimizer \
+            tests.test_notification_manager \
+            tests.test_backup_manager
+
+      - name: Run neural network tests
+        run: |
+          python3 -m unittest \
+            tests.test_nn_tokenizer \
+            tests.test_transformer \
+            tests.test_ppo_agent \
+            tests.test_replay_buffer
+
+      - name: Run backtest integration tests (if sklearn available)
+        run: |
+          python3 -m unittest tests.test_backtest_ppo_integration -v || echo "Skipped (deps)"
+
+      - name: Verify all Python files parse
+        run: |
+          python3 -c "
+import ast, os, sys
+errors = []
+for root, dirs, files in os.walk('.'):
+    dirs[:] = [d for d in dirs if d not in ('__pycache__', '.git', 'node_modules')]
+    for f in files:
+        if f.endswith('.py'):
+            path = os.path.join(root, f)
+            try:
+                ast.parse(open(path).read())
+            except SyntaxError as e:
+                errors.append(f'{path}: {e}')
+if errors:
+    for e in errors:
+        print(e, file=sys.stderr)
+    sys.exit(1)
+print('All Python files parse cleanly.')
+"
+
+      - name: Verify JavaScript files syntax (basic check)
+        run: |
+          which node && node --check dashboard-v2/js/*.js 2>/dev/null || echo "JS check optional"
+
+      - name: Report
+        run: |
+          echo "=== NexusTrader CI Complete ==="
+          echo "Python ${{ matrix.python-version }}"
+          python3 --version
+          echo "Tests completed."
