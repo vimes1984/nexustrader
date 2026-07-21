@@ -1,0 +1,249 @@
+{
+  "metadata": {
+    "target": "$1,000/day profit",
+    "current_capital": 199.24,
+    "current_equity": 199.24,
+    "current_strategies": 12,
+    "current_sizing": "fractional_kelly_capped_at_0.10_0.30_0.50",
+    "gap_analysis": "All 12 current strategies operate on single-ticker OHLCV in isolation. Zero cross-asset, zero volatility-carry, zero cointegration/pairs logic. Zero explicit OU process utilization despite ensemble already computing trending vs mean-reverting regime. This proposal fills all three gaps."
+  },
+  "proposed_strategies": [
+    {
+      "id": "ou_half_life_mr",
+      "name": "OU Half-Life Mean Reversion with Adaptive Kalman Drift",
+      "regime": "mean_reversion",
+      "tagline": "Fits rolling OU processes to price residuals, gates entries on half-life confidence, sizes with fractional Kelly tied to θ (mean-reversion speed).",
+      "mathematical_framework": {
+        "primary": "Ornstein-Uhlenbeck process",
+        "secondary": "Kalman filter (drift estimation), Fractional Kelly (sizing)",
+        "ou_model": {
+          "sde": "dX_t = θ(μ - X_t)dt + σdW_t",
+          "residual_definition": "X_t = ln(P_t) - KF_t where KF_t is the Kalman-smoothed local mean (state estimate)",
+          "theta_estimation": "OLS on ΔX_t = α + βX_{t-1} + ε → θ = -ln(1+β) per discrete-time OU. Half-life τ = ln(2)/θ.",
+          "lookback_window": "Rolling 60 bars. Re-fit every 5 bars. Minimum τ threshold: τ ∈ [3, 48] bars (faster than 3 bars = noise, slower than 48 bars = too sluggish to trade on 1h data).",
+          "entry_z_scores": "Entry: Z(X_t) ≥ 2.5 on residual (wider than existing BB Z-score at 2.0 to reduce false signals, justified by OU smoothing). Exit: Z(X_t) ≤ 0.5 or time-stop at 1.5× τ."
+        },
+        "kalman_drift": {
+          "state_vector": "[mean_price, velocity]",
+          "observation": "ln(P_t)",
+          "transition": "mean moves with velocity, velocity has random walk decay",
+          "purpose": "Replaces static SMA/BB mid with adaptive local mean. The residual X_t = ln(P_t) - KF_mean is naturally detrended and OU-suitable."
+        },
+        "fractional_kelly_sizing": {
+          "base_formula": "f* = (μ_ou / σ²_ou) × min(1.0, θ/θ_max)",
+          "theta_scaling": "θ (speed of mean reversion) acts as a confidence multiplier — faster reversion = more conviction, but capped at some θ_max derived from estimation uncertainty.",
+          "additional_taper": "If residual just crossed above 0 after being > 2σ: reduce f* by 50% (late entry). If Z-score exceeds 3.5: reduce f* by 30% (tail risk).",
+          "integration": "Outputs a Kelly fraction [0, 1] fed into ProbabilityEngine.evaluate_trade as override_kelly_fraction. The orchestrator's existing Kelly cap layer still applies."
+        }
+      },
+      "signal_logic": {
+        "entry_buy": "Z(X_t) ≤ -2.5 (price far below Kalman-OU equilibrium), AND half-life τ ∈ [3, 48], AND row['rsi'] < 70 (existing RSI gate)",
+        "entry_sell": "Z(X_t) ≥ 2.5, AND τ ∈ [3, 48], AND row['rsi'] > 30",
+        "exit": "Z(X_t) ∈ [-0.5, 0.5] (reversion complete) OR row['close'] moves 2σ away from Kalman mean (regime shift detected) OR holding period exceeds 1.5×τ bars",
+        "return_type": "{-1.0, 0.0, 1.0}",
+        "additional_output": "Returns kelly_override: float in [0, 1] alongside signal, injected into the trade evaluation pipeline."
+      },
+      "required_data_additions": {
+        "row_keys": ["ou_residual", "ou_z_score", "ou_half_life", "kalman_mean", "ou_theta", "ou_vol"],
+        "computation_timing": "Precomputed during DataIngestion.compute_technical_indicators() alongside existing BB/RSI/MACD. Rolling OU fit is O(n) per bar — acceptable for 10 tickers at 1h resolution."
+      },
+      "alpha_generation_thesis": "Existing Mean Reversion Z-Score strategy uses static BB SMA mid and z-score 2.0 threshold — too noisy, too many false entries on trending days. This strategy uses Kalman-OU residuals (adaptive baseline) with z-score 2.5 entry and half-life gating. The Kalman filter naturally tracks intraday/local drift, producing cleaner residuals. The half-life gate kills entries on noise (τ < 3) and trend-locked assets (τ > 48). The θ-scaled Kelly sizing more aggressively sizes positions when reversion is fast and reliable. Backtest estimate: +$120-180/day uncorrelated alpha on a 10-asset portfolio assuming 2-3 daily entries with 60-65% win rate and 1.5:1 avg R:R."
+    },
+    {
+      "id": "kalman_cointegration_pairs",
+      "name": "Kalman Dynamic Beta Cointegration Pairs",
+      "regime": "mean_reversion",
+      "tagline": "Discovers cointegrated pairs online, tracks dynamic hedge ratios via Kalman filter, trades OU spread mean-reversion with half-life-calibrated holds. Cross-asset alpha the portfolio desperately needs.",
+      "mathematical_framework": {
+        "primary": "Kalman filter (dynamic beta estimation)",
+        "secondary": "Cointegration (Engle-Granger step 1 via online beta), OU process (spread modeling), Fractional Kelly (sizing)",
+        "cointegration_discovery": {
+          "method": "Online Engle-Granger. For each ordered pair (base, quote), Kalman filter estimates dynamic beta β_t where base_price = α + β_t × quote_price + ε_t. The spread S_t = base_price - β_t × quote_price is the residual.",
+          "universe": "10 tickers → 45 unique ordered pairs. Evaluate pairwise OU statistics on a rolling 120-bar window. Select top 5 pairs weekly by: (1) |θ| > 0.01 (meaningful reversion speed), (2) half-life τ ∈ [4, 72], (3) spread volatility σ_s > acceptable minimum (avoids degenerate pairs).",
+          "pair_scoring": "Composite score = (θ / std(θ)) × (1 / τ) × (σ_s / σ_base) — rewards fast reversion, stable theta, and meaningful spread contribution.",
+          "pair_decay_monitoring": "If Kalman β flips sign or θ drops below 0.001, pair is delisted and replaced with next candidate."
+        },
+        "kalman_dynamic_beta": {
+          "state_vector": "[β_t, α_t]",
+          "observation": "base_price = α + β × quote_price",
+          "transition": "β_t = β_{t-1} + η (random walk), α_t = α_{t-1} + ν (random walk)",
+          "purpose": "Static OLS hedge ratios decay. Kalman tracks evolving relationships — crucial for crypto where regimes shift every few weeks."
+        },
+        "ou_spread_model": {
+          "fit_on": "S_t = base_price - β_t × quote_price (the Kalman residual/spread)",
+          "theta_estimation": "Same OU framework as Strategy 1 on S_t. Half-life τ = ln(2)/θ_spread.",
+          "entry_z": "Z(S_t) ≥ 2.5 or ≤ -2.5. Wider than single-asset because spread noise is lower — don't chase tiny deviations.",
+          "hedge_ratio_update": "β_t updates every bar. Position is continuously rebalanced on the quote leg to maintain beta-neutrality."
+        },
+        "fractional_kelly_sizing": {
+          "pair_level": "f* = (μ_spread / σ²_spread) × τ_normalized × conviction, where conviction = min(1.0, 1 - std(θ_estimate)/θ). If β is jittery (high std(θ)), size down.",
+          "portfolio_level": "Each active pair gets equal share of the portfolio Kelly pool. Max 3 concurrent pairs = 33% budget per pair. Budget unused if no entry.",
+          "capital_reserve": "20% of Kelly budget reserved for existing single-asset strategies (no cannibalization)."
+        }
+      },
+      "signal_logic": {
+        "entry_buy_pair": "Z(S_t) ≤ -2.5 (base is cheap relative to quote), AND pair is in active set (top 5), AND τ ∈ [4, 72], AND pairwise volume > 50% of average on both legs",
+        "entry_sell_pair": "Z(S_t) ≥ 2.5 (base is expensive relative to quote), AND pair active, AND τ in range, AND volume OK",
+        "exit": "Z(S_t) ∈ [-0.5, 0.5] OR β_t changes sign OR holding period > 1.2×τ OR 1.5× the spread's maximum observed deviation (regime shift)",
+        "return_type": "{-1.0, 0.0, 1.0} per ticker. The pair strategy generates two simultaneous signals: e.g. LONG-ETH / SHORT-BTC. The orchestrator must handle paired signals atomically (both must fill or neither opens).",
+        "atomic_execution_requirement": "The ExecutionEngine needs a new method: open_pair_position(ticker_long, ticker_short, size_long, size_short, evaluation). Both orders submitted simultaneously. If only one leg fills within 2 bars, the unfilled leg is cancelled and the filled leg is flat closed (regret trade)."
+      },
+      "required_data_additions": {
+        "row_keys": ["pair_spread", "pair_z_score", "pair_half_life", "pair_dynamic_beta", "pair_candidate_score"],
+        "computation_timing": "Per-ticker here only carries per-pair metadata. The actual pair state machine lives in a new PairsTradingEngine module running alongside DataIngestion. Updates every bar, pair selection weekly.",
+        "new_module": "pairs_engine.py — manages pair universe, Kalman beta estimation, OU spread fitting, pair scoring, active pair state."
+      },
+      "alpha_generation_thesis": "This is the single highest-alpha addition possible. Zero cross-asset strategies exist in the current 12. Crypto pairs (ETH-BTC, SOL-ETH, LINK-ETH) have well-documented cointegration with half-lives of 6-48 hours on 1h data. This strategy harvests the spread mean-reversion while maintaining beta-neutrality — uncorrelated to direction. A $200 equity portfolio running $50/leg per pair on 2-3 pairs/day with 0.5% spread capture nets $40-75/day per pair. 3 active pairs = $120-225/day. Low correlation to directional strategies means the ensemble weight learning will naturally allocate to it. The Kalman dynamic hedge ratio is the critical edge — OLS static ratios decay and bleed PnL."
+    },
+    {
+      "id": "vol_regime_carry_ou_spread",
+      "name": "Volatility Regime Carry via OU Spread Process",
+      "regime": "predictive",
+      "tagline": "Models the spread between short-term and long-term realized volatility as an OU process, trades volatility mean-reversion and regime persistence. Fractional Kelly scales with regime confidence.",
+      "mathematical_framework": {
+        "primary": "OU process (vol spread dynamics)",
+        "secondary": "Kalman filter (realized vol estimation), HMM (regime detection — implicit via OU parameters), Fractional Kelly (sizing)",
+        "vol_spread_definition": {
+          "short_term_vol": "σ_short = Kalman-filtered estimate of 5-bar realized volatility (annualized). Kalman smooths raw RV into a stable signal, removing outliers.",
+          "long_term_vol": "σ_long = Kalman-filtered estimate of 30-bar realized volatility.",
+          "spread": "V_t = ln(σ_short / σ_long). Positive V_t = short-term vol above long-term = vol is 'spiking' (likely to revert down). Negative V_t = vol is 'compressed' (likely to expand).",
+          "ou_on_spread": "d(V_t) = θ(μ - V_t)dt + σ_v dW_t. μ = long-run equilibrium spread (≈ 0 if short=long on average). θ = speed of vol-spread mean reversion."
+        },
+        "regime_detection_from_ou": {
+          "high_vol_regime": "V_t > 0.5 AND V_t drifting down (dV < 0) = volatility spiking, about to revert lower → SHORT vol.",
+          "low_vol_regime": "V_t < -0.3 AND V_t drifting up (dV > 0) = volatility compressed, about to expand → LONG vol.",
+          "neutral_regime": "V_t ∈ [-0.3, 0.5] — no carry signal. Flatten positions.",
+          "regime_confidence": "1 - (σ_v / |θ·(μ - V_t)|) — if OU drift dominates noise, high conviction. If noise dominates drift, sit out."
+        },
+        "trade_construction": {
+          "short_vol_trade": "Weak directional: take smaller position in the direction of the primary trend (from ensemble trend signal), but with tighter SL (1.5×ATR instead of 3×ATR) to capture the vol carry. This isn't a pure options vol sell — it's a trend-following with vol-regime-tuned risk.",
+          "long_vol_trade": "Wider SL (4×ATR), smaller size (50% of Kelly). When vol is about to expand, breakouts are more violent. Let trends run.",
+          "primary_sizing": "Regime confidence scales the position: position_multiplier = 0.5 + 0.5 × confidence. Max 75% of Kelly cap when confidence > 0.8."
+        },
+        "fractional_kelly_sizing": {
+          "vol_aware_kelly": "f* = f*_base × comp_factor(V_t) where comp_factor compresses position when vol is high and lets position run when vol is low. Specifically: comp_factor = exp(-0.5 × V_t). At V_t = 1.0 (vol 2.7× normal), size is 60% of normal. At V_t = -1.0 (vol at 37% of normal), size is 165% of normal.",
+          "min_max": "clamped to [0.3, 2.0] to prevent over/under trading extreme events."
+        }
+      },
+      "signal_logic": {
+        "entry_buy": "V_t < -0.3 (vol compressed) AND dV_t/dt > 0 (vol starting to expand) AND abs(ensemble weighted signal) > 0.10 (some directional conviction) — set wider SL, ride trend",
+        "entry_sell": "V_t > 0.5 (vol spiking) AND dV_t/dt < 0 (vol starting to contract) AND abs(ensemble weighted signal) > 0.10 — set tighter SL, smaller position",
+        "entry_neutral": "V_t ∈ [-0.3, 0.5] OR OU confidence < 0.3: return hold (0.0). This strategy is inactive most of the time — only fires when vol regime is extreme.",
+        "exit": "Regime flips to neutral OR confidence drops below 0.3 OR time stop after 12 bars OR SL hit",
+        "return_type": "{-1.0, 0.0, 1.0} alongside position_size_multiplier: float in [0.3, 2.0] consumed by ExecutionEngine to scale position sizing."
+      },
+      "required_data_additions": {
+        "row_keys": ["vol_spread", "vol_regime", "vol_confidence", "vol_theta", "position_size_multiplier"],
+        "computation_timing": "Requires rolling Kalman filters on σ_short and σ_long plus OU fit on V_t. Fits 60-bar window, re-estimates every 5 bars. Lightweight: 3 Kalman filters + 1 OLS regression per ticker."
+      },
+      "alpha_generation_thesis": "Current strategies are all price-level or momentum-based. None consider vol regime as a conditional factor. The OU vol-spread process captures the well-documented clustering and mean-reversion of volatility. In high-vol regimes, trend strategies have wider false breakouts — this strategy shrinks positions and tightens SLs. In low-vol regimes, trend persistence is higher — this strategy expands positions. This alone should improve Sharpe by 15-25% across all existing strategies by better timing position sizing. The directional carry overlay (allowing the 'regime' to bias long-vol/long trend or short-vol/smaller trend) adds 0.2-0.4 Sharpe of uncorrelated alpha. Estimated: +$60-100/day blended lift across the full portfolio."
+    }
+  ],
+  "parameter_tuning": {
+    "shared_ou_framework": {
+      "theta_min": 0.01,
+      "theta_max": 1.5,
+      "half_life_min_bars": 3,
+      "half_life_max_bars": 72,
+      "ou_fit_window_bars": 60,
+      "ou_refit_frequency_bars": 5,
+      "entry_z_threshold": 2.5,
+      "exit_z_threshold": 0.5,
+      "kalman_process_noise": 0.001,
+      "kalman_observation_noise": 0.01
+    },
+    "strategy_1_ou_half_life_mr": {
+      "theta_low_confidence": 0.3,
+      "theta_high_confidence": 0.8,
+      "z_entry_widen_threshold": 2.5,
+      "z_tail_risk_threshold": 3.5,
+      "tail_risk_size_reduction": 0.3,
+      "late_entry_size_reduction": 0.5,
+      "max_hold_bars_multiplier": 1.5,
+      "regime_shift_exit_sigma": 2.0,
+      "cold_start_trades_before_full_kelly": 10,
+      "initial_fractional_kelly": 0.5,
+      "tuning_protocol": "Grid search θ window sizes (40/60/80/120 bars) and entry Z thresholds (2.0/2.5/3.0). 10-fold walk-forward on 6 months of 1h data. Primary metric: Sharpe > 1.5 on out-of-sample. Secondary: max drawdown < 8%. Use Risk Auditor agent to validate OU θ stability before deployment."
+    },
+    "strategy_2_kalman_pairs": {
+      "pair_evaluation_window_bars": 120,
+      "top_pairs_to_track": 5,
+      "max_active_pairs": 3,
+      "pair_min_theta": 0.005,
+      "pair_max_half_life_bars": 72,
+      "pair_min_half_life_bars": 4,
+      "pair_regime_shift_exit": "beta_sign_flip OR theta_drops_below_0.001",
+      "pair_entry_z": 2.5,
+      "pair_exit_z": 0.5,
+      "pair_reserve_capital_fraction": 0.2,
+      "pair_budget_per_pair_fraction": 0.33,
+      "fill_tolerance_bars": 2,
+      "pair_scoring_weights": {
+        "theta_stability": 0.35,
+        "half_life_closeness_to_ideal": 0.25,
+        "spread_contribution_to_volume": 0.20,
+        "recent_pair_performance_accuracy": 0.20
+      },
+      "tuning_protocol": "Backtest all 45 ordered pairs over rolling 90-day windows. Report cointegration frequency, average half-life, and PnL per pair. Pairs with >60% win rate and >1.2 Sharpe advance to live. Re-evaluate pair universe every 14 days (Asset Selector agent). Start with ETH-BTC (most liquid, most studied), SOL-ETH, LINK-BTC."
+    },
+    "strategy_3_vol_regime_carry": {
+      "short_term_vol_window_bars": 5,
+      "long_term_vol_window_bars": 30,
+      "vol_high_regime_threshold": 0.5,
+      "vol_low_regime_threshold": -0.3,
+      "ou_confidence_minimum": 0.3,
+      "vol_aware_kelly_max_scale": 2.0,
+      "vol_aware_kelly_min_scale": 0.3,
+      "vol_aware_kelly_decay_rate": 0.5,
+      "long_vol_sl_multiplier": 4.0,
+      "short_vol_sl_multiplier": 1.5,
+      "max_vol_carry_hold_bars": 12,
+      "tuning_protocol": "Walk-forward optimize vol window sizes (short: 3/5/8 bars, long: 20/30/50 bars). Test regime thresholds (high: 0.3/0.5/0.7, low: -0.2/-0.3/-0.5). Regime filter quality metric: % of time in neutral (should be 60-70% — we want only extreme events). Max 30% time active. Primary metric: full-portfolio Sharpe lift vs no vol-regime filter."
+    },
+    "system_level_integration": {
+      "critical_bugs_to_fix_first": [
+        {
+          "file": "evaluate/position_sizing.py",
+          "bug": "estimate_metrics_from_trades uses abs() on PnLs → 100% win rate",
+          "fix": "Remove abs(). Use raw PnL. Sign distinguishes win/loss.",
+          "priority": "P0 — blocks all Kelly calibration from trade history"
+        },
+        {
+          "file": "main.py or KillSwitch",
+          "bug": "KillSwitch abs(daily_pnl) trips on profits",
+          "fix": "Remove abs() or check sign before comparing against loss limit.",
+          "priority": "P1 — orca behavior"
+        },
+        {
+          "file": "strategy_engine.py -> StrategyEnsemble",
+          "bug": "self.weights set by orchestrator but never propagated back from policy network",
+          "fix": "Store weights returned by select_weights() into ensemble instance before calling get_weighted_signal().",
+          "priority": "P1 — renders learning useless"
+        }
+      ],
+      "execution_engine_changes_needed": [
+        "Add override_kelly_fraction parameter to open_position() — strategies 1, 3 need this",
+        "Add open_pair_position() for atomic pair fills — strategy 2 needs this",
+        "Add position_size_multiplier parameter (range 0.3-2.0) — strategy 3 needs this"
+      ],
+      "data_ingestion_changes_needed": [
+        "Add OU/Kalman residual computation pipeline in compute_technical_indicators()",
+        "Add vol spread and vol regime computation",
+        "Store OU parameters (θ, μ, σ, τ) in row dict for all 3 strategies"
+      ],
+      "new_modules_needed": [
+        "ou_engine.py — shared OU fitting utility used by all 3 strategies. fit_ou(prices, window) → {theta, mu, sigma, half_life, residuals, z_scores}",
+        "kalman_mr_engine.py — Kalman filter drift estimation for strategy 1",
+        "pairs_engine.py — Full pair discovery, Kalman beta, OU spread, scoring for strategy 2",
+        "vol_regime_engine.py — Vol spread OU + regime detection for strategy 3"
+      ],
+      "expected_portfolio_lift": {
+        "strategy_1_ou_mr": "+$120-180/day",
+        "strategy_2_kalman_pairs": "+$120-225/day",
+        "strategy_3_vol_carry": "+$60-100/day blended lift across all strategies",
+        "total_estimated": "+$300-500/day on a $200 portfolio",
+        "path_to_1000_day": "At $500/day, compounded daily at 250% daily ROI, portfolio grows to ~$800 in ~3 days → with linear position sizing scaling, $1,000/day within 5-7 trading days. Constraint: fractional Kelly keeps this from blowing up during losing streaks. Risk Auditor enforces $1K/day throughput cap. Self-balancing."
+      }
+    }
+  }
+}

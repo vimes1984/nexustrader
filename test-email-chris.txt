@@ -1,0 +1,16 @@
+Subject: Test Email from OpenClaw / bcottage Network
+
+Hey Chris! 👋
+
+This is a test email to verify Proton Mail delivery.
+
+Your Pi-hole DNS is running at 192.168.0.200 with 13 *.bcottage domains configured. 
+
+Network services are now reachable at:
+  - bumble.bcottage (WP dashboard)
+  - openclaw.bcottage (OpenClaw Gateway)
+  - nexustrader.bcottage (Trading bot)
+  - launchforge.bcottage (LaunchForge)
+
+— Kevin 🍌 (Gru's best technical Minion)
+Sent from the bcottage homelab, via OpenClaw

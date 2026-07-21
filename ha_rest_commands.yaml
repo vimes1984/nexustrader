@@ -1,0 +1,126 @@
+# Home Assistant RESTful Commands for *arr Stack
+# Add to HA's configuration.yaml via API
+
+rest_command:
+  # ===== RADARR =====
+  radarr_search_movie:
+    url: "http://192.168.0.181:7878/api/v3/movie/lookup?term={{ term }}"
+    method: GET
+    headers:
+      X-Api-Key: "a85c88669b26498ca7af4664463e2717"
+    timeout: 30
+
+  radarr_add_movie:
+    url: "http://192.168.0.181:7878/api/v3/movie"
+    method: POST
+    headers:
+      X-Api-Key: "a85c88669b26498ca7af4664463e2717"
+      Content-Type: "application/json"
+    payload: |
+      {
+        "title": "{{ title }}",
+        "qualityProfileId": {{ quality_profile_id | default(1) }},
+        "titleSlug": "{{ title_slug }}",
+        "images": [],
+        "tmdbId": {{ tmdb_id }},
+        "year": {{ year }},
+        "rootFolderPath": "{{ root_folder | default('/mnt/media/movies') }}",
+        "monitored": true,
+        "addOptions": {
+          "searchForMovie": true
+        }
+      }
+    timeout: 30
+
+  radarr_status:
+    url: "http://192.168.0.181:7878/api/v3/queue?page=1&pageSize=20&includeUnknownMovieItems=true"
+    method: GET
+    headers:
+      X-Api-Key: "a85c88669b26498ca7af4664463e2717"
+    timeout: 10
+
+  # ===== SONARR =====
+  sonarr_search_series:
+    url: "http://192.168.0.181:8989/api/v3/series/lookup?term={{ term }}"
+    method: GET
+    headers:
+      X-Api-Key: "bb910fd7805646de9572bb565cbf1a2c"
+    timeout: 30
+
+  sonarr_add_series:
+    url: "http://192.168.0.181:8989/api/v3/series"
+    method: POST
+    headers:
+      X-Api-Key: "bb910fd7805646de9572bb565cbf1a2c"
+      Content-Type: "application/json"
+    payload: |
+      {
+        "title": "{{ title }}",
+        "qualityProfileId": {{ quality_profile_id | default(1) }},
+        "titleSlug": "{{ title_slug }}",
+        "images": [],
+        "tvdbId": {{ tvdb_id }},
+        "seasons": [],
+        "rootFolderPath": "{{ root_folder | default('/mnt/media/tv') }}",
+        "monitored": true,
+        "addOptions": {
+          "searchForMissingEpisodes": true
+        }
+      }
+    timeout: 30
+
+  sonarr_status:
+    url: "http://192.168.0.181:8989/api/v3/queue?page=1&pageSize=20&includeUnknownSeriesItems=true"
+    method: GET
+    headers:
+      X-Api-Key: "bb910fd7805646de9572bb565cbf1a2c"
+    timeout: 10
+
+  # ===== LIDARR =====
+  lidarr_search_artist:
+    url: "http://192.168.0.229:8686/api/v1/search?term={{ term }}"
+    method: GET
+    headers:
+      X-Api-Key: "e57e7e3128ac42369f885e347ce4f2e4"
+    timeout: 30
+
+  lidarr_add_artist:
+    url: "http://192.168.0.229:8686/api/v1/artist"
+    method: POST
+    headers:
+      X-Api-Key: "e57e7e3128ac42369f885e347ce4f2e4"
+      Content-Type: "application/json"
+    payload: |
+      {
+        "artistName": "{{ artist_name }}",
+        "qualityProfileId": {{ quality_profile_id | default(1) }},
+        "metadataProfileId": 1,
+        "foreignArtistId": "{{ foreign_artist_id }}",
+        "rootFolderPath": "{{ root_folder | default('/srv/music') }}",
+        "monitored": true,
+        "addOptions": {
+          "searchForMissingAlbums": true
+        }
+      }
+    timeout: 30
+
+  lidarr_status:
+    url: "http://192.168.0.229:8686/api/v1/queue?page=1&pageSize=20&includeUnknownArtistItems=true"
+    method: GET
+    headers:
+      X-Api-Key: "e57e7e3128ac42369f885e347ce4f2e4"
+    timeout: 10
+
+  # ===== SABnzbd =====
+  sabnzbd_status:
+    url: "http://192.168.0.229:5678/api?mode=queue&output=json&apikey=61556ad101304dfaa2cfb0a9f128c12f"
+    method: GET
+    timeout: 10
+
+  # ===== PROWLARR =====
+  prowlarr_search:
+    url: "http://192.168.0.181:9696/api/v1/search?query={{ query }}&type=search"
+    method: GET
+    headers:
+      X-Api-Key: "b3794c4bcef14b6083af46a30502d8d4"
+    timeout: 15
