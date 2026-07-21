@@ -33,6 +33,13 @@ from trading_modes import migrate_existing_settings as migrate_settings
 from replay_buffer import PrioritizedExperienceReplay
 from ppo_agent import PPOAgent
 
+try:
+    from llm_client import LLMClient
+    LLM_AVAILABLE = True
+except ImportError:
+    LLM_AVAILABLE = False
+    logging.warning("llm_client.py not found — LLaMA features disabled")
+
 # Set up logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
@@ -102,6 +109,27 @@ class NexusTraderOrchestrator:
         self.ppo_batch_size = int(database.load_setting("ppo_batch_size", "64"))
         self.ppo_epochs = int(database.load_setting("ppo_epochs", "4"))
         self.ppo_minibatch_size = int(database.load_setting("ppo_minibatch_size", "32"))
+        
+        # LLaMA integration
+        self.llm_client = None
+        self.llm_enabled = LLM_AVAILABLE and database.load_setting("llm_enabled", "true").lower() == "true"
+        self.llm_endpoint = database.load_setting("llm_endpoint", "http://192.168.0.77:8080")
+        self.llm_last_sentiment = {"sentiment_score": 0.0, "conviction": 0.0, "direction": "neutral"}
+        self.llm_last_regimes = {}
+        self.llm_last_sentiment_time = 0.0
+        self.llm_sentiment_interval = 900  # seconds — poll every 15 min
+        if self.llm_enabled:
+            try:
+                self.llm_client = LLMClient(endpoint=self.llm_endpoint)
+                health = self.llm_client.health_check()
+                if health["ok"]:
+                    logging.info(f"LLaMA client connected: {self.llm_endpoint}")
+                else:
+                    logging.warning(f"LLaMA server not healthy at {self.llm_endpoint}: {health}")
+                    self.llm_enabled = False
+            except Exception as e:
+                logging.warning(f"LLaMA client init failed: {e}")
+                self.llm_enabled = False
 
     def init_ticker(self, ticker):
         """Dynamically initializes data streams, strategy ensemble, and neural weights for a new ticker."""
@@ -427,6 +455,25 @@ class NexusTraderOrchestrator:
             
             self._run_async(update_sentiment(ticker))
 
+        # LLaMA sentiment poll (every 15 min, ticker-independent)
+        if self.llm_enabled and self.llm_client and (curr_time - self.llm_last_sentiment_time >= self.llm_sentiment_interval):
+            self.llm_last_sentiment_time = curr_time
+            async def update_llm_sentiment():
+                try:
+                    loop = asyncio.get_running_loop()
+                    result = await loop.run_in_executor(None, self.llm_client.analyze_sentiment,
+                        [f"{t} at \${row['close']:.2f}" for t in self.tickers[:5]],
+                        f"BTC \${self.latest_ticks.get('BTC-USD', {}).get('close', 0):.0f}, "
+                        f"{len(self.execution_engine.active_positions)} open positions"
+                    )
+                    self.llm_last_sentiment = result
+                    logging.info(f"LLaMA sentiment: {result.get('direction','?')} "
+                                 f"score={result.get('sentiment_score',0):.2f} "
+                                 f"conv={result.get('conviction',0):.2f}")
+                except Exception as ex:
+                    logging.warning(f"LLaMA sentiment poll failed: {ex}")
+            self._run_async(update_llm_sentiment())
+        
         # Inject cached sentiment score and source breakdowns into row dictionary
         row['sentiment'] = self.latest_sentiments.get(ticker, 0.0)
         row['sentiment_sources'] = self.latest_source_sentiments.get(ticker, {})
@@ -610,13 +657,46 @@ class NexusTraderOrchestrator:
                         )
                         if opened:
                             trade_opened = True
+                            # Generate LLaMA trade explanation (async, non-blocking)
+                            llm_explanation = ""
+                            if self.llm_enabled and self.llm_client:
+                                async def explain_trade():
+                                    try:
+                                        loop = asyncio.get_running_loop()
+                                        explanation = await loop.run_in_executor(None,
+                                            self.llm_client.explain_trade, {
+                                                "symbol": ticker,
+                                                "direction": "LONG" if direction == "BUY" else "SHORT",
+                                                "entry_price": float(current_price),
+                                                "signal_strength": float(weighted_signal),
+                                                "top_strategies": [
+                                                    ensemble.strategies[i].name
+                                                    for i in sorted(range(len(strategy_breakdown)),
+                                                                    key=lambda i: abs(strategy_breakdown[i]),
+                                                                    reverse=True)[:3]
+                                                ],
+                                                "regime": self.llm_last_sentiment.get("direction", "unknown"),
+                                                "attention_focus": "Live ensemble signal: {:.3f}".format(weighted_signal),
+                                                "market_overview": "Balance \${:.2f}, {} open positions".format(
+                                                    self.execution_engine.balance,
+                                                    len(self.execution_engine.active_positions)),
+                                            })
+                                        self._run_async(self.broadcast_message({
+                                            "type": "llm_explanation",
+                                            "ticker": ticker,
+                                            "explanation": explanation
+                                        }))
+                                    except Exception as ex:
+                                        logging.warning(f"LLaMA trade explanation failed: {ex}")
+                                self._run_async(explain_trade())
                             if self.execution_engine.trading_mode == "live":
                                 self._run_async(self.broadcast_message({
                                     "type": "trade_opened",
                                     "ticker": ticker,
                                     "position": self.execution_engine.active_positions[ticker],
                                     "balance": self.execution_engine.balance,
-                                    "equity": current_equity
+                                    "equity": current_equity,
+                                    "llm_explanation": llm_explanation or "LLaMA analysis pending..."
                                 }))
                             else:
                                 self._run_async(self.broadcast_message({
@@ -673,7 +753,8 @@ class NexusTraderOrchestrator:
                 "bb_upper": float(row.get('bb_upper', current_price)),
                 "bb_lower": float(row.get('bb_lower', current_price)),
                 "atr": float(row.get('atr', 0))
-            }
+            },
+            "llm_sentiment": self.llm_last_sentiment
         }))
 
     async def broadcast_message(self, message):
@@ -931,6 +1012,20 @@ def get_trading_reasoning():
             items.append({"id":"stale", "severity":"warning", "title":"Stale signal data", "detail":"No fresh signal update for: " + ", ".join(stale[:8])})
         if "SUI-USD" in tickers:
             items.append({"id":"sui", "severity":"warning", "title":"SUI-USD data risk", "detail":"SUI-USD has had yfinance/delisting-style failures. Disable if live prices stay missing."})
+        # LLaMA sentiment status
+        llm_enabled = getattr(orchestrator, "llm_enabled", False)
+        llm_sent = getattr(orchestrator, "llm_last_sentiment", {}) or {}
+        if llm_enabled and llm_sent.get("direction"):
+            themes = ", ".join(llm_sent.get("key_themes", []) or [])
+            detail = "{} (score {:.2f}, conviction {:.0f}%). {}".format(
+                llm_sent.get("direction","?").upper(),
+                float(llm_sent.get("sentiment_score",0)),
+                float(llm_sent.get("conviction",0))*100,
+                themes
+            )[:200]
+            items.append({"id":"llm","severity":"info","title":"LLaMA Sentiment","detail":detail})
+        elif llm_enabled:
+            items.append({"id":"llm","severity":"warning","title":"LLaMA","detail":"LLaMA enabled but awaiting first sentiment poll..."})
     except Exception as e:
         status = "error"
         items.append({"id":"reasoning-error", "severity":"error", "title":"Reasoning failed", "detail":str(e)})

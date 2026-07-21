@@ -319,7 +319,18 @@ class LearningEngine:
         self.num_strategies = num_strategies
         self.weight_floor = weight_floor
         self.nn_architecture = nn_architecture
-        if nn_architecture == "lstm":
+        if nn_architecture == "transformer":
+            from transformer_policy_net import TransformerPolicyNetwork
+            self.policy_net = TransformerPolicyNetwork(
+                action_dim=num_strategies,
+                d_model=hidden_dim if hidden_dim >= 64 else 64,
+                num_heads=4,
+                num_layers=max(2, hidden_layers),
+                max_seq_len=24,
+                dropout=dropout,
+                learning_rate=learning_rate,
+            )
+        elif nn_architecture == "lstm":
             from sequential_policy_net import SequentialPolicyNetwork
             self.policy_net = SequentialPolicyNetwork(
                 action_dim=num_strategies,
@@ -387,7 +398,7 @@ class LearningEngine:
         For MLP mode: state is an 8-element feature vector.
         For LSTM mode: state is a (seq_len, max_tokens) token ID array.
         """
-        if self.nn_architecture == "lstm" and hasattr(self.policy_net, 'select_weights'):
+        if self.nn_architecture in ("lstm", "transformer") and hasattr(self.policy_net, 'select_weights'):
             return self.policy_net.select_weights(state, weight_floor=self.weight_floor)
         raw_weights = self.policy_net.forward(state)
         
