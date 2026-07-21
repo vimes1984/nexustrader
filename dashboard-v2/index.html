@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NexusTrader — AI Neuro-Quantitative Suite</title>
   <meta name="description" content="Algorithmic trading bot with real-time probability estimation, RL optimization, and LLaMA-powered analysis.">
-  <link rel="stylesheet" href="/dashboard-v2/css/main.css?v=1784668956">
+  <link rel="stylesheet" href="/dashboard-v2/css/main.css?v=1784669110">
   <link rel="manifest" href="/manifest.json">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
@@ -352,6 +352,12 @@ body.debug #js-indicator { display: block !important; }
 
   <!-- ═══════════════ TAB: STRATEGY ═══════════════ -->
   <div id="tab-strategy" class="tab-content">
+        <div class="section-header" style="margin-bottom:12px">
+          <h2 style="color:var(--neon-blue)">🎯 Strategy Signal Monitor</h2>
+          <button class="btn btn-sm" id="btn-refresh-strategy">🔄 Refresh</button>
+        </div>
+        <div id="strategy-panel"></div>
+      </div>
     <div class="glass-panel" style="padding:14px 16px">
       <div class="section-title">Active Strategy Signals</div>
       <div id="strategy-panel"></div>
@@ -360,6 +366,57 @@ body.debug #js-indicator { display: block !important; }
 
   <!-- ═══════════════ TAB: LLM ═══════════════ -->
   <div id="tab-llm" class="tab-content">
+        <div class="section-header" style="margin-bottom:12px">
+          <h2 style="color:var(--neon-blue)">🔮 LLM Integration</h2>
+        </div>
+        <div class="grid-2col">
+          <div>
+            <div class="glass-panel" style="padding:16px">
+              <h3>Connection Status</h3>
+              <div style="margin-top:8px">
+                <div>Status: <span id="llm-status-text" style="font-weight:700">Checking...</span></div>
+                <div style="font-size:11px;margin-top:4px">Model: <span id="llm-status-model" style="color:var(--text-secondary)">—</span></div>
+                <div style="font-size:11px">Speed: <span id="llm-status-speed" style="color:var(--text-secondary)">—</span></div>
+              </div>
+              <div style="margin-top:12px">
+                <div style="font-size:11px;margin-bottom:4px">Last Sentiment:</div>
+                <div>Direction: <span id="llm-sentiment-dir" style="font-weight:700">—</span></div>
+                <div>Score: <span id="llm-sentiment-score" style="color:var(--text-secondary)">—</span></div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="glass-panel" style="padding:16px;margin-bottom:10px">
+              <h3>Configuration</h3>
+              <div class="form-group"><label>Host</label><input id="llm-host" placeholder="192.168.0.77"></div>
+              <div class="form-group"><label>Port</label><input id="llm-port" placeholder="8080"></div>
+              <div class="form-group toggle">
+                <span>Enable LLaMA</span>
+                <label><input type="checkbox" id="llm-enabled"><span class="track"></span></label>
+              </div>
+              <div class="form-group toggle">
+                <span>Fallback to OpenClaw</span>
+                <label><input type="checkbox" id="llm-fallback"><span class="track"></span></label>
+              </div>
+              <div style="display:flex;gap:8px;margin-top:10px">
+                <button class="btn btn-sm" id="btn-llm-save">💾 Save Config</button>
+                <button class="btn btn-sm" id="btn-llm-refresh">🔄 Refresh</button>
+              </div>
+            </div>
+            <div class="glass-panel" style="padding:16px">
+              <h3>Actions</h3>
+              <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+                <button class="btn btn-sm" id="btn-llm-test">🧪 Test Query</button>
+                <button class="btn btn-sm" id="btn-llm-sentiment">📈 Sentiment Analysis</button>
+                <button class="btn btn-sm" id="btn-llm-regime">🔄 Regime Detection</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="glass-panel" style="padding:16px;margin-top:10px" id="llm-result">
+          <p style="color:var(--text-secondary)">Results appear here...</p>
+        </div>
+      </div>
     <div class="two-col">
       <div>
         <div class="glass-panel" style="padding:14px 16px;margin-bottom:12px" id="llm-status-card">
@@ -395,47 +452,38 @@ body.debug #js-indicator { display: block !important; }
 
   <!-- ═══════════════ TAB: AI AGENTS ═══════════════ -->
   <div id="tab-agents" class="tab-content">
-    <div class="two-col">
-      <div>
-        <div class="glass-panel" style="padding:14px 16px;margin-bottom:12px">
-          <div class="section-title">Quant Team Status</div>
-          <div id="agents-status" class="scroll-y" style="max-height:400px"></div>
-          <div class="card-row mt-sm">
-            <button class="btn btn-primary" id="btn-trigger-self-dev">Self-Dev</button>
-            <button class="btn" id="btn-trigger-nn">NN Optimizer</button>
-            <button class="btn" id="btn-trigger-sentiment">Sentiment</button>
-            <button class="btn" id="btn-trigger-risk">Risk Audit</button>
-            <button class="btn" id="btn-trigger-alloc">Allocator</button>
-            <button class="btn btn-primary" id="btn-trigger-all">▶ Run All</button>
+        <div class="section-header" style="margin-bottom:12px">
+          <h2 style="color:var(--neon-blue)">🤖 Quant Team Agents</h2>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-sm" id="btn-trigger-all">⚡ Trigger All</button>
+            <button class="btn btn-sm" id="btn-refresh-agents">🔄 Refresh</button>
           </div>
         </div>
-      </div>
-      <div>
-        <div class="glass-panel" style="padding:14px 16px;margin-bottom:12px">
-          <div class="section-title">LLM Configuration</div>
+        <div id="agents-container"></div>
+        
+        <div class="section-header" style="margin:16px 0 8px 0">
+          <h3 style="color:var(--neon-green)">📝 Agent Prompts</h3>
+          <button class="btn btn-sm" id="btn-save-prompts">💾 Save Current Prompt</button>
+        </div>
+        <div id="prompts-tab-container" class="glass-panel" style="padding:16px"></div>
+        
+        <div class="section-header" style="margin:16px 0 8px 0">
+          <h3 style="color:var(--neon-yellow)">⚙️ Agent LLM Config</h3>
+        </div>
+        <div class="glass-panel" style="padding:16px">
+          <div class="grid-2col">
+            <div class="form-group"><label>Provider</label><input id="agent-llm-provider" placeholder="anthropic"></div>
+            <div class="form-group"><label>Model</label><input id="agent-llm-model" placeholder="claude-sonnet-4-20250514"></div>
+          </div>
+          <div class="form-group"><label>Base URL</label><input id="agent-llm-url" placeholder="https://api.anthropic.com"></div>
           <div class="form-group toggle">
-            <span style="font-size:12px">Enable LLaMA for agents</span>
-            <label style="margin:0"><input type="checkbox" id="agent-llm-enabled"><span class="track"></span></label>
+            <span>Enable Agents</span>
+            <label><input type="checkbox" id="agent-llm-enabled"><span class="track"></span></label>
           </div>
-          <div class="form-group"><label>Model</label><input type="text" id="agent-llm-model"></div>
-          <button class="btn btn-primary mt-sm" id="btn-save-agent-llm">Save</button>
-        </div>
-        <div class="glass-panel" style="padding:14px 16px">
-          <div class="section-title">Agent Prompts</div>
-          <textarea id="prompts-editor" style="min-height:200px" placeholder='{"agent":"prompt"}'>
-{
-  "self_dev": "Analyze and improve...",
-  "nn_optimizer": "Tune learning rate...",
-  "risk_auditor": "Audit drawdown..."
-}</textarea>
-          <button class="btn btn-primary mt-sm" id="btn-save-prompt">Save Prompts</button>
+          <button class="btn btn-sm" id="btn-save-agent-llm" style="margin-top:8px">💾 Save LLM Config</button>
         </div>
       </div>
-    </div>
-  </div>
-
-  <!-- ═══════════════ TAB: TRADING SYSTEM ═══════════════ -->
-  <div id="tab-settings" class="tab-content">
+<div id="tab-settings" class="tab-content">
     <div class="two-col">
       <div>
         <div class="glass-panel" style="padding:14px 16px;margin-bottom:12px">
@@ -443,7 +491,9 @@ body.debug #js-indicator { display: block !important; }
           <div class="form-grid">
             <div class="form-group"><label>Max Position Size ($)</label><input type="number" id="config-max-position"></div>
             <div class="form-group"><label>Max Drawdown (%)</label><input type="number" id="config-max-drawdown"></div>
-            <div class="form-group"><label>Cooldown (minutes)</label><input type="number" id="config-cooldown"></div>
+            <div class="form-group"><label>Cooldown (minutes)</label><input type="number" <div class="form-group"><label>TP Multiplier</label><input type="number" id="config-tp" step="0.1"></div>
+        <div class="form-group"><label>SL Multiplier</label><input type="number" id="config-sl" step="0.1"></div>
+        <div class="form-group"><label>Cooldown (min)</label><input type="number" id="config-cooldown"></div>
           </div>
           <div class="card-row mt-sm">
             <button class="btn btn-primary" id="btn-save-config">Save Config</button>
@@ -532,6 +582,12 @@ body.debug #js-indicator { display: block !important; }
 
   <!-- ═══════════════ TAB: ARCHITECTURE ═══════════════ -->
   <div id="tab-architecture" class="tab-content">
+        <div class="section-header" style="margin-bottom:12px">
+          <h2 style="color:var(--neon-blue)">🏗️ System Architecture</h2>
+          <button class="btn btn-sm" id="btn-refresh-arch">🔄 Refresh</button>
+        </div>
+        <div id="architecture-diagram"></div>
+      </div>
     <div id="architecture-diagram"></div>
   </div>
 
@@ -552,15 +608,15 @@ body.debug #js-indicator { display: block !important; }
 <div id="toast-container"></div>
 
 <!-- ═══════════════ SCRIPTS ═══════════════ -->
-<script src="/dashboard-v2/js/api.js?v=1784668956"></script>
-<script src="/dashboard-v2/js/router.js?v=1784668956"></script>
-<script src="/dashboard-v2/js/dashboard.js?v=1784668956"></script>
-<script src="/dashboard-v2/js/neural.js?v=1784668956"></script>
-<script src="/dashboard-v2/js/assets.js?v=1784668956"></script>
-<script src="/dashboard-v2/js/llm.js?v=1784668956"></script>
-<script src="/dashboard-v2/js/agents.js?v=1784668956"></script>
-<script src="/dashboard-v2/js/settings.js?v=1784668956"></script>
-<script src="/dashboard-v2/js/logs.js?v=1784668956"></script>
+<script src="/dashboard-v2/js/api.js?v=1784669110"></script>
+<script src="/dashboard-v2/js/router.js?v=1784669110"></script>
+<script src="/dashboard-v2/js/dashboard.js?v=1784669110"></script>
+<script src="/dashboard-v2/js/neural.js?v=1784669110"></script>
+<script src="/dashboard-v2/js/assets.js?v=1784669110"></script>
+<script src="/dashboard-v2/js/llm.js?v=1784669110"></script>
+<script src="/dashboard-v2/js/agents.js?v=1784669110"></script>
+<script src="/dashboard-v2/js/settings.js?v=1784669110"></script>
+<script src="/dashboard-v2/js/logs.js?v=1784669110"></script>
 
 
   <div id="fatal-error-display" style="display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(244,63,94,0.9);color:white;padding:12px;z-index:99999;font-family:monospace;font-size:12px;max-height:200px;overflow-y:auto"></div>
