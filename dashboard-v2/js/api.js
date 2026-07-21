@@ -7,13 +7,33 @@ const API = {
 
   async _fetch(path, opts = {}) {
     const url = this.base + path;
-    const res = await fetch(url, {
-      headers: { 'Content-Type': 'application/json', ...opts.headers },
-      ...opts,
-    });
+    let res;
+    try {
+      res = await fetch(url, {
+        headers: { 'Content-Type': 'application/json', ...opts.headers },
+        ...opts,
+        signal: AbortSignal.timeout(15000),
+      });
+    } catch (err) {
+      if (err.name === 'TimeoutError' || err.name === 'AbortError') {
+        throw new Error('NETWORK_TIMEOUT: Request to ' + path + ' timed out');
+      }
+      throw new Error('NETWORK_ERROR: ' + (err.message || 'Connection failed'));
+    }
     if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw new Error(`HTTP ${res.status}: ${text.slice(0, 200)}`);
+      let text = '';
+      try { text = await res.text(); } catch(e) { text = ''; }
+      const trimmed = text.slice(0, 300);
+      if (res.status === 404) {
+        throw new Error('NOT_FOUND: Endpoint ' + path + ' not available (404)');
+      } else if (res.status === 500) {
+        throw new Error('SERVER_ERROR: ' + path + ' returned 500: ' + trimmed);
+      } else if (res.status === 503) {
+        throw new Error('SERVICE_UNAVAILABLE: Backend is offline (503)');
+      } else if (res.status === 429) {
+        throw new Error('RATE_LIMITED: Too many requests (429). Retry later.');
+      }
+      throw new Error('HTTP ' + res.status + ': ' + trimmed);
     }
     return res.json();
   },

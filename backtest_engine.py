@@ -379,7 +379,7 @@ class BacktestEngine:
         for i, row in enumerate(candles):
             history = candles[max(0, i - 100):i]
             try:
-                signal, _ = ensemble.generate_ensemble_signal(row, history_df=history)
+                signal, _ = ensemble.get_weighted_signal(row, history_df=history)
             except Exception:
                 signal = 0.0
             close = row.get("close", 0)

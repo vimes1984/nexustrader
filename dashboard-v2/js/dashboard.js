@@ -5,6 +5,7 @@ const Dashboard = {
   chart: null, weightsChart: null, chartSeries: {}, chartType: 'candles', chartData: [],
 
   init() {
+    this.initFreshness();
     try { this.initCharts(); } catch(e) { console.error('Chart init failed:', e); }
     document.addEventListener('nt:initState', (e) => this.onInitState(e.detail));
     document.addEventListener('nt:wsMessage', (e) => this.onWSMessage(e.detail));
@@ -13,18 +14,43 @@ const Dashboard = {
 
     document.querySelectorAll('.chart-type-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        document.querySelectorAll('.chart-type-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.chart-type-btn').forEach(b => {
+          b.classList.remove('active');
+          b.setAttribute('aria-checked', 'false');
+        });
         btn.classList.add('active');
+        btn.setAttribute('aria-checked', 'true');
         this.chartType = btn.dataset.type;
         this.redrawChart();
       });
     });
+
+    // Chart zoom reset
+    byId('chart-reset-zoom')?.addEventListener('click', () => {
+      if (this.chart && this.chartData?.length) {
+        this.chart.timeScale().fitContent();
+        App?.toast('Chart zoom reset', 'info');
+      }
+    });
+
+    // Improve crosshair — enable magnet mode for better precision
+    if (this.chart) {
+      this.chart.applyOptions({ crosshair: { mode: 0, vertLine: { labelBackgroundColor: '#1e293b' }, horzLine: { labelBackgroundColor: '#1e293b' } } });
+    }
+
     lucide?.createIcons();
+  },
+
+  initFreshness() {
+    ['chart','portfolio'].forEach(id => this.updateFreshness(id, null));
   },
 
   initCharts() {
     const chartEl = byId('main-chart');
     if (!chartEl || typeof LightweightCharts === 'undefined') return;
+
+    // Listen for resize events (orientation change etc)
+    document.addEventListener('nt:resize', () => this._resizeHandler?.());
 
     this.chart = LightweightCharts.createChart(chartEl, {
       width: chartEl.clientWidth || 800,
@@ -65,17 +91,30 @@ const Dashboard = {
       });
     }
 
-    // Resize handler
+    // Debounced resize handler to prevent layout thrashing
+    if (window.__ntChartResize) {
+      window.removeEventListener('resize', window.__ntChartResize);
+    }
     this._resizeHandler = () => {
       if (this.chart && chartEl.clientWidth) {
         this.chart.applyOptions({ width: chartEl.clientWidth, height: chartEl.clientHeight || 420 });
       }
     };
-    window.addEventListener('resize', this._resizeHandler);
+    this._debouncedResize = this._debounce ? this._debounce(this._resizeHandler, 150) : this._resizeHandler;
+    window.__ntChartResize = this._debouncedResize;
+    window.addEventListener('resize', this._debouncedResize);
+  },
+
+  _debounce(fn, ms) {
+    let timer;
+    return (...args) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => fn(...args), ms);
+    };
   },
 
   redrawChart() {
-    if (!this.chart?.chartSeries?.candles || !this.chartSeries?.candles || !this.chartData?.length) return; // fallback for chartSeries stored separately
+    if (!this.chart || !this.chartSeries?.candles || !this.chartData?.length) return;
     if (this.chartType === 'line') {
       const flat = this.chartData.map(d => ({ time: d.time, open: d.close, high: d.close, low: d.close, close: d.close }));
       this.chartSeries.candles.setData(flat);
@@ -137,19 +176,19 @@ const Dashboard = {
             low: data.low || data.price,
             close: data.price
           });
-          // Animate price marker on real-time tick
-          if (this.chart) {
-            this.applyOptions?.({ crosshair: { mode: LightweightCharts.CrosshairMode.Normal } });
-          }
         } catch(e) {}
       }
+      // Update data freshness indicator
+      this.updateFreshness('chart', data.timestamp);
+      this.updateFreshness('portfolio', data.timestamp);
       this.updateKPIs(data);
       if (data.sim_progress != null) {
         const c = byId('sim-progress-container'); const b = byId('sim-progress-bar'); const l = byId('sim-progress-label');
+        const pct = Math.round(data.sim_progress);
         if (data.sim_progress > 0 && data.sim_progress < 100) {
-          if (c) c.style.display = 'flex';
-          if (b) b.style.width = data.sim_progress + '%';
-          if (l) l.textContent = Math.round(data.sim_progress) + '%';
+          if (c) { c.style.display = 'flex'; c.setAttribute('aria-valuenow', String(pct)); }
+          if (b) b.style.width = pct + '%';
+          if (l) l.textContent = pct + '%';
         } else if (c) { c.style.display = 'none'; }
       }
       if (data.position) this.renderPosition(data.position);
@@ -278,6 +317,30 @@ const Dashboard = {
       <span style="font-family:var(--font-mono)">Size: <b>${Number(pos.size||0).toFixed(4)}</b></span>
       <span style="font-family:var(--font-mono)">PnL: <b style="color:${pnl>=0?'var(--neon-green)':'var(--neon-red)'}">$${pnl.toFixed(4)}</b></span>
     </div>`;
+  },
+
+  updateFreshness(id, timestamp) {
+    const el = byId('freshness-' + id);
+    if (!el) return;
+    const dot = el.querySelector('.freshness-dot');
+    const text = el.querySelector('.freshness-text');
+    if (!timestamp) {
+      el.className = 'data-freshness loading';
+      if (text) text.textContent = 'Waiting...';
+      return;
+    }
+    const age = Date.now() - (timestamp < 1e12 ? timestamp * 1000 : timestamp);
+    el.className = 'data-freshness';
+    if (age < 5000) {
+      if (text) text.textContent = 'Live';
+    } else if (age < 60000) {
+      if (text) text.textContent = Math.round(age/1000) + 's ago';
+    } else if (age < 3600000) {
+      if (text) text.textContent = Math.round(age/60000) + 'm ago';
+    } else {
+      el.classList.add('stale');
+      if (text) text.textContent = 'Stale';
+    }
   },
 
   renderProbability(prob) {

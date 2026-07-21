@@ -1,44 +1,40 @@
 import os
-import sqlite3
 import json
-import urllib.request
 import logging
 from mutation_guard import should_apply_agent_mutation, log_blocked_mutation
+import database as _db
 
 AGENT_NAME = "risk_auditor"
 import subprocess
 
-DB_PATH = os.path.expanduser("~/.nexustrader/nexustrader.db")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 def load_settings():
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
-    c.execute("SELECT key, value FROM settings")
-    rows = c.fetchall()
-    conn.close()
-    return {r[0]: r[1] for r in rows}
+    try:
+        conn = _db.get_db_connection()
+        c = conn.cursor()
+        c.execute("SELECT key, value FROM settings")
+        rows = c.fetchall()
+        conn.close()
+        return {r[0]: r[1] for r in rows} if rows else {}
+    except Exception:
+        return {}
 
 def save_setting(key, value):
     if not should_apply_agent_mutation(AGENT_NAME):
         log_blocked_mutation(AGENT_NAME, key, value)
         return
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
-    conn.commit()
-    conn.close()
+    _db.save_setting_directly(key, value)
 
 def run_risk_audit(trigger_deploy: bool = False):
     logging.info("Starting Quantitative Portfolio Risk Audit...")
     settings = load_settings()
-    gemini_api_key = settings.get("blog_gemini_api_key", "").strip()
     ai_enabled = settings.get("blog_ai_enabled", "false") == "true"
     
-    if not gemini_api_key or not ai_enabled:
-        logging.warning("Gemini API key is not configured or AI is disabled. Cannot run Risk Audit.")
-        return "Gemini API key is not configured or AI is disabled."
+    # Use OpenClaw bridge regardless of Gemini key - the bridge handles routing
+    if not ai_enabled:
+        logging.warning("AI is disabled. Cannot run Risk Audit.")
+        return "AI is disabled. Enable blog_ai_enabled setting."
         
     db_prompt = settings.get("prompt_risk_auditor")
     if not db_prompt:
@@ -56,8 +52,8 @@ At the very end of your response, output a strict JSON block with risk parameter
     # Read trades from DB for risk auditing
     recent_trades = []
     try:
-        conn = sqlite3.connect(DB_PATH)
-        conn.row_factory = sqlite3.Row
+        conn = _db.get_db_connection()
+        conn.row_factory = __import__('sqlite3').Row
         c = conn.cursor()
         c.execute("SELECT id, symbol, direction, pnl, exit_reason FROM trades ORDER BY id DESC LIMIT 20")
         recent_trades = [dict(r) for r in c.fetchall()]
@@ -78,9 +74,9 @@ Recent trades telemetry:
     report_lines = ["\n## 🛡️ Portfolio Risk Audit Report"]
     
     try:
-        logging.info("Requesting Risk Audit evaluation from Gemini...")
-        from openclaw_bridge import query_openclaw, extract_json_block
-        advice_text = query_openclaw(prompt, agent_name="risk")
+        logging.info("Requesting Risk Audit evaluation from LLM...")
+        from openclaw_bridge import query_auto, extract_json_block
+        advice_text = query_auto(prompt, agent_name="risk")
         
         advice_clean = advice_text
         json_block = ""
@@ -132,8 +128,8 @@ Recent Developer/Quant logs:
 Critically analyze this context. Redesign your own prompt template to focus it even more tightly on achieving $1,000 USD/day, ensuring it asks for correct hedging checks and keeps its final settings JSON format.
 Return ONLY a JSON block containing the key "revised_prompt_risk_auditor" with your improved prompt template as the value (do not include markdown wrappers like ```json).
 """
-        from openclaw_bridge import query_openclaw, extract_json_block
-        raw_text = query_openclaw(meta_prompt, agent_name="risk", max_tokens=2048)
+        from openclaw_bridge import query_auto, extract_json_block
+        raw_text = query_auto(meta_prompt, agent_name="risk", max_tokens=2048)
         if raw_text.startswith("```json"):
             raw_text = raw_text[7:]
         if raw_text.endswith("```"):
@@ -151,6 +147,7 @@ Return ONLY a JSON block containing the key "revised_prompt_risk_auditor" with y
     report_content = "\n".join(report_lines)
     
     # Save/Append report to blog/daily_summaries/weekly_self_improvement.md
+    base_dir = os.path.dirname(os.path.abspath(__file__))
     if os.path.exists(os.path.join(base_dir, "blog", "daily_summaries")):
         report_path = os.path.join(base_dir, "blog", "daily_summaries", "weekly_self_improvement.md")
         try:

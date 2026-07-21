@@ -25,6 +25,9 @@
   --radius: 8px;
   --radius-sm: 6px;
   --transition: 0.2s ease;
+  --shadow-card: 0 4px 24px rgba(0,0,0,0.2);
+  --shadow-dropdown: 0 12px 40px rgba(0,0,0,0.6);
+  --focus-ring: 0 0 0 2px rgba(59,130,246,0.3);
 }
 
 /* ═══════════ RESET ═══════════ */
@@ -63,6 +66,7 @@ body {
   background: var(--bg-surface);
   border: 1px solid var(--border-color);
   border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
   /* Safari: backdrop-filter needs -webkit- prefix before standard */
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
@@ -180,7 +184,7 @@ label { font-size: 12px; color: var(--text-secondary); display: block; margin-bo
   border-radius: var(--radius) 0 0 var(--radius);
 }
 .kpi-title { font-size: 10px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1.5px; font-weight: 600; }
-.kpi-value { font-size: 26px; font-weight: 700; font-family: var(--font-mono); margin: 4px 0; line-height: 1.2; }
+.kpi-value { font-size: 26px; font-weight: 700; font-family: var(--font-mono); margin: 4px 0; line-height: 1.2; transition: color 0.3s ease, opacity 0.3s ease; }
 .kpi-sub { font-size: 11px; color: var(--text-muted); }
 
 /* ═══════════ CHART ═══════════ */
@@ -263,12 +267,14 @@ label { font-size: 12px; color: var(--text-secondary); display: block; margin-bo
   position: fixed; top: 16px; right: 16px; z-index: 11000;
   display: flex; flex-direction: column; gap: 8px; pointer-events: none;
 }
+#toast-container:empty { display: none; }
 .toast {
   background: rgba(17,24,39,0.95); border: 1px solid var(--border-color);
   border-radius: var(--radius); padding: 10px 16px; font-size: 12px;
   display: flex; align-items: center; gap: 8px;
   backdrop-filter: blur(12px); min-width: 200px; max-width: 400px;
   pointer-events: auto; box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  position: relative; overflow: hidden;
 }
 .toast::before {
   content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
@@ -323,6 +329,41 @@ label { font-size: 12px; color: var(--text-secondary); display: block; margin-bo
 .scroll-y::-webkit-scrollbar { width: 4px; }
 .scroll-y::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
 .scroll-y::-webkit-scrollbar-track { background: transparent; }
+
+/* ═══════════ DATA FRESHNESS INDICATOR ═══════════ */
+.data-freshness {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 9px; color: var(--text-muted);
+  padding: 2px 8px; border-radius: 10px;
+  background: rgba(255,255,255,0.03);
+  white-space: nowrap;
+}
+.data-freshness .freshness-dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--neon-green);
+  animation: pulse 2s ease-in-out infinite;
+}
+.data-freshness.stale .freshness-dot { background: var(--neon-red); animation: none; }
+.data-freshness.stale { color: var(--neon-red); }
+.data-freshness.loading .freshness-dot {
+  background: var(--neon-yellow);
+  animation: pulse 0.6s ease-in-out infinite;
+}
+
+/* ═══════════ COLOR-BLIND SAFE PATTERNS ═══════════ */
+/* Use patterns + shapes alongside colors for PnL direction */
+.pnl-up { color: var(--neon-green); }
+.pnl-up::before { content: '▲ '; font-size: 10px; }
+.pnl-down { color: var(--neon-red); }
+.pnl-down::before { content: '▼ '; font-size: 10px; }
+.pnl-neutral { color: var(--text-secondary); }
+
+/* Striped pattern for charts to aid color-blind users */
+.colorblind-stripes {
+  background: repeating-linear-gradient(45deg,
+    transparent 0px, transparent 4px,
+    rgba(255,255,255,0.08) 4px, rgba(255,255,255,0.08) 8px) !important;
+}
 
 /* ═══════════ UTILITIES ═══════════ */
 .mb-sm { margin-bottom: 8px; }

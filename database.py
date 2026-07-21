@@ -5,7 +5,11 @@ import logging
 import time
 
 # Safety singletons (lightweight import, no circular deps)
-from evaluation.singletons import mutation_freeze
+try:
+    from evaluation.singletons import mutation_freeze
+except ImportError:
+    # Fallback: root-level singletons module
+    from singletons import mutation_freeze
 from trading_modes import ns as ns_key, MODE_RESEARCH, MODE_LIVE
 
 def get_data_dir():

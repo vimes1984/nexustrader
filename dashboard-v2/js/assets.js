@@ -23,7 +23,7 @@ const Assets = {
       const data = await API.assetList();
       const tickers = Array.isArray(data) ? data : (data?.tickers || data?.assets || []);
       if (!tickers.length) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text-muted)">No tracked assets</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><div class="empty-state-icon">📦</div><div class="empty-state-title">No tracked assets</div><div class="empty-state-desc">Add your first ticker symbol to start tracking assets.</div><button class="btn btn-sm btn-primary" id="btn-add-asset-from-empty" onclick="Assets?.addAsset()">+ Add Asset</button></div></td></tr>';
         return;
       }
       tbody.innerHTML = tickers.map(t => {

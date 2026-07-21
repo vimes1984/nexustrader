@@ -54,7 +54,14 @@ TOKEN_TO_ID = {tok: i for i, tok in enumerate(FULL_VOCABULARY)}
 # ─── Helper Functions ───────────────────────────────────────────────────────
 
 def _compute_atr(high: np.ndarray, low: np.ndarray, close: np.ndarray, period: int = 14) -> float:
-    """Compute ATR over a numpy array window."""
+    """Compute ATR using Wilder's RMA smoothing (EMA alpha=1/period).
+
+    J. Welles Wilder's ATR:
+    1. True Range = max(high-low, |high-close_{t-1}|, |low-close_{t-1}|)
+    2. First ATR = mean of first `period` TR values
+    3. Subsequent: ATR = (prev_ATR * (period-1) + current_TR) / period
+       = EMA(TR, alpha=1/period)
+    """
     if len(close) < 2:
         return 0.0
     tr = np.maximum(
@@ -66,7 +73,15 @@ def _compute_atr(high: np.ndarray, low: np.ndarray, close: np.ndarray, period: i
     )
     if len(tr) == 0:
         return 0.0
-    return float(np.mean(tr[-period:]) if len(tr) >= period else np.mean(tr))
+    # Wilder's RMA smoothing
+    if len(tr) >= period:
+        atr = float(np.mean(tr[:period]))
+        alpha = 1.0 / period
+        for i in range(period, len(tr)):
+            atr = alpha * tr[i] + (1.0 - alpha) * atr
+        return atr
+    else:
+        return float(np.mean(tr))
 
 
 def _compute_ema(series: np.ndarray, period: int) -> float:
@@ -83,14 +98,31 @@ def _compute_ema(series: np.ndarray, period: int) -> float:
 
 
 def _compute_rsi(closes: np.ndarray, period: int = 14) -> float:
-    """Compute RSI-14."""
+    """Compute RSI-14 using Wilder's smoothing (EMA alpha=1/period).
+
+    Wilder's RSI (J. Welles Wilder, 1978):
+    - First avg_gain/avg_loss = SMA of first `period` gains/losses
+    - Subsequent: avg = (prev * (period-1) + current) / period
+      = EMA with alpha = 1/period
+    - RS = avg_gain / avg_loss
+    - RSI = 100 - 100/(1 + RS)
+    """
     if len(closes) < period + 1:
         return 50.0
     deltas = np.diff(closes)
     gains = np.where(deltas > 0, deltas, 0.0)
     losses = np.where(deltas < 0, -deltas, 0.0)
-    avg_gain = float(np.mean(gains[-period:]))
-    avg_loss = float(np.mean(losses[-period:]))
+    # Wilder's smoothing: first SMA, then EMA with alpha=1/period
+    if len(gains) >= period:
+        avg_gain = float(np.mean(gains[:period]))
+        avg_loss = float(np.mean(losses[:period]))
+        alpha = 1.0 / period
+        for i in range(period, len(gains)):
+            avg_gain = alpha * gains[i] + (1.0 - alpha) * avg_gain
+            avg_loss = alpha * losses[i] + (1.0 - alpha) * avg_loss
+    else:
+        avg_gain = float(np.mean(gains))
+        avg_loss = float(np.mean(losses))
     if avg_loss == 0:
         return 100.0
     rs = avg_gain / avg_loss

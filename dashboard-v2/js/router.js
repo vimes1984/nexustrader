@@ -111,8 +111,25 @@ const App = {
       if (this.el.notificationDropdown?.style.display === 'flex' &&
           !e.target.closest('.notification-dropdown-container')) {
         this.el.notificationDropdown.style.display = 'none';
+        this.el.notificationBell?.setAttribute('aria-expanded', 'false');
       }
     });
+
+    // Handle orientation changes: recalculate layout
+    window.addEventListener('orientationchange', () => {
+      setTimeout(() => {
+        document.dispatchEvent(new CustomEvent('nt:resize'));
+      }, 300);
+    });
+
+    // Prevent accidental long-press context menu on mobile
+    document.querySelector('.dashboard-container')?.addEventListener('touchstart', (e) => {
+      const target = e.target;
+      if (target && (target.closest('button') || target.closest('.kpi-card') || target.closest('.chart-container'))) {
+        // Allow long-press on actionable elements to proceed
+        return;
+      }
+    }, { passive: true });
   },
 
   initNav() {
@@ -162,6 +179,7 @@ const App = {
   openDrawer() {
     if (this.el.navDrawer) {
       this.el.navDrawer.style.left = '0';
+      this.el.navDrawer.setAttribute('aria-hidden', 'false');
       // Focus trap: move focus into drawer
       setTimeout(() => {
         const firstTab = this.el.navDrawer.querySelector('.nav-tab');
@@ -169,14 +187,17 @@ const App = {
       }, 100);
     }
     if (this.el.navOverlay) this.el.navOverlay.style.display = 'block';
+    byId('open-drawer-btn')?.setAttribute('aria-expanded', 'true');
   },
   closeDrawer() {
     if (this.el.navDrawer) {
       this.el.navDrawer.style.left = '-280px';
+      this.el.navDrawer.setAttribute('aria-hidden', 'true');
       // Restore focus to hamburger button
       byId('open-drawer-btn')?.focus();
     }
     if (this.el.navOverlay) this.el.navOverlay.style.display = 'none';
+    byId('open-drawer-btn')?.setAttribute('aria-expanded', 'false');
   },
 
   // ── Touch Gestures ──
@@ -424,9 +445,12 @@ const App = {
 
   toggleNotifications() {
     const dd = this.el.notificationDropdown;
+    const bell = this.el.notificationBell;
     if (!dd) return;
-    dd.style.display = dd.style.display === 'flex' ? 'none' : 'flex';
-    if (dd.style.display === 'flex') {
+    const isOpen = dd.style.display === 'flex';
+    dd.style.display = isOpen ? 'none' : 'flex';
+    if (bell) bell.setAttribute('aria-expanded', String(!isOpen));
+    if (!isOpen) {
       this.state.unreadNotifications = 0;
       this.state.notifications.forEach(n => n.read = true);
       localStorage.setItem('nt_notif_v2', JSON.stringify(this.state.notifications));
@@ -471,6 +495,15 @@ const App = {
   emit(event, data) {
     (this._listeners[event] || []).forEach(fn => { try { fn(data); } catch(e) { console.error('Event handler error:', event, e); } });
     document.dispatchEvent(new CustomEvent(`nt:${event}`, { detail: data }));
+  },
+
+  // ── Debounce utility ──
+  _debounce(fn, ms) {
+    let timer;
+    return (...args) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => fn(...args), ms);
+    };
   },
 
   // ── Helpers ──

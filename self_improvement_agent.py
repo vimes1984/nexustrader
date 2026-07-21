@@ -1,34 +1,31 @@
 import os
 import json
-import sqlite3
 import numpy as np
 import logging
 from mutation_guard import should_apply_agent_mutation, log_blocked_mutation
+import database as _db
 
 AGENT_NAME = "self_improvement_agent"
 import urllib.request
 
-DB_PATH = os.path.expanduser("~/.nexustrader/nexustrader.db")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 def load_settings():
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
-    c.execute("SELECT key, value FROM settings")
-    rows = c.fetchall()
-    conn.close()
-    return {r[0]: r[1] for r in rows}
+    try:
+        conn = _db.get_db_connection()
+        c = conn.cursor()
+        c.execute("SELECT key, value FROM settings")
+        rows = c.fetchall()
+        conn.close()
+        return {r[0]: r[1] for r in rows} if rows else {}
+    except Exception:
+        return {}
 
 def save_setting(key, value):
     if not should_apply_agent_mutation(AGENT_NAME):
         log_blocked_mutation(AGENT_NAME, key, value)
         return
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
-    conn.commit()
-    conn.close()
+    _db.save_setting_directly(key, value)
 
 def run_backtest_rsi(ticks, oversold, overbought):
     """Simulates trading using the RSI strategy over historical ticks and returns net PnL."""
@@ -128,19 +125,15 @@ def run_backtest_atr_multipliers(ticks, tp_mult, sl_mult):
 
 def run_self_improvement():
     logging.info("Starting weekly self-improvement and strategy parameter optimization...")
-    if not os.path.exists(DB_PATH):
-        logging.warning("Database not found. Skipping optimization.")
-        return
-        
     try:
-        conn = sqlite3.connect(DB_PATH)
-        conn.row_factory = sqlite3.Row
+        conn = _db.get_db_connection()
+        conn.row_factory = __import__('sqlite3').Row
         c = conn.cursor()
         
         # 1. Load historical ticks for backtesting
         c.execute("SELECT close, rsi FROM ticks ORDER BY timestamp ASC LIMIT 5000")
         ticks = [dict(r) for r in c.fetchall()]
-        
+
         if len(ticks) < 50:
             logging.info(f"Insufficient tick history ({len(ticks)} ticks). Need at least 50 ticks to run backtest optimization. Using default parameters.")
             conn.close()
@@ -306,14 +299,7 @@ Current Session Data:
                     sl_mult = params.get("sl_multiplier", 1.5)
                     kelly = params.get("kelly_ceiling", 0.2)
 
-                    conn_asset = sqlite3.connect(DB_PATH)
-                    c_asset = conn_asset.cursor()
-                    c_asset.execute(
-                        "INSERT OR REPLACE INTO active_assets (ticker, is_active, tp_multiplier, sl_multiplier, kelly_ceiling) VALUES (?, ?, ?, ?, ?)",
-                        (ticker, int(is_active), tp_mult, sl_mult, kelly)
-                    )
-                    conn_asset.commit()
-                    conn_asset.close()
+                    _db.save_active_asset(ticker, is_active, tp_mult, sl_mult, kelly)
                     report_lines.append(f"\n📊 **Auto-Applied Asset Setting**: `{ticker}` -> Active: `{is_active}`, TP: `{tp_mult}x`, SL: `{sl_mult}x`, Kelly Cap: `{kelly}`")
         except Exception as e:
             report_lines.append(f"Error calling AI for analysis: {e}")
@@ -335,7 +321,8 @@ Current Session Data:
             logging.info("Weekly self improvement report saved to blog.")
             
     except Exception as e:
-        logging.error(f"Error in weekly self-improvement optimization: {e}")
+        import traceback
+        logging.error(f"Error in weekly self-improvement optimization: {e}\n{traceback.format_exc()}")
 
 def optimize_own_prompt(settings, recent_trades, best_oversold, best_overbought, best_threshold, best_tp_mult, best_sl_mult):
     try:

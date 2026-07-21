@@ -2,7 +2,11 @@ import time
 import logging
 import json
 import os
+import threading
 import database
+
+# Global lock protecting shared execution state (active_positions, balance, pending_limit_orders)
+_exec_lock = threading.RLock()
 
 def normalize_kraken_asset(asset: str) -> str:
     asset = asset.upper()

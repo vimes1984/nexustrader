@@ -157,37 +157,51 @@ class PolicyNetwork:
                 self.b[i] -= self.lr * db[i]
 
     def _compute_gradients(self, state, alignment, advantage, entropy_beta=0.01):
-        """Compute policy gradients for a single (state, alignment, advantage) tuple."""
+        """Compute policy gradients for a single (state, alignment, advantage) tuple.
+
+        Uses the REINFORCE policy gradient (Williams, 1992).
+
+        The ensemble weights define a distribution over strategies. The 'action' is the
+        strategy whose signal most strongly agrees with the trade direction.
+
+        Policy gradient:  ∇J = E[∇log π(a|s) * A]
+        For softmax policy:  ∂log π(a_i|s)/∂z_j = δ_{ij} - π_j
+
+        Entropy bonus gradient (Schulman et al., 2017):
+        H = -Σ π_i log π_i
+        ∂H/∂z_j = -π_j * (log π_j + H)
+        """
         # Forward pass to cache activations
         self.forward(state)
         
-        # Scale advantage
+        # Scale advantage to a reasonable range for gradient magnitude
         scaled_reward = np.clip(advantage * 100.0, -5.0, 5.0)
         
         probs = self.probs
-        # Policy gradient: dL/d(logit_i) = -A * (delta_{i,action} - p_i)
-        # where A is the advantage scaled reward and action = argmax of alignment
-        # Alignment is a vector of strategy signal strengths * direction
-        #
-        # The gradient of -A * alignment · log(probs) w.r.t. logits:
-        # d/d(z_i) [-A * sum_j alignment_j * log(p_j)]
-        # = -A * [alignment_i - sum_j alignment_j * p_i]
-        # = -A * p_i * (alignment_i/p_i - sum(alignment))
-        # 
-        # Simpler form: cross-entropy style gradient
-        # dL/dz = probs * sum(alignment) - alignment
-        # where alignment is the target distribution
-        #
-        # For the standard policy gradient dL = -alignment * d(log_prob)
-        # dL/dz = probs - alignment (the standard softmax gradient)
-        d_z = scaled_reward * (probs - alignment.reshape(1, -1))
         
-        # Entropy bonus gradient: dH/dz where H = -sum(p * log(p))
-        # dH/dz = p * (entropy - log(p))
+        # Determine the chosen action: the strategy with strongest alignment signal
+        # alignment = strategy_signals * dir_val  (positive = agreed with trade direction)
+        alignment_flat = alignment.reshape(-1)
+        if np.any(alignment_flat > 0):
+            # Pick the strategy that most strongly agreed with the trade direction
+            action_idx = np.argmax(alignment_flat)
+        else:
+            # All strategies disagreed; pick the one that disagreed least
+            action_idx = np.argmax(alignment_flat)  # max of negative values = least negative
+        
+        # Standard REINFORCE gradient: ∇log π(a|s) = e_action - π
+        one_hot = np.zeros_like(probs)
+        one_hot[0, action_idx] = 1.0
+        d_z = scaled_reward * (one_hot - probs)
+        
+        # Entropy bonus: total loss = PG_loss - beta * H
+        # ∂(PG_loss - beta*H)/∂z = PG_grad - beta * ∂H/∂z
+        # ∂H/∂z_j = -π_j * (log π_j + H)  (derived from softmax Jacobian)
+        # PG_grad - beta*∂H/∂z = PG_grad + beta * π * (log π + H)
         log_p = np.log(probs + 1e-9)
         entropy = -np.sum(probs * log_p)
-        entropy_grad = probs * (entropy - log_p)
-        d_z -= entropy_beta * entropy_grad
+        entropy_grad = probs * (entropy + log_p)  # = π * (H + log(π))
+        d_z += entropy_beta * entropy_grad  # PLUS sign: -beta * (-π*(H+log(π))) = +beta * π*(H+log(π))
         
         dW = [None] * len(self.W)
         db = [None] * len(self.b)

@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from cost_model import CostModel
 
 # BacktestEngine imports strategy_engine → sklearn → may not be installed
+_BACKTEST_REASON = ""
 try:
     from backtest_engine import BacktestEngine
     _BACKTEST_OK = True

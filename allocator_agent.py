@@ -1,75 +1,55 @@
 import os
-import sqlite3
 import json
-import urllib.request
 import logging
 from mutation_guard import should_apply_agent_mutation, log_blocked_mutation
+import database as _db
 
 AGENT_NAME = "allocator_agent"
 import subprocess
 
-DB_PATH = os.path.expanduser("~/.nexustrader/nexustrader.db")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 def load_settings():
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
-    c.execute("SELECT key, value FROM settings")
-    rows = c.fetchall()
-    conn.close()
-    return {r[0]: r[1] for r in rows}
+    settings = {}
+    try:
+        conn = _db.get_db_connection()
+        c = conn.cursor()
+        c.execute("SELECT key, value FROM settings")
+        rows = c.fetchall()
+        conn.close()
+        return {r[0]: r[1] for r in rows} if rows else {}
+    except Exception:
+        return {}
 
 def save_setting(key, value):
     if not should_apply_agent_mutation(AGENT_NAME):
         log_blocked_mutation(AGENT_NAME, key, value)
         return
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
-    conn.commit()
-    conn.close()
+    _db.save_setting_directly(key, value)
 
 def load_active_assets():
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("CREATE TABLE IF NOT EXISTS active_assets (ticker TEXT PRIMARY KEY, is_active INTEGER DEFAULT 1, tp_multiplier REAL DEFAULT 2.5, sl_multiplier REAL DEFAULT 1.5, kelly_ceiling REAL DEFAULT 0.2)")
-    c.execute("SELECT ticker, is_active, tp_multiplier, sl_multiplier, kelly_ceiling FROM active_assets")
-    rows = c.fetchall()
-    conn.close()
-    return [{
-        "ticker": r[0],
-        "is_active": bool(r[1]),
-        "tp_multiplier": float(r[2]),
-        "sl_multiplier": float(r[3]),
-        "kelly_ceiling": float(r[4])
-    } for r in rows]
+    return _db.load_active_assets()
 
 def save_active_asset(ticker, is_active, tp_multiplier, sl_multiplier, kelly_ceiling):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute(
-        "INSERT OR REPLACE INTO active_assets (ticker, is_active, tp_multiplier, sl_multiplier, kelly_ceiling) VALUES (?, ?, ?, ?, ?)",
-        (ticker, int(is_active), tp_multiplier, sl_multiplier, kelly_ceiling)
-    )
-    conn.commit()
-    conn.close()
+    _db.save_active_asset(ticker, is_active, tp_multiplier, sl_multiplier, kelly_ceiling)
 
 def load_performance_summary():
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("SELECT symbol, pnl_percent, pnl FROM trades ORDER BY id DESC LIMIT 100")
-    rows = c.fetchall()
-    conn.close()
-    
     summary = {}
-    for symbol, pnl_pct, pnl in rows:
-        if symbol not in summary:
-            summary[symbol] = {"trades": 0, "wins": 0, "total_pnl": 0.0}
-        summary[symbol]["trades"] += 1
-        if pnl and float(pnl) > 0:
-            summary[symbol]["wins"] += 1
-        summary[symbol]["total_pnl"] += float(pnl or 0.0)
+    try:
+        conn = _db.get_db_connection()
+        c = conn.cursor()
+        c.execute("SELECT symbol, pnl_percent, pnl FROM trades ORDER BY id DESC LIMIT 100")
+        rows = c.fetchall()
+        conn.close()
+        for symbol, pnl_pct, pnl in rows:
+            if symbol not in summary:
+                summary[symbol] = {"trades": 0, "wins": 0, "total_pnl": 0.0}
+            summary[symbol]["trades"] += 1
+            if pnl and float(pnl) > 0:
+                summary[symbol]["wins"] += 1
+            summary[symbol]["total_pnl"] += float(pnl or 0.0)
+    except Exception:
+        pass
     return summary
 
 def run_allocator_self_improvement(trigger_deploy: bool = False):
@@ -190,6 +170,7 @@ Return ONLY a JSON block containing the key "revised_prompt_allocator_agent" wit
     report_content = "\n".join(report_lines)
     
     # Save/Append report to blog/daily_summaries/weekly_self_improvement.md
+    base_dir = os.path.dirname(os.path.abspath(__file__))
     if os.path.exists(os.path.join(base_dir, "blog", "daily_summaries")):
         report_path = os.path.join(base_dir, "blog", "daily_summaries", "weekly_self_improvement.md")
         try:

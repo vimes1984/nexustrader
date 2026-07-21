@@ -55,10 +55,11 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Vendor/static assets: cache-first (already pre-cached)
+  // Vendor/static assets: cache-first with network fallback
   if (url.pathname.includes('/dashboard-v2/vendor/') ||
-      url.pathname.includes('/dashboard-v2/css/')) {
-    event.respondWith(staleWhileRevalidate(event.request));
+      url.pathname.includes('/dashboard-v2/css/') ||
+      url.pathname.includes('/dashboard-v2/manifest.json')) {
+    event.respondWith(cacheFirstWithNetworkFallback(event.request));
     return;
   }
 
@@ -90,6 +91,21 @@ async function staleWhileRevalidate(request) {
   }).catch(() => cached);
 
   return cached || fetchPromise;
+}
+
+async function cacheFirstWithNetworkFallback(request) {
+  const cached = await caches.match(request);
+  if (cached) return cached;
+  try {
+    const response = await fetch(request);
+    if (response && response.status === 200) {
+      const cache = await caches.open(CACHE_STATIC);
+      cache.put(request, response.clone());
+    }
+    return response;
+  } catch (err) {
+    return new Response('', { status: 408, statusText: 'Offline' });
+  }
 }
 
 async function cacheFirst(request) {

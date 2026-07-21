@@ -2553,8 +2553,6 @@ def train_new_brain(name: str, ticker: str):
     if activate_res["status"] == "success":
         return {"status": "success", "message": f"Initialized and activated brain '{name}'."}
     return activate_res
-    
-    return {"status": "success"}
 
 @app.get("/api/exchange/status")
 def get_exchange_status():

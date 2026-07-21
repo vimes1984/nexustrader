@@ -58,6 +58,8 @@ def compute_kelly_fraction(win_rate: float, avg_win: float, avg_loss: float) -> 
     """
     if win_rate <= 0 or win_rate >= 1 or avg_loss <= 0:
         return 0.0
+    if avg_win <= 0:
+        return 0.0  # No winning trades means no edge
 
     win_loss_ratio = avg_win / avg_loss if avg_loss > 0 else 1.0
     kelly = win_rate - (1.0 - win_rate) / win_loss_ratio
