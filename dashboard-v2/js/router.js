@@ -105,6 +105,18 @@ const App = {
     // Notification bell
     this.el.notificationBell.addEventListener('click', () => this.toggleNotifications());
     byId('clear-notifications-btn').addEventListener('click', () => this.clearNotifications());
+    // Dev debug toggle
+    byId('btn-dev-toggle')?.addEventListener('click', () => {
+      document.body.classList.toggle('debug');
+      const isDebug = document.body.classList.contains('debug');
+      this.toast(isDebug ? 'Debug mode ON' : 'Debug mode OFF', 'info');
+      // Store preference
+      localStorage.setItem('nt_debug', isDebug ? '1' : '0');
+    });
+    // Restore debug preference
+    if (localStorage.getItem('nt_debug') === '1') {
+      document.body.classList.add('debug');
+    }
     // Close drawer on outside click
     document.addEventListener('click', (e) => {
       if (this.el.notificationDropdown.style.display === 'flex' &&
@@ -117,10 +129,16 @@ const App = {
   /** Initialize tab navigation */
   initNav() {
     const tabs = document.querySelectorAll('.nav-tab');
+    if (tabs.length === 0) {
+      console.error('initNav: NO .nav-tab elements found in DOM!');
+      return;
+    }
     tabs.forEach(tab => {
       tab.addEventListener('click', () => {
         const tabId = tab.dataset.tab;
-        if (tabId) this.switchTab(tabId);
+        if (tabId) {
+          this.switchTab(tabId);
+        }
         this.closeDrawer();
       });
     });
@@ -306,7 +324,9 @@ const App = {
   async pollSafety() {
     try {
       const data = await API.safetyStatus();
-      if (data.kill_switch) {
+      // API returns {kill_switch: {tripped: bool, ...}}
+      const isTripped = data.kill_switch?.tripped === true;
+      if (isTripped) {
         this.el.safetyBadge.style.display = 'flex';
         this.el.safetyText.textContent = 'KillSwitch Active';
       } else {

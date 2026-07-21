@@ -18,6 +18,15 @@
   <script src="/dashboard-v2/vendor/chart.umd.min.js"></script>
   <!-- Icons -->
   <script src="/dashboard-v2/vendor/lucide.min.js"></script>
+<style>
+/* Hide hamburger text fallback when lucide icon renders */
+#open-drawer-btn svg + .lucide-fallback { display: none; }
+#open-drawer-btn svg { width: 22px; height: 22px; color: var(--text-primary); }
+
+/* Dev Debug Mode */
+body.debug #fatal-error-display { display: block !important; }
+body.debug #js-indicator { display: block !important; }
+</style>
 </head>
 <body>
 
@@ -38,8 +47,9 @@
   <!-- ═══════════════ HEADER ═══════════════ -->
   <header class="glass-panel dashboard-header">
     <div class="brand">
-      <button id="open-drawer-btn" class="btn" style="background:transparent;border:none;padding:4px">
+      <button id="open-drawer-btn" class="btn" style="background:transparent;border:none;padding:6px 8px;font-size:22px;line-height:1;cursor:pointer;color:var(--text-primary)" title="Menu">
         <i data-lucide="menu" style="width:22px;height:22px"></i>
+        <span class="lucide-fallback">☰</span>
       </button>
       <i data-lucide="cpu" style="color:var(--neon-blue);width:28px;height:28px"></i>
       <div>
@@ -69,6 +79,8 @@
         Reset
       </button>
 
+      <!-- Dev Toggle -->
+      <button class="btn btn-sm" id="btn-dev-toggle" style="font-family:monospace;font-size:10px;padding:4px 8px;opacity:0.5" title="Toggle Debug Mode">🐛</button>
       <!-- Notification Bell -->
       <div class="notification-dropdown-container">
         <button class="btn" id="notification-bell-btn" style="position:relative">
