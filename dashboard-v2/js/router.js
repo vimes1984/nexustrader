@@ -56,10 +56,10 @@ const App = {
     document.querySelectorAll('.nav-tab').forEach((tab, i) => {
       const orig = tab.onclick;
       tab.addEventListener('click', function(e) {
-        this._debug('NAV-CLICK:', tab.dataset.tab, 'target:', e.target.tagName, e.target.className);
+        App._debug('NAV-CLICK:', tab.dataset.tab, 'target:', e.target.tagName, e.target.className);
       });
     });
-    this._debug('initNav bound to', document.querySelectorAll('.nav-tab').length, 'nav items');
+    App._debug('initNav bound to', document.querySelectorAll('.nav-tab').length, 'nav items');
   },
 
   /** Cache frequently-used DOM elements */
@@ -181,7 +181,7 @@ const App = {
   /** Switch to a tab */
   switchTab(tabId) {
     try {
-      this._debug('switchTab called:', tabId);
+      App._debug('switchTab called:', tabId);
       // Update nav buttons
       document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
       const btn = document.querySelector('.nav-tab[data-tab="' + tabId + '"]');
@@ -189,12 +189,12 @@ const App = {
 
       // Show/hide tab content
       const allTabs = document.querySelectorAll('.tab-content');
-      this._debug('  found', allTabs.length, 'tab-content divs');
+      App._debug('  found', allTabs.length, 'tab-content divs');
       allTabs.forEach(c => c.style.display = 'none');
       const content = document.getElementById(tabId);
       if (content) {
         content.style.display = 'block';
-        this._debug('  switched to', tabId);
+        App._debug('  switched to', tabId);
       } else {
         console.error('  tab not found:', tabId);
       }
