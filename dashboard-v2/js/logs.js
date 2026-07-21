@@ -19,20 +19,45 @@ const Logs = {
       if (!el) return;
       el.innerHTML = '<p style="color:var(--text-secondary)">Loading logs...</p>';
       const data = await API.systemLogs(300);
-      if (!data || !data.logs || !data.logs.length) {
-        el.innerHTML = '<p style="color:var(--text-secondary)">No logs available</p>';
+      if (!data || !data.logs) {
+        el.innerHTML = '<p style="color:var(--text-secondary)">No log data available</p>';
         return;
       }
-      el.innerHTML = data.logs.slice(-200).map(l => {
-        const ts = l.timestamp || l.time || '';
-        const level = (l.level || 'INFO').toUpperCase();
-        const msg = l.message || l.text || l.msg || '';
-        return '<div style="font-family:monospace;font-size:11px;padding:2px 0;border-bottom:1px solid rgba(255,255,255,0.02)">' +
-          '<span style="color:var(--text-secondary)">' + ts + '</span> ' +
-          '<span style="color:' + this.logColor(level) + ';margin:0 6px">[' + level + ']</span> ' +
-          '<span>' + msg.replace(/</g, '&lt;') + '</span>' +
-        '</div>';
-      }).join('');
+      // API returns logs as either: string (raw text), array of objects, or array of strings
+      if (typeof data.logs === 'string') {
+        // Raw text — split by newlines, try to parse timestamps
+        const lines = data.logs.split('\n').filter(l => l.trim());
+        if (!lines.length) {
+          el.innerHTML = '<p style="color:var(--text-secondary)">' + data.logs + '</p>';
+          return;
+        }
+        el.innerHTML = lines.slice(-200).map(line => {
+          // Try to colorize by level keywords
+          let color = 'var(--text-secondary)';
+          const upper = line.toUpperCase();
+          if (upper.includes('ERROR') || upper.includes('CRITICAL') || upper.includes('FATAL')) color = 'var(--neon-red)';
+          else if (upper.includes('WARN')) color = 'var(--neon-yellow)';
+          else if (upper.includes('DEBUG')) color = '#64748b';
+          return '<div style="font-family:monospace;font-size:11px;padding:2px 0;border-bottom:1px solid rgba(255,255,255,0.02);color:' + color + '">' +
+            line.replace(/</g, '&lt;') +
+          '</div>';
+        }).join('');
+      } else if (Array.isArray(data.logs) && data.logs.length) {
+        // Array of objects
+        el.innerHTML = data.logs.slice(-200).map(l => {
+          if (typeof l === 'string') return '<div style="font-family:monospace;font-size:11px;padding:2px 0;border-bottom:1px solid rgba(255,255,255,0.02)">' + l.replace(/</g, '&lt;') + '</div>';
+          const ts = l.timestamp || l.time || '';
+          const level = (l.level || 'INFO').toUpperCase();
+          const msg = l.message || l.text || l.msg || '';
+          return '<div style="font-family:monospace;font-size:11px;padding:2px 0;border-bottom:1px solid rgba(255,255,255,0.02)">' +
+            '<span style="color:var(--text-secondary)">' + ts + '</span> ' +
+            '<span style="color:' + this.logColor(level) + ';margin:0 6px">[' + level + ']</span> ' +
+            '<span>' + msg.replace(/</g, '&lt;') + '</span>' +
+          '</div>';
+        }).join('');
+      } else {
+        el.innerHTML = '<p style="color:var(--text-secondary)">No log entries recorded yet</p>';
+      }
     } catch (e) {
       const el = byId('system-logs');
       if (el) el.innerHTML = '<p style="color:var(--neon-red)">Failed to load logs: ' + e.message + '</p>';
