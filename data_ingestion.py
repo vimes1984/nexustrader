@@ -5,6 +5,8 @@ import yfinance as yf
 import time
 import threading
 import logging
+import json
+import os
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
@@ -19,11 +21,16 @@ class DataIngestion:
         self.stream_thread = None
         self.subscribers = []
 
+    def _require_lock(self):
+        """Ensure thread lock exists for thread-safe data access."""
+        if not hasattr(self, '_data_lock'):
+            self._data_lock = threading.Lock()
+    
     def fetch_historical_data(self):
         """Fetches historical market data from Yahoo Finance."""
         logging.info(f"Fetching historical data for {self.ticker} ({self.interval}, period={self.period})...")
         try:
-            df = yf.download(tickers=self.ticker, period=self.period, interval=self.interval)
+            df = yf.download(tickers=self.ticker, period=self.period, interval=self.interval, auto_adjust=True, progress=False)
             if df.empty:
                 raise ValueError("No data returned from yfinance.")
             
@@ -50,10 +57,13 @@ class DataIngestion:
             df['close'] = df['close'].astype(float)
             df['volume'] = df['volume'].astype(float)
             
-            self.data = df
+            self._require_lock()
+            with self._data_lock:
+                self.data = df
             logging.info(f"Successfully loaded {len(self.data)} rows of historical data.")
             self.compute_technical_indicators()
-            return self.data
+            with self._data_lock:
+                return self.data.copy()
         except Exception as e:
             logging.error(f"Error fetching historical data: {e}")
             raise e
@@ -77,12 +87,16 @@ class DataIngestion:
         df['macd_signal'] = df['macd'].ewm(span=9, adjust=False).mean()
         df['macd_hist'] = df['macd'] - df['macd_signal']
 
-        # Relative Strength Index (RSI)
+        # Relative Strength Index (RSI) — Wilder's Smoothed RMA (14-period)
+        # Standard: uses exponential moving average (alpha = 1/period) not SMA
         delta = df['close'].diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-        rs = gain / (loss + 1e-9)
-        df['rsi'] = 100 - (100 / (1 + rs))
+        gain = delta.where(delta > 0, 0.0)
+        loss = (-delta.where(delta < 0, 0.0))
+        # Wilder's smoothing: first value is SMA, subsequent values are EMA with alpha=1/14
+        avg_gain = gain.ewm(alpha=1.0/14.0, adjust=False).mean()
+        avg_loss = loss.ewm(alpha=1.0/14.0, adjust=False).mean()
+        rs = avg_gain / (avg_loss + 1e-9)
+        df['rsi'] = 100.0 - (100.0 / (1.0 + rs))
 
         # Bollinger Bands
         df['bb_mid'] = df['close'].rolling(window=20).mean()
@@ -90,14 +104,15 @@ class DataIngestion:
         df['bb_upper'] = df['bb_mid'] + (2 * df['bb_std'])
         df['bb_lower'] = df['bb_mid'] - (2 * df['bb_std'])
 
-        # Average True Range (ATR)
+        # Average True Range (ATR) — Wilder's Smoothed (14-period)
         high_low = df['high'] - df['low']
         high_close_prev = (df['high'] - df['close'].shift()).abs()
         low_close_prev = (df['low'] - df['close'].shift()).abs()
         
         # Standard ATR using maximum of the three ranges
         tr = pd.concat([high_low, high_close_prev, low_close_prev], axis=1).max(axis=1)
-        df['atr'] = tr.rolling(window=14).mean()
+        # First ATR is SMA(14), subsequent values are RMA (Wilder's: alpha=1/14)
+        df['atr'] = tr.ewm(alpha=1.0/14.0, adjust=False).mean()
         
         # Volume Weighted Moving Average (VWMA)
         df['vwma_20'] = (df['close'] * df['volume']).rolling(window=20).sum() / (df['volume'].rolling(window=20).sum() + 1e-9)
@@ -185,9 +200,6 @@ class DataIngestion:
         logging.info(f"Live data stream started. Polling every {interval_seconds}s...")
 
     def _run_live_polling(self, interval):
-        import json
-        import os
-        
         config_path = os.path.expanduser("~/.nexustrader/config.json")
         use_ccxt = False
         broker_type = "kraken"

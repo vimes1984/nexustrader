@@ -20,10 +20,9 @@ DB_PATH = DB_FILE
 def get_db_connection():
     conn = sqlite3.connect(DB_PATH, timeout=30.0)
     conn.row_factory = sqlite3.Row
-    try:
-        conn.execute("PRAGMA journal_mode=WAL")
-    except Exception:
-        pass
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=30000")
+    conn.execute("PRAGMA foreign_keys=ON")
     return conn
 
 def init_db():
@@ -33,9 +32,9 @@ def init_db():
     
     # Check if ticks table needs migration
     try:
-        cursor.execute("PRAGMA table_info(ticks)")
-        columns = [row[1] for row in cursor.fetchall()]
-        if len(columns) > 0 and "symbol" not in columns:
+        cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='ticks'")
+        tbl = cursor.fetchone()
+        if tbl and "symbol" not in (tbl[0] or ""):
             logging.info("Migrating ticks table: dropping old single-ticker ticks table...")
             cursor.execute("DROP TABLE ticks")
     except Exception as e:
@@ -314,6 +313,19 @@ def init_db():
         except Exception:
             pass
             
+    # Create indexes for performance
+    try:
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_ticks_symbol ON ticks(symbol)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_ticks_timestamp ON ticks(timestamp)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_trades_symbol ON trades(symbol)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_trades_exit_time ON trades(exit_time)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_trades_policy_brain ON trades(policy_brain)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_weights_history_ticker ON weights_history(ticker)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_weights_history_ticker_ts ON weights_history(ticker, timestamp)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_settings_key ON settings(key)")
+    except Exception as e:
+        logging.error(f"Error creating indexes: {e}")
+    
     # Commit and close
     conn.commit()
     conn.close()
@@ -352,18 +364,19 @@ def load_weights_history(ticker: str, limit: int = 100):
         return []
 
 def save_tick(row, symbol):
+    """Saves a price tick to database."""
     if hasattr(row, "keys") and not isinstance(row, dict):
         row = dict(row)
-    """Saves a price tick to database."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    conn = None
     try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
         cursor.execute("""
         INSERT OR REPLACE INTO ticks 
         (timestamp, symbol, open, high, low, close, volume, rsi, macd, macd_signal, bb_upper, bb_lower, atr)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
-            str(row['timestamp']),
+            str(row.get('timestamp', '')),
             symbol,
             float(row.get('open', 0)),
             float(row.get('high', 0)),
@@ -381,7 +394,8 @@ def save_tick(row, symbol):
     except Exception as e:
         logging.error(f"Error saving tick to db: {e}")
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 def save_trade(trade):
     """Saves a closed trade to database."""
@@ -611,6 +625,25 @@ def load_shadow_trades(limit: int = 100):
     finally:
         conn.close()
 
+def _detect_agent_name():
+    """Inspect call stack to identify the calling quant agent."""
+    import inspect
+    import os as _os
+    for frame_info in inspect.stack():
+        filename = _os.path.basename(frame_info.filename)
+        if filename == "self_improvement_agent.py":
+            return "PhD Quant Agent"
+        elif filename == "nn_agent.py":
+            return "NeuralCore Optimizer"
+        elif filename == "sentiment_agent.py":
+            return "Sentiment Sentinel"
+        elif filename == "risk_auditor.py":
+            return "Risk Auditor"
+        elif filename == "allocator_agent.py":
+            return "Ensemble Asset Allocator"
+    return None
+
+
 def save_setting(key, value):
     """Saves system setting (json string or float/int).
 
@@ -618,30 +651,11 @@ def save_setting(key, value):
     the change is logged as a suggestion and NOT applied.
     """
     old_value = load_setting(key, "")
+    agent_name = _detect_agent_name()
 
     # Check mutation freeze for agent-originated changes
-    if mutation_freeze.frozen and not key.startswith("prompt_"):
-        import inspect
-        import os as _os
-        agent_name = None
-        for frame_info in inspect.stack():
-            filename = _os.path.basename(frame_info.filename)
-            if filename == "self_improvement_agent.py":
-                agent_name = "PhD Quant Agent"
-                break
-            elif filename == "nn_agent.py":
-                agent_name = "NeuralCore Optimizer"
-                break
-            elif filename == "sentiment_agent.py":
-                agent_name = "Sentiment Sentinel"
-                break
-            elif filename == "risk_auditor.py":
-                agent_name = "Risk Auditor"
-                break
-            elif filename == "allocator_agent.py":
-                agent_name = "Ensemble Asset Allocator"
-                break
-        if agent_name and str(old_value) != str(value):
+    if agent_name and mutation_freeze.frozen and not key.startswith("prompt_"):
+        if str(old_value) != str(value):
             mutation_freeze.suggest(agent_name, key, old_value, value,
                                     reason="Automatic config change blocked by MutationFreeze")
             logging.info("[MutationFreeze] Blocked {} change to {} = {} (was {})".format(
@@ -659,29 +673,8 @@ def save_setting(key, value):
         conn.close()
         
     # Log optimization if changed by an agent
-    if str(old_value) != str(value) and not key.startswith("prompt_"):
-        import inspect
-        import os as _os
-        agent_name = None
-        for frame_info in inspect.stack():
-            filename = _os.path.basename(frame_info.filename)
-            if filename == "self_improvement_agent.py":
-                agent_name = "PhD Quant Agent"
-                break
-            elif filename == "nn_agent.py":
-                agent_name = "NeuralCore Optimizer"
-                break
-            elif filename == "sentiment_agent.py":
-                agent_name = "Sentiment Sentinel"
-                break
-            elif filename == "risk_auditor.py":
-                agent_name = "Risk Auditor"
-                break
-            elif filename == "allocator_agent.py":
-                agent_name = "Ensemble Asset Allocator"
-                break
-        if agent_name:
-            log_optimization(agent_name, key, old_value, value)
+    if agent_name and str(old_value) != str(value) and not key.startswith("prompt_"):
+        log_optimization(agent_name, key, old_value, value)
 
 def load_setting(key, default=None):
     """Loads system setting."""

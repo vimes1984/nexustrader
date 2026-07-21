@@ -331,12 +331,16 @@ class TransformerPolicyNetwork:
         self.d_policy_W1 = np.einsum('bd,bh->dh', cache['pooled'], d_hidden)
         d_pooled = np.einsum('bh,dh->bd', d_hidden, self.policy_W1)
         
-        # Gradient through pooling: broadcast back to sequence positions
-        seq_len = self.encoder_layers[0]._cache.get('x', np.zeros((batch_size, 1, self.d_model))).shape[1] if hasattr(self.encoder_layers[0], '_cache') else self.max_seq_len
-        d_pooled = d_pooled[:, np.newaxis, :] / seq_len  # Broadcast back
-        
-        # Gradient through encoder layers (reverse order)
-        d_x = d_pooled * np.ones((batch_size, seq_len, self.d_model)) / seq_len  # Approximate
+        # Gradient through mean pooling:
+        # pooled = mean(x, axis=1) so d_x = broadcast(d_pooled, seq) / seq_len
+        # Get seq_len from the encoder layer cache (most recent forward pass)
+        seq_len = self.max_seq_len
+        if hasattr(self.encoder_layers[0], '_cache'):
+            x_cache = self.encoder_layers[0]._cache.get('x', None)
+            if x_cache is not None:
+                seq_len = x_cache.shape[1]
+        # Correct gradient: each position gets 1/seq_len of d_pooled
+        d_x = np.broadcast_to(d_pooled[:, np.newaxis, :], (batch_size, seq_len, self.d_model)) / seq_len
         for layer in reversed(self.encoder_layers):
             try:
                 d_x = layer.backward(d_x)

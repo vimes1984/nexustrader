@@ -9,7 +9,7 @@ const Logs = {
 
   async load() {
     const el = byId('system-logs'); if (!el) return;
-    el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted)">⏳ Loading logs...</div>';
+    el.innerHTML = '<div class="skeleton skeleton-chart" style="height:300px"></div><div class="skeleton skeleton-text" style="width:95%"></div><div class="skeleton skeleton-text" style="width:70%"></div>';
     try {
       const data = await API.systemLogs(1000);
       let lines = [];

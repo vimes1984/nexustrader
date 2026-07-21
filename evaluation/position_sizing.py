@@ -58,8 +58,11 @@ def compute_kelly_fraction(win_rate: float, avg_win: float, avg_loss: float) -> 
     """
     if win_rate <= 0 or win_rate >= 1 or avg_loss <= 0:
         return 0.0
+    if avg_win <= 0:
+        return 0.0  # No winning trades means no edge
 
     win_loss_ratio = avg_win / avg_loss if avg_loss > 0 else 1.0
+    # Standard Kelly: f* = p - q/b where b = W/L
     kelly = win_rate - (1.0 - win_rate) / win_loss_ratio
     return max(0.0, min(kelly, 1.0))
 
@@ -182,11 +185,13 @@ def volatility_adjusted_qty(
     risk_amount = capital * risk_fraction
     atr_pct = atr / price
 
-    # Scale position so that an ATR move represents the risk amount
-    atr_risk = risk_fraction * capital * atr_multiplier
-    qty = atr_risk / (atr * atr_multiplier) if atr > 0 else 0.0
+    # Scale position so that an ATR move of (atr * atr_multiplier) represents the risk amount
+    # qty = risk_amount / (atr * atr_multiplier)
+    # which means: if price moves by atr * atr_multiplier, we lose/gain exactly risk_amount
+    denominator = atr * atr_multiplier
+    qty = risk_amount / denominator if denominator > 0 else 0.0
 
-    # Alternative: flat qty based on risk fraction / price (if ATR not helpful)
+    # Fallback: flat qty based on risk fraction / price (if ATR not helpful)
     if qty <= 0:
         qty = (capital * risk_fraction) / price
 

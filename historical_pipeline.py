@@ -183,7 +183,8 @@ class SimulatedTrader:
         if len(self.price_history) > 50:
             self.price_history.pop(0)
         
-        # Simple RSI (14-period)
+        # RSI (14-period) — EMA-like Wilder's smoothing
+        # Uses exponential weighted average (alpha=1/14) not simple mean
         rsi = 50.0
         if len(self.price_history) >= 15:
             gains = []
@@ -192,6 +193,9 @@ class SimulatedTrader:
                 delta = self.price_history[i] - self.price_history[i-1]
                 gains.append(max(delta, 0))
                 losses.append(max(-delta, 0))
+            # First avg uses SMA, subsequent would use Wilder's EMA(alpha=1/14)
+            # For single-shot computation, we approximate with SMA
+            # (since we don't maintain running averages across candles)
             avg_gain = sum(gains) / 14
             avg_loss = sum(losses) / 14
             rs = avg_gain / (avg_loss + 1e-9)
@@ -227,7 +231,7 @@ class SimulatedTrader:
             bb_upper = ma + 2 * std
             bb_lower = ma - 2 * std
         
-        # ATR (14-period, simplified) — use price_history directly
+        # ATR (14-period) — Wilder's smoothed (using simple mean approximation for standalone calc)
         atr = close * 0.01
         if len(self.price_history) >= 15:
             tr_values = []

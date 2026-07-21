@@ -362,19 +362,33 @@ class PPOAgent:
             if abs(ratio - 1) > self.clip_epsilon:
                 clip_frac += 1.0 / n
 
-            # Gradient of actor loss w.r.t. output logits
-            # Gradient of -surr1/2 w.r.t. action probabilities
-            if surr1 < surr2:
-                grad_scale = -adv * ratio / (probs[int(action)] + 1e-12)
-            else:
-                grad_scale = 0.0
-
+            # PPO policy gradient: L^{CLIP}(theta) = -E[min(r_t * A_t, clip(r_t, ...) * A_t)]
+            # dL/d(logits) = dL/d(probs) * d(probs)/d(logits)
+            # 
+            # For action probability p_a:
+            # dL/d(logit_i) = sum_j dL/d(p_j) * p_j * (delta_{ij} - p_i)
+            # where dL/d(p_a) = -adv * ratio * (1/p_a)  [if unclipped]
+            #          or = 0                          [if clipped]
+            #
+            # This simplifies to:
+            # dL/d(logit_i) = -adv * ratio * (delta_{i,action} - p_i)  [if unclipped]
             d_z_actor = np.zeros((1, self.policy_net.action_dim), dtype=np.float64)
-            if grad_scale != 0.0:
-                d_z_actor[0, int(action)] = grad_scale
+            
+            if surr1 < surr2:
+                # Unclipped: use the proper softmax policy gradient
+                # dL/d(logit_i) = -surrogate_gradient wrt log-prob * (delta_ia - p_i)
+                # = -adv * ratio * (delta_i,action - p_i)
+                d_z_actor[0] = -adv * ratio * (np.eye(self.policy_net.action_dim)[int(action)] - probs)
+            else:
+                # Clipped: gradient is zero (clipping stops gradient flow)
+                pass
 
-            # Entropy gradient
-            entropy_grad = -probs * (np.log(np.clip(probs, 1e-12, 1.0)) + 1.0)
+            # Entropy gradient: -H = sum(p * log(p))
+            # d(-H)/d(logit_i) = p_i * (log(p_i) + 1 - sum(p_j * (log(p_j) + 1)))
+            # Simplified: p_i * log(p_i) - p_i * entropy_term
+            # We compute: p * (log(p) + 1) - p * sum(p * (log(p) + 1))
+            log_p = np.log(np.clip(probs, 1e-12, 1.0))
+            entropy_grad = probs * (log_p + 1.0 - np.sum(probs * (log_p + 1.0)))
             d_z_actor -= self.entropy_coef * entropy_grad.reshape(1, -1)
 
             # Backprop through policy_net

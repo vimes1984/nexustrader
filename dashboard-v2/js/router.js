@@ -84,7 +84,27 @@ const App = {
       localStorage.setItem('nt_debug', document.body.classList.contains('debug') ? '1' : '0');
       this.toast(document.body.classList.contains('debug') ? 'Debug ON' : 'Debug OFF', 'info');
     });
+    // Restore debug mode from localStorage
     if (localStorage.getItem('nt_debug') === '1') document.body.classList.add('debug');
+
+    // Persist dark mode (still dark by default, but saves UI state)
+    if (localStorage.getItem('nt_dark_mode') === '0') {
+      document.documentElement.setAttribute('data-theme', 'light');
+    } else {
+      localStorage.setItem('nt_dark_mode', '1');
+      document.documentElement.setAttribute('data-theme', 'dark');
+    }
+    // Listen for theme changes
+    document.addEventListener('nt:themeChange', (e) => {
+      const mode = e.detail?.dark ? '1' : '0';
+      localStorage.setItem('nt_dark_mode', mode);
+    });
+
+    // Touch gesture support (swipe between tabs)
+    this.initTouchGestures();
+
+    // Keyboard navigation
+    this.initKeyboardNav();
 
     // Close dropdown on outside click
     document.addEventListener('click', (e) => {
@@ -140,12 +160,69 @@ const App = {
   },
 
   openDrawer() {
-    if (this.el.navDrawer) this.el.navDrawer.style.left = '0';
+    if (this.el.navDrawer) {
+      this.el.navDrawer.style.left = '0';
+      // Focus trap: move focus into drawer
+      setTimeout(() => {
+        const firstTab = this.el.navDrawer.querySelector('.nav-tab');
+        if (firstTab) firstTab.focus();
+      }, 100);
+    }
     if (this.el.navOverlay) this.el.navOverlay.style.display = 'block';
   },
   closeDrawer() {
-    if (this.el.navDrawer) this.el.navDrawer.style.left = '-280px';
+    if (this.el.navDrawer) {
+      this.el.navDrawer.style.left = '-280px';
+      // Restore focus to hamburger button
+      byId('open-drawer-btn')?.focus();
+    }
     if (this.el.navOverlay) this.el.navOverlay.style.display = 'none';
+  },
+
+  // ── Touch Gestures ──
+  initTouchGestures() {
+    const tabOrder = ['tab-dashboard', 'tab-neural', 'tab-assets', 'tab-strategy', 'tab-llm', 'tab-agents', 'tab-settings', 'tab-optimizations', 'tab-architecture', 'tab-logs'];
+    let touchStartX = 0;
+    let touchStartY = 0;
+    const main = document.querySelector('main');
+    if (!main) return;
+
+    main.addEventListener('touchstart', (e) => {
+      if (e.target.closest('.controls-bar') || e.target.closest('#nav-drawer') ||
+          e.target.closest('.notification-dropdown-container') || e.target.closest('#toast-container') ||
+          e.target.closest('select') || e.target.closest('input') || e.target.closest('textarea') ||
+          e.target.closest('button') || e.target.closest('.ticker-tab')) {
+        touchStartX = 0; return;
+      }
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+    }, { passive: true });
+
+    main.addEventListener('touchend', (e) => {
+      if (touchStartX === 0) return;
+      const diffX = e.changedTouches[0].clientX - touchStartX;
+      const diffY = e.changedTouches[0].clientY - touchStartY;
+      touchStartX = 0;
+
+      // Require horizontal swipe > 60px and minimal vertical drift
+      if (Math.abs(diffX) < 60 || Math.abs(diffY) > Math.abs(diffX) * 0.5) return;
+
+      const currentIdx = tabOrder.indexOf(this.state.activeTab ? 'tab-' + this.state.activeTab : 'tab-dashboard');
+      if (currentIdx === -1) return;
+
+      let nextIdx;
+      if (diffX < 0) {
+        // Swipe left → next tab
+        nextIdx = Math.min(currentIdx + 1, tabOrder.length - 1);
+      } else {
+        // Swipe right → previous tab
+        nextIdx = Math.max(currentIdx - 1, 0);
+      }
+
+      if (nextIdx !== currentIdx) {
+        this.switchTab(tabOrder[nextIdx]);
+      }
+    }, { passive: true });
   },
 
   async loadInitState() {

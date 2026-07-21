@@ -30,9 +30,11 @@ def normalize_kraken_asset(asset: str) -> str:
     return asset
 
 class ExecutionEngine:
-    def __init__(self, initial_balance=100.0, transaction_fee_rate=0.001):
+    def __init__(self, initial_balance=100.0, transaction_fee_rate=0.0026):
         self.initial_balance = initial_balance
-        self.transaction_fee_rate = transaction_fee_rate
+        self.transaction_fee_rate = transaction_fee_rate  # Default: Kraken taker fee (0.26%)
+        # Slippage estimation for realistic paper trading
+        self.slippage_rate = 0.001  # 0.1% estimated market impact for small orders
         self.active_positions = {}  # symbol -> position dict
         self.max_open_positions = 3  # Hard limit: max concurrent positions
         self.max_concentration = 0.40  # Max portfolio % in a single ticker
@@ -151,6 +153,7 @@ class ExecutionEngine:
                 'apiKey': api_key,
                 'secret': api_secret,
                 'enableRateLimit': True,
+                'timeout': 15000,
             })
             balance_info = exchange.fetch_balance()
             total_bal = balance_info.get('total', {})
@@ -319,6 +322,7 @@ class ExecutionEngine:
                 'apiKey': api_key,
                 'secret': api_secret,
                 'enableRateLimit': True,
+                'timeout': 15000,
             })
             
             # Load markets to obtain asset precisions and limits
@@ -415,6 +419,21 @@ class ExecutionEngine:
         quantity = position_value / entry_price
         fee = position_value * self.transaction_fee_rate
 
+        # Apply slippage on entry for realistic simulation
+        slippage_cost = entry_price * self.slippage_rate
+        if direction == "BUY":
+            effective_entry = entry_price + slippage_cost
+        else:  # SELL
+            effective_entry = entry_price - slippage_cost
+        
+        # Adjust TP/SL for slippage on entry
+        if direction == "BUY":
+            adjusted_tp = tp - slippage_cost  # Tougher to hit TP
+            adjusted_sl = sl  # SL stays (worst case)
+        else:
+            adjusted_tp = tp + slippage_cost
+            adjusted_sl = sl
+
         if self.trading_mode == "live":
             # For live trading, execute immediately on the broker API
             success, actual_qty = self.execute_order_on_broker(symbol, direction.lower(), quantity, entry_price)
@@ -430,75 +449,43 @@ class ExecutionEngine:
             self.active_positions[symbol] = {
                 "symbol": symbol,
                 "direction": direction,
-                "entry_price": entry_price,
+                "entry_price": effective_entry,  # Use slippage-adjusted price
                 "quantity": actual_qty,
-                "take_profit": tp,
-                "stop_loss": sl,
+                "take_profit": adjusted_tp,
+                "stop_loss": adjusted_sl,
                 "entry_time": time.time(),
                 "strategy_signals": strategy_signals,
                 "entry_state": evaluation.get("state", []),
                 "sentiment_sources": evaluation.get("sentiment_sources", {}),
                 "fee_paid": fee
             }
-            logging.info(f"Opened live {direction} position for {symbol}: Qty {actual_qty:.6f} at {entry_price:.2f}. Fee: {fee:.2f}")
+            logging.info(f"Opened live {direction} position for {symbol}: Qty {actual_qty:.6f} at {effective_entry:.2f} (slippage adj). Fee: {fee:.2f}")
             return True
         else:
-            # For paper trading, place a simulated limit order
-            self.pending_limit_orders[symbol] = {
+            # Paper trading: simulate market order with slippage (immediate fill)
+            actual_qty = quantity
+            self.balance -= fee
+            database.save_setting("portfolio_balance", self.balance)
+            
+            self.active_positions[symbol] = {
                 "symbol": symbol,
                 "direction": direction,
-                "limit_price": entry_price,
-                "quantity": quantity,
-                "take_profit": tp,
-                "stop_loss": sl,
+                "entry_price": effective_entry,  # Slippage-adjusted entry
+                "quantity": actual_qty,
+                "take_profit": adjusted_tp,
+                "stop_loss": adjusted_sl,
                 "entry_time": time.time(),
                 "strategy_signals": strategy_signals,
                 "entry_state": evaluation.get("state", []),
                 "sentiment_sources": evaluation.get("sentiment_sources", {}),
-                "fee": fee
+                "fee_paid": fee
             }
-            logging.info(f"[LIMIT ORDER PLACED] Placed pending limit {direction} order for {symbol} at {entry_price:.2f}")
+            logging.info(f"Opened paper {direction} position for {symbol}: Qty {actual_qty:.6f} at {effective_entry:.2f} (incl. slippage). Fee: {fee:.2f}")
             return True
 
     def update_positions(self, symbol, current_price):
-        """Checks pending limit orders for fills and active positions for TP/SL hits."""
-        # 1. Evaluate pending limit orders for this symbol (fill check)
-        if symbol in self.pending_limit_orders:
-            order = self.pending_limit_orders[symbol]
-            direction = order["direction"]
-            limit_price = order["limit_price"]
-            
-            fill_order = False
-            if direction == "BUY" and current_price <= limit_price:
-                fill_order = True
-            elif direction == "SELL" and current_price >= limit_price:
-                fill_order = True
-                
-            if fill_order:
-                # Deduct fee and open active position
-                self.balance -= order["fee"]
-                database.save_setting("portfolio_balance", self.balance)
-                
-                pos = {
-                    "symbol": symbol,
-                    "direction": direction,
-                    "entry_price": limit_price,
-                    "quantity": order["quantity"],
-                    "take_profit": order["take_profit"],
-                    "stop_loss": order["stop_loss"],
-                    "entry_time": time.time(),
-                    "strategy_signals": order["strategy_signals"],
-                    "entry_state": order.get("entry_state", []),
-                    "sentiment_sources": order.get("sentiment_sources", {}),
-                    "fee_paid": order["fee"]
-                }
-                self.active_positions[symbol] = pos
-                logging.info(f"[LIMIT ORDER FILLED] Filled pending limit {direction} order for {symbol} at {limit_price:.2f}. Fee: {order['fee']:.2f}")
-                del self.pending_limit_orders[symbol]
-                
-                return {"event": "filled", "data": pos}
-                
-        # 2. Evaluate active positions for this symbol (TP/SL check)
+        """Checks active positions for TP/SL hits. Uses slippage-adjusted exit prices."""
+        # Evaluate active positions for this symbol (TP/SL check)
         if symbol not in self.active_positions:
             return None
 
@@ -509,36 +496,48 @@ class ExecutionEngine:
         tp = pos["take_profit"]
         sl = pos["stop_loss"]
 
-        # Trailing Stop-Loss logic
-        trailing_stop_enabled = False  # Disabled: backwards for SELL positions
+        # Trailing Stop-Loss logic — config-driven
+        trailing_stop_enabled = database.load_setting("trailing_stop_enabled", "true").lower() == "true"
         if trailing_stop_enabled:
+            trail_offset_pct = float(database.load_setting("trailing_stop_offset_pct", "0.005"))
             if direction == "BUY":
                 if "original_sl" not in pos:
                     pos["original_sl"] = sl
-                    pos["trail_offset"] = entry_price - sl
-                
-                new_sl = current_price - pos["trail_offset"]
-                if new_sl > sl:
-                    sl = new_sl
-                    pos["stop_loss"] = new_sl
-                    logging.info(f"[TRAILING STOP-LOSS] Trailed stop-loss for {symbol} upward to {new_sl:.4f}")
+                # For BUY: trail SL upward as price rises
+                trailed_sl = current_price * (1.0 - trail_offset_pct)
+                if trailed_sl > sl:
+                    sl = trailed_sl
+                    pos["stop_loss"] = trailed_sl
+                    logging.debug(f"[TRAILING SL] {symbol} BUY: trailed SL to {trailed_sl:.4f}")
             else: # SELL
                 if "original_sl" not in pos:
                     pos["original_sl"] = sl
-                    pos["trail_offset"] = sl - entry_price
-                
-                new_sl = current_price + pos["trail_offset"]
-                if new_sl < sl:
-                    sl = new_sl
-                    pos["stop_loss"] = new_sl
-                    logging.info(f"[TRAILING STOP-LOSS] Trailed stop-loss for {symbol} downward to {new_sl:.4f}")
+                # For SELL: trail SL downward as price falls
+                trailed_sl = current_price * (1.0 + trail_offset_pct)
+                if trailed_sl < sl:
+                    sl = trailed_sl
+                    pos["stop_loss"] = trailed_sl
+                    logging.debug(f"[TRAILING SL] {symbol} SELL: trailed SL to {trailed_sl:.4f}")
 
-        close_trade = False
+        # Check for time-based stop (max position age)
+        max_position_hours = 48  # Hard close after 48 hours
         exit_reason = None
+        close_trade = False
         pnl = 0.0
+        
+        if pos.get("entry_time") and (time.time() - pos["entry_time"]) > (max_position_hours * 3600):
+            close_trade = True
+            exit_reason = "Time Stop ({}h max)".format(max_position_hours)
+
+        # Apply slippage on exit for realistic simulation
+        slippage_cost = current_price * self.slippage_rate
+        if direction == "BUY":
+            exit_price = current_price - slippage_cost  # Worse price when selling
+        else:  # SELL
+            exit_price = current_price + slippage_cost  # Worse price when buying to cover
 
         if direction == "BUY":
-            pnl = (current_price - entry_price) * quantity
+            pnl = (exit_price - entry_price) * quantity
             if current_price >= tp:
                 close_trade = True
                 exit_reason = "Take Profit"
@@ -546,7 +545,7 @@ class ExecutionEngine:
                 close_trade = True
                 exit_reason = "Stop Loss"
         else: # SELL
-            pnl = (entry_price - current_price) * quantity
+            pnl = (entry_price - exit_price) * quantity
             if current_price <= tp:
                 close_trade = True
                 exit_reason = "Take Profit"
@@ -557,13 +556,13 @@ class ExecutionEngine:
         if close_trade:
             # Place exit order on live broker if live mode is enabled
             exit_side = "sell" if direction == "BUY" else "buy"
-            success = self.execute_order_on_broker(symbol, exit_side, quantity, current_price)
+            success = self.execute_order_on_broker(symbol, exit_side, quantity, exit_price)
             if not success:
                 logging.error(f"Could not execute exit order for {symbol} on live broker. Keeping position open.")
                 return None
                 
             # Handle trade closure
-            exit_fee = (current_price * quantity) * self.transaction_fee_rate
+            exit_fee = (exit_price * quantity) * self.transaction_fee_rate
             pnl_after_fee = pnl - exit_fee
             
             # Trigger Loss Cooldown if PnL is negative
@@ -578,14 +577,14 @@ class ExecutionEngine:
             original_value = quantity * entry_price
             self.balance += (original_value + pnl) - exit_fee
             
-            # Save updated balance to DB
+            # Save updated balance to DB (batch if possible)
             database.save_setting("portfolio_balance", self.balance)
             
             # If live mode, sync balance directly from the exchange
             if self.trading_mode == "live":
                 self.sync_live_balance()
             
-            pnl_percent = (pnl_after_fee) / (original_value + 1e-9)
+            pnl_percent = (pnl_after_fee) / (original_value + 1e-9) if original_value != 0 else 0.0
 
             # Get active brain for symbol from DB settings
             active_brain_name = database.load_setting(f"active_policy_brain_{symbol}", "Default Brain")
@@ -594,7 +593,7 @@ class ExecutionEngine:
                 "symbol": symbol,
                 "direction": direction,
                 "entry_price": entry_price,
-                "exit_price": float(current_price),
+                "exit_price": float(exit_price),
                 "quantity": quantity,
                 "pnl": float(pnl_after_fee),
                 "pnl_percent": float(pnl_percent),

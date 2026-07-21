@@ -95,6 +95,7 @@ const Dashboard = {
   },
 
   async fetchWeights() {
+    const c = byId('weights-container'); if (c) c.innerHTML = '<div class="skeleton skeleton-text" style="width:100%"></div><div class="skeleton skeleton-text" style="width:80%"></div><div class="skeleton skeleton-text" style="width:90%"></div>';
     try {
       const d = await API.weights();
       if (d?.weights) this.renderWeights(d.weights);

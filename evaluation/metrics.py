@@ -8,7 +8,14 @@ from typing import Sequence, Optional
 
 
 def sharpe_ratio(returns: Sequence[float], risk_free_rate: float = 0.0) -> float:
-    """Annualized Sharpe ratio from a sequence of per-trade returns."""
+    """Annualized Sharpe ratio from a sequence of per-trade returns.
+    
+    NOTE: This function receives per-trade returns, not daily returns.
+    Annualization by sqrt(252) is only valid for daily returns.
+    For per-trade returns, proper annualization requires sqrt(avg_trades_per_year).
+    Without that info, we compute the non-annualized version or let the caller
+    pass appropriate scaling. Here we return the non-annualized Sharpe.
+    """
     if len(returns) < 2:
         return 0.0
     mean_r = sum(returns) / len(returns)
@@ -16,33 +23,45 @@ def sharpe_ratio(returns: Sequence[float], risk_free_rate: float = 0.0) -> float
     if variance <= 0:
         return 0.0
     std = math.sqrt(variance)
-    # Approximate annualization factor assuming ~252 trading days
-    # per-trade returns are already fractional (e.g. 0.02 for 2%), so scale by sqrt(n_trades)
-    # For a proper annualized Sharpe, we'd need daily returns. This is a heuristic.
     if std == 0:
         return 0.0
+    # Non-annualized Sharpe (per-trade basis). For annualized, multiply by sqrt(trades_per_year).
     return (mean_r - risk_free_rate) / std
 
 
 def sortino_ratio(returns: Sequence[float], risk_free_rate: float = 0.0) -> float:
-    """Sortino ratio — uses downside deviation only."""
+    """Sortino ratio — uses downside deviation only.
+    
+    Standard formula: (mean_return - risk_free) / downside_deviation
+    where downside_deviation = sqrt( sum(min(r - rf, 0)^2) / N )
+    
+    Returns non-annualized Sortino. For annualized, multiply by sqrt(periods_per_year).
+    """
     if len(returns) < 2:
         return 0.0
     mean_r = sum(returns) / len(returns)
-    downside = [r for r in returns if r < risk_free_rate]
-    if not downside:
+    # Downside deviation: semi-variance of returns below risk-free rate
+    n = len(returns)
+    downside_var = sum(min(r - risk_free_rate, 0) ** 2 for r in returns) / n
+    if downside_var <= 0:
         return float('inf') if mean_r > risk_free_rate else 0.0
-    down_var = sum((r - risk_free_rate) ** 2 for r in downside) / len(returns)
-    if down_var <= 0:
-        return 0.0
-    return (mean_r - risk_free_rate) / math.sqrt(down_var)
+    return (mean_r - risk_free_rate) / math.sqrt(downside_var)
 
 
 def calmar_ratio(returns: Sequence[float], max_drawdown: float) -> float:
-    """Calmar ratio — CAGR / max drawdown. Returns 0 if drawdown is 0."""
+    """Calmar ratio — CAGR / max drawdown. Returns 0 if drawdown is 0.
+    
+    CAGR = (1 + cumulative_return)^(1/years) - 1
+    For simplicity when period info is unavailable, uses the mean return as approximation.
+    
+    NOTE: Proper Calmar requires knowing the time span. The sum-of-returns approximation
+    is only valid when returns are small (ln(1+r) ~ r).
+    """
     if len(returns) < 1 or max_drawdown <= 0:
         return 0.0
+    # Cumulative return as sum of log returns approximation
     total_return = sum(returns)
+    # Annualized mean return *as an approximation of CAGR*
     cagr = total_return / len(returns) * 252  # rough annualization
     return cagr / max_drawdown
 

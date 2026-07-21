@@ -181,10 +181,12 @@ class MultiHeadAttention:
         d_V = np.einsum('bhst,bhse->bhte', cache['attn_weights'], d_heads)
         d_attn_weights = np.einsum('bhte,bhse->bhst', d_heads, cache['V'])
         
-        # Gradient through softmax
-        d_scores = d_attn_weights * cache['attn_weights']
-        s = np.sum(d_attn_weights * cache['attn_weights'], axis=-1, keepdims=True)
-        d_scores = d_scores - cache['attn_weights'] * s
+        # Gradient through softmax: proper Jacobian
+        # d(softmax(x)_i)/dx_j = softmax(x)_i * (delta_ij - softmax(x)_j)
+        # In matrix form: diag(p) - p @ p^T
+        p = cache['attn_weights']  # (batch, num_heads, seq, seq)
+        # d_scores = p * (d_attn - sum(p * d_attn, axis=-1, keepdims=True))
+        d_scores = p * (d_attn_weights - np.sum(p * d_attn_weights, axis=-1, keepdims=True))
         d_scores = d_scores / self.scale
         
         # Gradient w.r.t Q, K, V (approximate — full backprop through scale is omitted)

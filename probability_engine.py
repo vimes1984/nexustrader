@@ -107,14 +107,18 @@ class ProbabilityEngine:
         # Simple historical refinement if history is available
         if history_df is not None and len(history_df) > 50:
             try:
-                # Find historical instances with similar signals
-                similar_signals = history_df[
-                    (history_df['rsi'].between(rsi - 10, rsi + 10))
-                ]
-                if len(similar_signals) > 10:
-                    # Look at next-5-period forward returns
-                    forward_returns = similar_signals['close'].shift(5) > similar_signals['close']
-                    hist_win_rate = forward_returns.mean()
+                # Use original index-aligned close for forward return calculation
+                close_series = history_df['close'].copy()
+                forward_close = close_series.shift(-5)
+                valid_idx = close_series.notna() & forward_close.notna()
+                
+                # Find historical instances with similar RSI
+                rsi_series = history_df['rsi']
+                similar_mask = rsi_series.between(rsi - 10, rsi + 10) & valid_idx
+                similar_count = similar_mask.sum()
+                
+                if similar_count > 10:
+                    hist_win_rate = (forward_close[similar_mask] > close_series[similar_mask]).mean()
                     # Blend 70% model / 30% empirical historical win rate
                     p_win = 0.7 * p_win + 0.3 * hist_win_rate
             except Exception as e:
@@ -139,13 +143,15 @@ class ProbabilityEngine:
             risk = sl - price
             
         risk = max(risk, 1e-9)
-        risk_reward_ratio = reward / risk
+        # Cap reward:risk ratio to prevent numerical issues with extreme values
+        risk_reward_ratio = min(reward / risk, 20.0)
         
         # 4. Calculate Expected Value (EV) per unit size
         ev = (p_win * reward) - ((1 - p_win) * risk)
         
         # 5. Position Sizing via Kelly Criterion
         # f* = p - (q / b) = p - (1-p)/R
+        # where b = win_amount/loss_amount = R
         kelly_size = p_win - ((1.0 - p_win) / risk_reward_ratio)
         kelly_size = max(0.0, kelly_size)  # No negative sizes
         
@@ -218,11 +224,16 @@ class ProbabilityEngine:
         # Volume confirmation
         volume = row.get('volume', 0)
         avg_volume = row.get('avg_volume', 0)
-        if avg_volume > 0 and volume > 0 and volume / avg_volume < 0.5:
+        # Compute rolling avg volume from history if available
+        if avg_volume is None or avg_volume <= 0:
+            if history_df is not None and 'volume' in history_df.columns and len(history_df) >= 20:
+                avg_volume = history_df['volume'].tail(20).mean()
+        if avg_volume and avg_volume > 0 and volume > 0 and volume / avg_volume < 0.5:
             entry_ok = False
         
         # Dynamic min_win_rate based on recent performance
         dyn_min = self.min_win_rate
+        death_spiral_risk_mult = 1.0  # Position size multiplier when on a losing streak
         try:
             import database as _db2
             recent_trades = _db2.load_trades()
@@ -230,16 +241,22 @@ class ProbabilityEngine:
             if recent_n >= 3:
                 wins = sum(1 for t in recent_trades[-recent_n:] if t.get('pnl', 0) > 0)
                 wr = wins / recent_n
-                # When losing, LOWER the bar to take more shots.
-                # When winning, keep standards high.
+                # When losing, LOWER the bar to take more shots AND halve position size.
+                # When winning, keep standards high and full size.
                 if wr < 0.3:
                     dyn_min = max(self.min_win_rate - 0.10, 0.40)  # Lower bar to escape death spiral
+                    death_spiral_risk_mult = 0.5  # Halve position size on losing streak
                 elif wr < 0.5:
                     dyn_min = max(self.min_win_rate - 0.03, 0.45)  # Slight relaxation
+                    death_spiral_risk_mult = 0.75  # 75% size on choppy streak
                 elif wr > 0.7:
                     dyn_min = min(self.min_win_rate + 0.05, 0.70)  # Raise bar when crushing it
+                    death_spiral_risk_mult = 1.0  # Full size on hot streak
         except:
             pass
+        
+        # Apply death spiral position size reduction
+        final_fraction = final_fraction * death_spiral_risk_mult
         
         is_viable = (p_win >= dyn_min) and (ev > 0) and (final_fraction > 0) and entry_ok
         

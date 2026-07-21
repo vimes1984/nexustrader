@@ -99,9 +99,12 @@ def kelly_cap_from_calibration(brier: float, n_samples: int = 0) -> float:
         )
         return POOR_CALIBRATION_KELLY_CAP
 
-    ratio = brier / POOR_CALIBRATION_THRESHOLD
-    cap = 1.0 - (ratio * (1.0 - POOR_CALIBRATION_KELLY_CAP))
-    return round(max(POOR_CALIBRATION_KELLY_CAP, min(1.0, cap)), 4)
+    # Linear interpolation: Brier=0 -> cap=0.15 (good calibration), Brier=threshold -> cap=0.02
+    # Score better than random = better cap
+    ratio = brier / POOR_CALIBRATION_THRESHOLD  # 0.0 (perfect) to 1.0 (random)
+    max_kelly = 0.15  # Max Kelly fraction even with perfect calibration
+    cap = max_kelly * (1.0 - ratio) + POOR_CALIBRATION_KELLY_CAP * ratio
+    return round(float(cap), 4)
 
 
 def load_calibration_from_trades(db_path: str = None) -> dict:

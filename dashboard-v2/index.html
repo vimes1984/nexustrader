@@ -9,9 +9,17 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
+  <!-- DNS Preconnect / Preload / Font Optimization -->
+  <link rel="preconnect" href="https:" crossorigin>
+  <link rel="dns-prefetch" href="//">
+  <link rel="preload" href="/dashboard-v2/css/main.css?v=1784671101" as="style">
+  <link rel="preload" href="/dashboard-v2/vendor/lucide.min.js" as="script">
+  <link rel="preload" href="/dashboard-v2/vendor/lightweight-charts.standalone.production.js" as="script">
+  <!-- Font fallback: system fonts load instantly, no FOIT -->
   <link rel="stylesheet" href="/dashboard-v2/css/main.css?v=1784671101">
   <link rel="manifest" href="/dashboard-v2/manifest.json">
   <link rel="apple-touch-icon" href="/dashboard/icon-192.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/dashboard/icon-192.png">
 
   <!-- Vendor Libraries (self-hosted) -->
   <script src="/dashboard-v2/vendor/lightweight-charts.standalone.production.js"></script>
@@ -115,7 +123,7 @@
   </div>
 
   <!-- ═════════ TICKER SWITCHER ═════════ -->
-  <div class="ticker-switcher" id="ticker-switcher-bar"></div>
+  <div class="ticker-switcher" id="ticker-switcher-bar" role="tablist" aria-label="Select ticker"></div>
 
   <!-- ═══════════════════ TAB: DASHBOARD ═══════════════════ -->
   <div id="tab-dashboard" class="tab-content active">
@@ -130,7 +138,7 @@
       </div>
       <span id="chart-data-info" style="font-size:10px;color:var(--text-secondary)"></span>
     </div>
-    <div class="glass-panel chart-container" id="main-chart"></div>
+    <div class="glass-panel chart-container" id="main-chart" role="img" aria-label="Price chart" aria-live="polite"></div>
 
     <div class="two-col" style="margin-top:12px">
       <div>
@@ -383,6 +391,19 @@ window.addEventListener('unhandledrejection',function(e) {
   el.style.display='block';
   el.innerHTML+='<div>❌ Promise: '+(e.reason||'unknown')+'</div>';
 });
+</script>
+
+<!-- Service Worker Registration -->
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/dashboard-v2/sw.js').then((reg) => {
+      console.log('[SW] Registered:', reg.scope);
+    }).catch((err) => {
+      console.log('[SW] Registration failed:', err);
+    });
+  });
+}
 </script>
 
 <!-- Application Scripts (order matters!) -->

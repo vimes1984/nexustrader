@@ -52,6 +52,10 @@ def calculate_metrics(equity_curve: List[float], trades: List[dict]) -> Performa
             mean_r = sum(returns) / n
             variance = sum((r - mean_r) ** 2 for r in returns) / (n - 1)
             std_r = math.sqrt(variance) if variance > 0 else 0.0
+            # Annualized Sharpe: assumes the return series matches the data interval
+            # For 1h data, sqrt(24*365) = sqrt(8760); for daily, sqrt(252).
+            # The caller should pass the appropriate scale factor.
+            # Default to daily (252) for backward compatibility.
             m.sharpe = (mean_r / std_r * math.sqrt(252)) if std_r > 1e-10 else 0.0
 
     if not trades:

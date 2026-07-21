@@ -96,6 +96,7 @@ class NexusTraderOrchestrator:
         self.running_task = None
         self.playback_speed = 0.2  # delay in seconds between simulated bars
         self.is_simulating = False
+        self.mode = "idle"  # Explicit initial mode to prevent None comparison bugs
         self.loop = None
         
         # Setup learning callback connection
@@ -521,29 +522,33 @@ class NexusTraderOrchestrator:
         ensemble = self.strategy_ensembles[ticker]
         ingestor = self.data_ingestions[ticker]
         
-        # Check and apply dynamic auto-switch brain
-        auto_switch = database.load_setting(f"auto_switch_brains_{ticker}", "true") == "true"
-        if auto_switch:
-            try:
-                conn = database.get_db_connection()
-                cursor = conn.cursor()
-                cursor.execute(
-                    "SELECT name, weights FROM policy_brains WHERE ticker = ? ORDER BY accumulated_pnl_percent DESC, training_steps DESC LIMIT 1",
-                    (ticker,)
-                )
-                row_pb = cursor.fetchone()
-                conn.close()
-                if row_pb:
-                    best_brain_name = row_pb[0]
-                    best_brain_weights = row_pb[1]
-                    active_brain_name = database.load_setting(f"active_policy_brain_{ticker}", "Default Brain")
-                    if best_brain_name != active_brain_name:
-                        logging.info(f"[AUTO-BRAIN-SWITCH] Dynamically hot-swapping {ticker} active brain to best model '{best_brain_name}' (PnL-driven)")
-                        database.save_setting(f"policy_net_weights_{ticker}", best_brain_weights)
-                        database.save_setting(f"active_policy_brain_{ticker}", best_brain_name)
-                        learner.policy_net.from_json(best_brain_weights)
-            except Exception as e:
-                logging.error(f"[AUTO-BRAIN-SWITCH ERROR] Failed to dynamically auto-switch brain for {ticker}: {e}")
+        # Check and apply dynamic auto-switch brain (throttled: max once per hour)
+        _as_key = f"_last_brain_check_{ticker}"
+        _as_time = getattr(self, _as_key, 0.0)
+        if curr_time - _as_time >= 3600:
+            setattr(self, _as_key, curr_time)
+            auto_switch = database.load_setting(f"auto_switch_brains_{ticker}", "true") == "true"
+            if auto_switch:
+                try:
+                    conn = database.get_db_connection()
+                    cursor = conn.cursor()
+                    cursor.execute(
+                        "SELECT name, weights FROM policy_brains WHERE ticker = ? ORDER BY accumulated_pnl_percent DESC, training_steps DESC LIMIT 1",
+                        (ticker,)
+                    )
+                    row_pb = cursor.fetchone()
+                    conn.close()
+                    if row_pb:
+                        best_brain_name = row_pb[0]
+                        best_brain_weights = row_pb[1]
+                        active_brain_name = database.load_setting(f"active_policy_brain_{ticker}", "Default Brain")
+                        if best_brain_name != active_brain_name:
+                            logging.info(f"[AUTO-BRAIN-SWITCH] Dynamically hot-swapping {ticker} active brain to best model '{best_brain_name}' (PnL-driven)")
+                            database.save_setting(f"policy_net_weights_{ticker}", best_brain_weights)
+                            database.save_setting(f"active_policy_brain_{ticker}", best_brain_name)
+                            learner.policy_net.from_json(best_brain_weights)
+                except Exception as e:
+                    logging.error(f"[AUTO-BRAIN-SWITCH ERROR] Failed to dynamically auto-switch brain for {ticker}: {e}")
         
         # 1. Query the Policy Gradient Neural Network to allocate base strategy weights
         state = learner.get_state_vector(
@@ -635,8 +640,10 @@ class NexusTraderOrchestrator:
         trade_opened = False
         
         if not pos_open:
-            # Threshold to trigger evaluation: signal strength > 0.25 (out of -1.0 to 1.0 scale)
-            if abs(weighted_signal) >= 0.25:
+            # Dynamic signal threshold: higher for small accounts (fewer, higher-conviction trades)
+            # Scales inversely with account balance: $200 -> 0.35, $1K -> 0.25, $10K -> 0.20
+            _min_sig = max(0.20, min(0.45, 1.0 / (1.0 + self.execution_engine.balance / 500.0)))
+            if abs(weighted_signal) >= _min_sig:
                 direction = "BUY" if weighted_signal > 0 else "SELL"
                 
                 # Evaluate probability and risk
@@ -662,6 +669,7 @@ class NexusTraderOrchestrator:
                         current_drawdown=drawdown_tracker.current_drawdown,
                         open_positions={k: v.get("quantity", 0) for k, v in self.execution_engine.active_positions.items()},
                         total_exposure=exposure,
+                        current_equity=current_equity,
                     )
                     if not safe:
                         logging.warning("[KillSwitch] Blocking trade: {}".format(reason))
@@ -1095,15 +1103,17 @@ async def api_init_state(request: Request):
     positions = []
     try:
         for sym, pos in getattr(ee, "active_positions", {}).items():
+            entry_time = pos.get("entry_time", int(_time.time())) if isinstance(pos, dict) else getattr(pos, "entry_time", int(_time.time()))
             positions.append({
-                "symbol": sym, "direction": getattr(pos,"direction","BUY"),
-                "entry_price": getattr(pos,"entry_price",0),
-                "current_price": getattr(pos,"current_price",0),
-                "quantity": getattr(pos,"quantity",0),
-                "entry_time": getattr(pos,"entry_time",int(_time.time())),
-                "unrealized_pnl": getattr(pos,"unrealized_pnl",0),
-                "unrealized_pnl_pct": getattr(pos,"unrealized_pnl_pct",0),
-                "age_seconds": int(_time.time())-getattr(pos,"entry_time",int(_time.time())),
+                "symbol": sym,
+                "direction": pos.get("direction", "BUY") if isinstance(pos, dict) else getattr(pos, "direction", "BUY"),
+                "entry_price": pos.get("entry_price", 0) if isinstance(pos, dict) else getattr(pos, "entry_price", 0),
+                "current_price": pos.get("current_price", 0) if isinstance(pos, dict) else getattr(pos, "current_price", 0),
+                "quantity": pos.get("quantity", 0) if isinstance(pos, dict) else getattr(pos, "quantity", 0),
+                "entry_time": entry_time,
+                "unrealized_pnl": pos.get("unrealized_pnl", 0) if isinstance(pos, dict) else getattr(pos, "unrealized_pnl", 0),
+                "unrealized_pnl_pct": pos.get("unrealized_pnl_pct", 0) if isinstance(pos, dict) else getattr(pos, "unrealized_pnl_pct", 0),
+                "age_seconds": int(_time.time()) - entry_time,
             })
     except Exception:
         pass
@@ -1113,7 +1123,7 @@ async def api_init_state(request: Request):
         "trades":all_trades, "total_pnl":sum(t.get("pnl",0)or 0 for t in all_trades),
         "tickers":tickers, "ticker":default_ticker, "ticker_prices":ticker_prices,
         "active_brains":active_brains,
-        "initial_balance":float(_db.load_setting("initial_balance","219.74")),
+        "initial_balance":float(_db.load_setting("initial_portfolio_balance","100.0")),
         "lifetime_steps":int(_db.load_setting("lifetime_steps","0")),
         "model_dna":_db.load_setting("model_dna","genesis"),
         "positions":positions,
@@ -1130,18 +1140,20 @@ async def api_positions():
     try:
         ee = getattr(orchestrator, "execution_engine", None)
         if ee:
-            open_pos = getattr(ee, "open_positions", {})
-            for sym, pos in open_pos.items():
+            # active_positions is dict of dicts
+            active_pos = getattr(ee, "active_positions", {})
+            for sym, pos in active_pos.items():
+                entry_time = pos.get("entry_time", int(_time.time())) if isinstance(pos, dict) else int(_time.time())
                 positions.append({
                     "symbol": sym,
-                    "direction": getattr(pos, "direction", "BUY"),
-                    "entry_price": getattr(pos, "entry_price", 0),
-                    "current_price": getattr(pos, "current_price", 0),
-                    "quantity": getattr(pos, "quantity", 0),
-                    "entry_time": getattr(pos, "entry_time", int(_time.time())),
-                    "unrealized_pnl": getattr(pos, "unrealized_pnl", 0),
-                    "unrealized_pnl_pct": getattr(pos, "unrealized_pnl_pct", 0),
-                    "age_seconds": int(_time.time()) - getattr(pos, "entry_time", int(_time.time())),
+                    "direction": pos.get("direction", "BUY") if isinstance(pos, dict) else "BUY",
+                    "entry_price": pos.get("entry_price", 0) if isinstance(pos, dict) else 0,
+                    "current_price": pos.get("current_price", 0) if isinstance(pos, dict) else 0,
+                    "quantity": pos.get("quantity", 0) if isinstance(pos, dict) else 0,
+                    "entry_time": entry_time,
+                    "unrealized_pnl": pos.get("unrealized_pnl", 0) if isinstance(pos, dict) else 0,
+                    "unrealized_pnl_pct": pos.get("unrealized_pnl_pct", 0) if isinstance(pos, dict) else 0,
+                    "age_seconds": int(_time.time()) - entry_time,
                 })
     except Exception:
         pass
@@ -1226,7 +1238,7 @@ def get_quant_status():
             try:
                 with open(reports[0]) as f:
                     a["last_report_summary"] = f.readline().strip().lstrip("#").strip()[:100]
-            except:
+            except Exception:
                 a["last_report_summary"] = "(unreadable)"
         else:
             a["last_report"] = None
@@ -1480,6 +1492,7 @@ def get_trades():
                         'apiKey': api_key,
                         'secret': api_secret,
                         'enableRateLimit': True,
+                        'timeout': 15000,
                     })
                     exchange_trades = reconstruct_trades_from_exchange(exchange)
                     return exchange_trades
@@ -1920,7 +1933,7 @@ def apply_optimization(opt_id: int):
             elif param == "kelly_fraction" and hasattr(orchestrator.probability_engine, 'kelly_fraction'):
                 try:
                     orchestrator.probability_engine.kelly_fraction = float(new_val)
-                except:
+                except Exception:
                     pass
         
         return {
@@ -3931,7 +3944,7 @@ async def api_broker_config_save(request: Request):
 # Helper for async JSON parsing
 async def _get_json(request: Request):
     try: return await request.json()
-    except: return {}
+    except Exception: return {}
 
 @app.get("/api/system/config")
 def api_system_config_v2():
@@ -4182,7 +4195,8 @@ def api_opt_apply(opt_id: str):
 def api_opt_apply_all():
     for o in ["widen_sl","reduce_size","entry_delay","disable_alt","add_hedge"]:
         try: api_opt_apply(o)
-        except: pass
+        except Exception:
+            pass
     return {"ok":True,"applied":["widen_sl","reduce_size","entry_delay","disable_alt","add_hedge"]}
 
 @app.post("/api/optimizations/review")
