@@ -187,13 +187,11 @@ const App = {
       const btn = document.querySelector('.nav-tab[data-tab="' + tabId + '"]');
       if (btn) btn.classList.add('active');
 
-      // Show/hide tab content
-      const allTabs = document.querySelectorAll('.tab-content');
-      App._debug('  found', allTabs.length, 'tab-content divs');
-      allTabs.forEach(c => c.style.display = 'none');
+      // Show/hide tab content — MUST use classList because CSS has !important
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
       const content = document.getElementById(tabId);
       if (content) {
-        content.style.display = 'block';
+        content.classList.add('active');
         App._debug('  switched to', tabId);
       } else {
         console.error('  tab not found:', tabId);
