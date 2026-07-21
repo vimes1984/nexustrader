@@ -211,8 +211,23 @@ def query_auto(
 
     This is the recommended entry point for all Quant Team agents.
     Set DB setting 'enable_local_llama' to 'true' to use your LAN LLaMA server.
+
+    If RAG is enabled (DB setting 'enable_rag' = 'true'), relevant trading context
+    is automatically injected from the vector store into the prompt.
     """
     use_local = _load_db_setting("enable_local_llama", "false").lower() == "true"
+
+    # Inject RAG context if enabled
+    use_rag = _load_db_setting("enable_rag", "true").lower() == "true"
+    if use_rag:
+        try:
+            from rag_pipeline import rag_query
+            rag_ctx = rag_query(prompt, top_k=5)
+            if rag_ctx:
+                prompt = rag_ctx + "\n\n---\n\n" + prompt
+        except Exception as e:
+            logger.debug(f"RAG injection skipped: {e}")
+
     if use_local:
         return query_llama(prompt, agent_name=agent_name, max_tokens=max_tokens,
                            max_retries=max_retries, temperature=temperature,
