@@ -284,14 +284,13 @@ class BacktestEngine:
         exit_price = apply_exit_cost(exit_price_raw, "BUY", self.cost_model)
         pnl_pct = (exit_price - entry_price) / entry_price if entry_price > 0 else 0.0
         equity_curve = []
-        nav = 1.0
         buy_price = entry_price
+        # Build equity curve consistent with other baselines: start at 1.0
         for c in candles:
             close = c.get("close", buy_price)
-            nav = close / buy_price
+            nav = close / buy_price  # relative to entry price
             equity_curve.append(nav)
         trades = [{"pnl": exit_price - entry_price}]
-        m = calculate_metrics(equity_curve, trades)
         d = self._metrics_to_dict(equity_curve, trades)
         d["total_return"] = round(pnl_pct, 6)
         return d

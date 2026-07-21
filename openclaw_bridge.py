@@ -63,16 +63,23 @@ def _save_db_setting(key, value):
 
 
 def get_gateway_config():
-    """Return (url, token) from DB or defaults."""
+    """Return (url, token) from DB or defaults.
+    
+    Lazy-writes missing config into DB only if a write path needs it.
+    For read-only checks, use settings values without side effects.
+    """
     url = _load_db_setting("openclaw_gateway_url", "")
     token = _load_db_setting("openclaw_gateway_token", "")
-    if not url:
-        url = DEFAULT_GATEWAY_URL
-        _save_db_setting("openclaw_gateway_url", url)
-    if not token:
-        token = DEFAULT_GATEWAY_TOKEN
-        _save_db_setting("openclaw_gateway_token", token)
+    if not url or not token:
+        return (url or DEFAULT_GATEWAY_URL, token or DEFAULT_GATEWAY_TOKEN)
     return url, token
+
+
+def _persist_gateway_config():
+    """Write current gateway config to DB. Call explicitly when config changes."""
+    url, token = get_gateway_config()
+    _save_db_setting("openclaw_gateway_url", url)
+    _save_db_setting("openclaw_gateway_token", token)
 
 
 def _do_http_request(url, headers, body, timeout_sec, display, attempt, max_retries):
@@ -91,7 +98,11 @@ def _do_http_request(url, headers, body, timeout_sec, display, attempt, max_retr
                 return text, True
             raise ValueError("Empty response")
         except urllib.error.HTTPError as e:
-            err_body = e.read().decode("utf-8", errors="replace")[:500]
+            # HTTPError is a subclass of URLError — must catch it FIRST
+            try:
+                err_body = e.read().decode("utf-8", errors="replace")[:500]
+            except Exception:
+                err_body = "(unreadable)"
             logger.warning(f"[LLMBridge] HTTP {e.code} for {display}: {err_body}")
             if retry < max_retries - 1:
                 time.sleep(2 ** retry)

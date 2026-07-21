@@ -2,6 +2,7 @@ import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 import logging
 from collections import defaultdict
+import database
 
 class TradingStrategy:
     def __init__(self, name):
@@ -37,7 +38,6 @@ class RSIStrategy(TradingStrategy):
         self.default_overbought = overbought
 
     def generate_signal(self, row, history=None):
-        import database
         oversold = float(database.load_setting("opt_rsi_oversold", str(self.default_oversold)))
         overbought = float(database.load_setting("opt_rsi_overbought", str(self.default_overbought)))
         rsi = row.get('rsi', 50)
@@ -71,7 +71,6 @@ class KalmanTrendStrategy(TradingStrategy):
         self.kf = KalmanFilterPrice(process_variance=1e-5, measurement_variance=1e-2)
 
     def generate_signal(self, row, history=None):
-        import database
         close = row.get('close', 0)
         kf_price = self.kf.update(close)
         
@@ -140,8 +139,13 @@ class MLPredictorStrategy(TradingStrategy):
         
         # Avoid division by zero
         close = df['close'].values + 1e-9
-        sma_20_ratio = df['sma_20'].values / close
-        sma_50_ratio = df['sma_50'].values / close
+        # Compute rolling SMAs if not already present
+        if 'sma_20' not in df.columns:
+            df['sma_20'] = df['close'].rolling(20).mean()
+        if 'sma_50' not in df.columns:
+            df['sma_50'] = df['close'].rolling(50).mean()
+        sma_20_ratio = df['sma_20'].fillna(close).values / close
+        sma_50_ratio = df['sma_50'].fillna(close).values / close
         bb_upper_ratio = df['bb_upper'].values / close
         bb_lower_ratio = df['bb_lower'].values / close
         
@@ -154,12 +158,22 @@ class MLPredictorStrategy(TradingStrategy):
             return 0.0
         
         close = row.get('close', 1e-9)
+        # Compute rolling SMA from history if available (row keys may not have them)
+        sma_20 = row.get('sma_20', None)
+        sma_50 = row.get('sma_50', None)
+        if sma_20 is None and history is not None and len(history) >= 20:
+            sma_20 = np.mean([h.get('close', close) for h in history[-20:]])
+        if sma_50 is None and history is not None and len(history) >= 50:
+            sma_50 = np.mean([h.get('close', close) for h in history[-50:]])
+        sma_20 = sma_20 or close
+        sma_50 = sma_50 or close
+        
         feat = np.array([[
             row.get('rsi', 50),
             row.get('macd', 0),
             row.get('macd_signal', 0),
-            row.get('sma_20', close) / close,
-            row.get('sma_50', close) / close,
+            sma_20 / close,
+            sma_50 / close,
             row.get('bb_upper', close) / close,
             row.get('bb_lower', close) / close
         ]])
@@ -211,9 +225,12 @@ class MeanReversionZScoreStrategy(TradingStrategy):
         close = row.get('close', 0)
         bb_mid = row.get('bb_mid', close)
         bb_std = row.get('bb_std', 0)
-        if bb_std <= 0:
+        # Guard against near-zero std dev (e.g., flat price, minimal data)
+        if bb_std <= 1e-9:
             return 0.0
         z_score = (close - bb_mid) / bb_std
+        # Clip z-score to prevent overflow from extreme values
+        z_score = np.clip(z_score, -10.0, 10.0)
         if z_score < -self.entry_threshold:
             return 1.0
         elif z_score > self.entry_threshold:

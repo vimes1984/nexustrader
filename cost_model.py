@@ -28,8 +28,15 @@ def apply_exit_cost(price: float, side: str, cost_model: CostModel) -> float:
         return price * (1 + fee + slip + spread)
 
 def estimate_round_trip_cost(position_value: float, cost_model: CostModel) -> float:
-    """Estimates total cost for a full round-trip trade."""
-    fee_cost = position_value * (cost_model.maker_fee + cost_model.taker_fee)
-    slip_cost = position_value * (cost_model.slippage_bps / 10_000.0) * 2
-    spread_cost = position_value * (cost_model.spread_bps / 10_000.0)
+    """Estimates total cost for a full round-trip trade.
+    
+    Entry: pays taker fee + slippage + half-spread
+    Exit: pays taker fee + slippage + half-spread
+    Total: 2*taker_fee + 2*slippage + spread
+    """
+    slip_bps = cost_model.slippage_bps / 10_000.0
+    spread_bps = cost_model.spread_bps / 10_000.0
+    fee_cost = position_value * cost_model.taker_fee * 2  # entry + exit
+    slip_cost = position_value * slip_bps * 2
+    spread_cost = position_value * spread_bps
     return fee_cost + slip_cost + spread_cost

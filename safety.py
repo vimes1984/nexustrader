@@ -63,6 +63,7 @@ class KillSwitch:
         self.max_position_per_symbol = max_position_per_symbol
         self.max_total_exposure = max_total_exposure
         self.max_drawdown_pct = max_drawdown_pct
+        self._base_equity = 0.0  # tracked so limits scale if account grows
 
         # Runtime state
         self.daily_pnl = 0.0
@@ -75,22 +76,41 @@ class KillSwitch:
         current_drawdown: float = 0.0,
         open_positions: Optional[dict] = None,
         total_exposure: float = 0.0,
+        current_equity: Optional[float] = None,
     ) -> Tuple[bool, Optional[str]]:
         """Returns (is_safe, reason_if_tripped).
 
         If already tripped, stays tripped until reset.
+        current_equity: if provided, enables dynamic scaling of limits to account size.
         """
         if self.tripped:
             return False, self.trigger_reason
+
+        # Set base equity on first check with real value
+        if self._base_equity == 0.0 and current_equity is not None and current_equity > 0:
+            self._base_equity = current_equity
+
+        # Dynamic limits scaled to account size
+        # For a $200 account: $20 daily loss, $50 per-position, $150 total exposure
+        # These scale linearly as the account grows
+        if current_equity is not None and current_equity > 0:
+            scale = current_equity / 200.0  # Scale from $200 baseline
+            max_daily = max(self.max_daily_loss, 20.0 * scale)
+            max_per_pos = max(self.max_position_per_symbol, 50.0 * scale)
+            max_exposure = max(self.max_total_exposure, 150.0 * scale)
+        else:
+            max_daily = self.max_daily_loss
+            max_per_pos = self.max_position_per_symbol
+            max_exposure = self.max_total_exposure
 
         # Daily reset every 24h
         if time.time() - self.daily_reset_time > 86400:
             self.daily_pnl = 0.0
             self.daily_reset_time = time.time()
 
-        if self.daily_pnl <= -self.max_daily_loss:
+        if self.daily_pnl <= -max_daily:
             self.tripped = True
-            self.trigger_reason = "Daily loss limit: {:.2f} >= {:.2f}".format(-self.daily_pnl, self.max_daily_loss)
+            self.trigger_reason = "Daily loss limit: {:.2f} >= {:.2f} (account: ${:.0f})".format(-self.daily_pnl, max_daily, current_equity or 0)
             return False, self.trigger_reason
 
         if current_drawdown >= self.max_drawdown_pct:
@@ -100,14 +120,14 @@ class KillSwitch:
 
         if open_positions:
             for sym, size in open_positions.items():
-                if abs(size) > self.max_position_per_symbol:
+                if abs(size) > max_per_pos:
                     self.tripped = True
-                    self.trigger_reason = "Position limit {}: {} > {}".format(sym, size, self.max_position_per_symbol)
+                    self.trigger_reason = "Position limit {}: {} > {:.0f} (account: ${:.0f})".format(sym, size, max_per_pos, current_equity or 0)
                     return False, self.trigger_reason
 
-        if total_exposure > self.max_total_exposure:
+        if total_exposure > max_exposure:
             self.tripped = True
-            self.trigger_reason = "Total exposure: {} > {}".format(total_exposure, self.max_total_exposure)
+            self.trigger_reason = "Total exposure: {:.0f} > {:.0f} (account: ${:.0f})".format(total_exposure, max_exposure, current_equity or 0)
             return False, self.trigger_reason
 
         return True, None

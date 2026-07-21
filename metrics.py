@@ -38,22 +38,35 @@ def sortino_ratio(returns: Sequence[float], risk_free_rate: float = 0.0) -> floa
     return (mean_r - risk_free_rate) / math.sqrt(down_var)
 
 
-def calmar_ratio(returns: Sequence[float], max_drawdown: float) -> float:
-    """Calmar ratio — CAGR / max drawdown. Returns 0 if drawdown is 0."""
+def calmar_ratio(returns: Sequence[float], max_drawdown: float, periods_per_year: float = 252.0) -> float:
+    """Calmar ratio — CAGR / max drawdown. Returns 0 if drawdown is 0.
+    
+    Uses proper CAGR: (1 + total_return)^(periods_per_year / n) - 1
+    """
     if len(returns) < 1 or max_drawdown <= 0:
         return 0.0
+    n = len(returns)
+    years = n / periods_per_year
+    if years <= 0:
+        return 0.0
     total_return = sum(returns)
-    cagr = total_return / len(returns) * 252  # rough annualization
+    base = max(1.0 + total_return, 0.01)
+    try:
+        cagr = base ** (1.0 / years) - 1.0
+    except (ValueError, OverflowError, ZeroDivisionError):
+        return 0.0
     return cagr / max_drawdown
 
 
 def profit_factor(trades: Sequence[dict]) -> float:
-    """Gross profit / gross loss. Returns 0 if no losing trades (safe div)."""
+    """Gross profit / gross loss. Returns 0 if no losing trades (safe div).
+    Capped at 100 for JSON safety.
+    """
     gross_profit = sum(t.get('pnl', 0) for t in trades if t.get('pnl', 0) > 0)
     gross_loss = sum(abs(t.get('pnl', 0)) for t in trades if t.get('pnl', 0) < 0)
     if gross_loss == 0:
-        return float('inf') if gross_profit > 0 else 0.0
-    return gross_profit / gross_loss
+        return 100.0 if gross_profit > 0 else 0.0
+    return min(gross_profit / gross_loss, 100.0)
 
 
 def win_rate(trades: Sequence[dict]) -> float:
@@ -97,20 +110,25 @@ def brier_score(probabilities: Sequence[float], outcomes: Sequence[int]) -> floa
 
 
 def calibration_error(probabilities: Sequence[float], outcomes: Sequence[int], bins: int = 10) -> float:
-    """Expected calibration error (ECE). Lower is better."""
+    """Expected calibration error (ECE). Lower is better.
+    
+    Uses fixed-width probability bins [0, 0.1), [0.1, 0.2), ..., [0.9, 1.0]
+    as per standard ECE definition (Guo et al., 2017).
+    """
     if len(probabilities) == 0:
         return 0.0
-    pairs = sorted(zip(probabilities, outcomes), key=lambda x: x[0])
-    n = len(pairs)
-    bin_size = max(1, n // bins)
+    n = len(probabilities)
     total_error = 0.0
-    for i in range(0, n, bin_size):
-        bin_pairs = pairs[i:i + bin_size]
-        if not bin_pairs:
+    bin_size = 1.0 / bins
+    for i in range(bins):
+        low = i * bin_size
+        high = low + bin_size
+        in_bin = [(p, o) for p, o in zip(probabilities, outcomes) if low <= p < high]
+        if not in_bin:
             continue
-        avg_prob = sum(p for p, _ in bin_pairs) / len(bin_pairs)
-        actual_freq = sum(o for _, o in bin_pairs) / len(bin_pairs)
-        total_error += abs(avg_prob - actual_freq) * (len(bin_pairs) / n)
+        avg_prob = sum(p for p, _ in in_bin) / len(in_bin)
+        actual_freq = sum(o for _, o in in_bin) / len(in_bin)
+        total_error += abs(avg_prob - actual_freq) * (len(in_bin) / n)
     return total_error
 
 

@@ -11,9 +11,13 @@ class KalmanFilterPrice:
         self.P = 1.0   # Estimation error covariance
 
     def update(self, measurement):
+        # Guard against NaN or inf measurements
+        if measurement is None or not np.isfinite(measurement):
+            return float(self.x) if self.x is not None else 0.0
+            
         if self.x is None:
             self.x = measurement
-            return self.x
+            return float(self.x)
 
         # 1. Predict state and error covariance
         x_pred = self.x
@@ -21,8 +25,12 @@ class KalmanFilterPrice:
 
         # 2. Update (Correction)
         kalman_gain = P_pred / (P_pred + self.R)
+        # Guard against numerical instability in Kalman gain
+        kalman_gain = np.clip(kalman_gain, 0.0, 1.0)
         self.x = x_pred + kalman_gain * (measurement - x_pred)
-        self.P = (1 - kalman_gain) * P_pred
+        self.P = (1.0 - kalman_gain) * P_pred
+        # Prevent P from going negative due to floating point
+        self.P = max(self.P, 1e-12)
 
         return float(self.x)
 

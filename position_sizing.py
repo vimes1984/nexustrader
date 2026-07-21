@@ -30,7 +30,7 @@ def estimate_metrics_from_trades(trades: List[dict]) -> dict:
     if not trades:
         return {"win_rate": 0.5, "avg_win": 0.0, "avg_loss": 0.0, "count": 0}
 
-    pnls = [abs(t.get('pnl_percent', t.get('pnl', 0.0))) for t in trades]
+    pnls = [t.get('pnl_percent', t.get('pnl', 0.0)) or 0.0 for t in trades]
     wins = [p for p in pnls if p > 0]
     losses = [p for p in pnls if p < 0]
 
@@ -98,7 +98,7 @@ def compute_safe_fraction(
             "half_kelly": 0.02,
             "drawdown_penalty": 1.0,
             "calibration_cap": calibration_cap,
-            "safe_fraction": 0.02,  # 2% default when cold-starting
+            "safe_fraction": 0.05,  # 5% default when cold-starting
             "signal": "cold_start_default"
         }
 
@@ -119,8 +119,12 @@ def compute_safe_fraction(
 
     safe_fraction = effective_kelly * drawdown_penalty
 
-    # Hard cap
+    # Hard cap (upper bound)
     safe_fraction = min(safe_fraction, ABSOLUTE_MAX_FRACTION)
+    # Minimum floor: only when drawdown penalty hasn't halted trading
+    if drawdown_penalty > 0:
+        min_safe_fraction = 0.02  # 2% minimum for data-rich setups
+        safe_fraction = max(safe_fraction, min_safe_fraction)
 
     # Determine signal
     if safe_fraction <= 0:
@@ -173,11 +177,11 @@ def volatility_adjusted_qty(
         return 0.0
 
     risk_amount = capital * risk_fraction
-    atr_pct = atr / price
 
-    # Scale position so that an ATR move represents the risk amount
-    atr_risk = risk_fraction * capital * atr_multiplier
-    qty = atr_risk / (atr * atr_multiplier) if atr > 0 else 0.0
+    # Scale position so that an ATR * atr_multiplier move represents the risk amount
+    # qty = risk_amount / (atr * atr_multiplier)
+    denominator = atr * atr_multiplier
+    qty = risk_amount / denominator if denominator > 0 else 0.0
 
     # Alternative: flat qty based on risk fraction / price (if ATR not helpful)
     if qty <= 0:

@@ -209,15 +209,14 @@ class SimulatedTrader:
             ema26 = self._ema(self.price_history, 26)
             macd = ema12 - ema26
             
-            # Signal line (9-period EMA of MACD — simplified)
-            if hasattr(self, '_macd_history'):
-                self._macd_history.append(macd)
-                if len(self._macd_history) > 9:
-                    self._macd_history.pop(0)
-                macd_signal = self._ema(self._macd_history, 9) if len(self._macd_history) >= 9 else macd
-            else:
-                self._macd_history = [macd]
-                macd_signal = macd
+            # Signal line (9-period EMA of MACD)
+            if not hasattr(self, '_macd_history'):
+                self._macd_history = []
+            self._macd_history.append(macd)
+            macd_signal = self._ema(self._macd_history, 9) if len(self._macd_history) >= 9 else macd
+            # Trim history to avoid unbounded growth
+            if len(self._macd_history) > 20:
+                self._macd_history = self._macd_history[-20:]
         
         macd_hist = macd - macd_signal
         
@@ -227,7 +226,7 @@ class SimulatedTrader:
         if len(self.price_history) >= 20:
             recent = self.price_history[-20:]
             ma = sum(recent) / 20
-            std = (sum((p - ma) ** 2 for p in recent) / 20) ** 0.5
+            std = (sum((p - ma) ** 2 for p in recent) / 20) ** 0.5  # population std (Bollinger convention)
             bb_upper = ma + 2 * std
             bb_lower = ma - 2 * std
         
@@ -235,8 +234,15 @@ class SimulatedTrader:
         atr = close * 0.01
         if len(self.price_history) >= 15:
             tr_values = []
-            # Use raw candle buffer if available, else price history
-            buf = getattr(self, '_raw_candles', [])
+            # Store current candle for ATR calculation (before overwriting the buffer)
+            if not hasattr(self, '_raw_candles'):
+                self._raw_candles = []
+            # Pre-store the current candle for this computation
+            self._raw_candles.append({
+                'high': float(row.get('high', close)),
+                'low': float(row.get('low', close)),
+            })
+            buf = self._raw_candles
             for i in range(-13, 1):
                 if i < 0 and len(buf) >= abs(i):
                     c = buf[i]
@@ -247,16 +253,10 @@ class SimulatedTrader:
                 tr = max(h - l, abs(h - prev_c), abs(l - prev_c))
                 tr_values.append(tr)
             atr = sum(tr_values) / len(tr_values) if tr_values else close * 0.01
-        
-        # Store raw candle for ATR
-        if not hasattr(self, '_raw_candles'):
-            self._raw_candles = []
-        self._raw_candles.append({
-            'high': float(row.get('high', close)),
-            'low': float(row.get('low', close)),
-        })
-        if len(self._raw_candles) > 50:
-            self._raw_candles.pop(0)
+            
+            # Trim to prevent unbounded growth
+            if len(self._raw_candles) > 51:
+                self._raw_candles = self._raw_candles[-50:]
         
         indicator = {
             'rsi': rsi,

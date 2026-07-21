@@ -48,31 +48,46 @@ def sortino_ratio(returns: Sequence[float], risk_free_rate: float = 0.0) -> floa
     return (mean_r - risk_free_rate) / math.sqrt(downside_var)
 
 
-def calmar_ratio(returns: Sequence[float], max_drawdown: float) -> float:
+def calmar_ratio(returns: Sequence[float], max_drawdown: float, periods_per_year: float = 252.0) -> float:
     """Calmar ratio — CAGR / max drawdown. Returns 0 if drawdown is 0.
     
-    CAGR = (1 + cumulative_return)^(1/years) - 1
-    For simplicity when period info is unavailable, uses the mean return as approximation.
+    CAGR = (1 + total_return)^(periods_per_year / len(returns)) - 1
+    where total_return is the cumulative return over the entire period.
     
-    NOTE: Proper Calmar requires knowing the time span. The sum-of-returns approximation
-    is only valid when returns are small (ln(1+r) ~ r).
+    Unline Sharpe/Sortino (which annualize by sqrt), CAGR scales exponentially with time.
+    For small returns this approximates: CAGR ~= mean_return * periods_per_year
+    
+    Args:
+        returns: Sequence of per-period returns (e.g., daily returns)
+        max_drawdown: Maximum drawdown as fraction (e.g., 0.25 = 25%)
+        periods_per_year: Number of periods in a year (252 trading days, 12 months, etc.)
     """
     if len(returns) < 1 or max_drawdown <= 0:
         return 0.0
-    # Cumulative return as sum of log returns approximation
     total_return = sum(returns)
-    # Annualized mean return *as an approximation of CAGR*
-    cagr = total_return / len(returns) * 252  # rough annualization
+    # Proper CAGR: (1 + total_return)^(periods_per_year / n_periods) - 1
+    n = len(returns)
+    years = n / periods_per_year
+    if years <= 0:
+        return 0.0
+    # Use (1+total_return) for CAGR; clamp to prevent negative base raising to fractional power
+    base = max(1.0 + total_return, 0.01)  # floor at 1% to keep real root for heavy losses
+    try:
+        cagr = base ** (1.0 / years) - 1.0
+    except (ValueError, OverflowError, ZeroDivisionError):
+        return 0.0
     return cagr / max_drawdown
 
 
 def profit_factor(trades: Sequence[dict]) -> float:
-    """Gross profit / gross loss. Returns 0 if no losing trades (safe div)."""
+    """Gross profit / gross loss. Returns 0 if no losing trades (safe div).
+    Capped at 100 for JSON safety.
+    """
     gross_profit = sum(t.get('pnl', 0) for t in trades if t.get('pnl', 0) > 0)
     gross_loss = sum(abs(t.get('pnl', 0)) for t in trades if t.get('pnl', 0) < 0)
     if gross_loss == 0:
-        return float('inf') if gross_profit > 0 else 0.0
-    return gross_profit / gross_loss
+        return 100.0 if gross_profit > 0 else 0.0
+    return min(gross_profit / gross_loss, 100.0)
 
 
 def win_rate(trades: Sequence[dict]) -> float:

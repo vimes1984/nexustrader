@@ -95,10 +95,19 @@ class LLMClient:
     def _complete_json(self, prompt: str, max_tokens: int = 150) -> dict:
         """Complete and parse as JSON, with fallback stripping."""
         raw = self._complete(prompt, max_tokens=max_tokens, temperature=0.5)
-        # Try to extract JSON from the response (model may add commentary)
-        for attempt in [raw, raw[raw.find("{"):raw.rfind("}")+1] if "{" in raw else ""]:
+        if not raw:
+            return {"raw_response": "", "parse_error": True}
+        
+        # Try the raw response first, then extract first {…} block
+        candidates = [raw]
+        brace_start = raw.find("{")
+        brace_end = raw.rfind("}")
+        if brace_start != -1 and brace_end > brace_start:
+            candidates.append(raw[brace_start:brace_end+1])
+        
+        for candidate in candidates:
             try:
-                return json.loads(attempt)
+                return json.loads(candidate)
             except json.JSONDecodeError:
                 continue
         # Fallback: return raw text as a key

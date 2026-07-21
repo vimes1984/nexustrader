@@ -16,7 +16,7 @@ class PerformanceMetrics:
     avg_loser: float = 0.0
     expectancy: float = 0.0
 
-def calculate_metrics(equity_curve: List[float], trades: List[dict]) -> PerformanceMetrics:
+def calculate_metrics(equity_curve: List[float], trades: List[dict], periods_per_year: int = 252, risk_free_rate: float = 0.0) -> PerformanceMetrics:
     """
     Calculate performance metrics from an equity curve and list of trades.
     trades: list of dicts with keys: pnl (float)
@@ -52,11 +52,9 @@ def calculate_metrics(equity_curve: List[float], trades: List[dict]) -> Performa
             mean_r = sum(returns) / n
             variance = sum((r - mean_r) ** 2 for r in returns) / (n - 1)
             std_r = math.sqrt(variance) if variance > 0 else 0.0
-            # Annualized Sharpe: assumes the return series matches the data interval
-            # For 1h data, sqrt(24*365) = sqrt(8760); for daily, sqrt(252).
-            # The caller should pass the appropriate scale factor.
-            # Default to daily (252) for backward compatibility.
-            m.sharpe = (mean_r / std_r * math.sqrt(252)) if std_r > 1e-10 else 0.0
+            # Annualized Sharpe (with risk-free rate)
+            excess_mean = mean_r - (risk_free_rate / periods_per_year)  # convert yearly rf to per-period
+            m.sharpe = (excess_mean / std_r * math.sqrt(periods_per_year)) if std_r > 1e-10 else 0.0
 
     if not trades:
         return m
@@ -73,7 +71,11 @@ def calculate_metrics(equity_curve: List[float], trades: List[dict]) -> Performa
 
     gross_profit = sum(winners)
     gross_loss = abs(sum(losers))
-    m.profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else (float("inf") if gross_profit > 0 else 0.0)
+    # Cap profit factor at 100 for JSON-safety (inf breaks serialization)
+    if gross_loss > 0:
+        m.profit_factor = min(gross_profit / gross_loss, 100.0)
+    else:
+        m.profit_factor = 100.0 if gross_profit > 0 else 0.0
 
     m.expectancy = (m.win_rate * m.avg_winner) + ((1 - m.win_rate) * m.avg_loser)
 

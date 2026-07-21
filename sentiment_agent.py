@@ -1,34 +1,43 @@
 import os
-import sqlite3
 import json
-import urllib.request
 import logging
 from mutation_guard import should_apply_agent_mutation, log_blocked_mutation
 
 AGENT_NAME = "sentiment_agent"
 import subprocess
 
-DB_PATH = os.path.expanduser("~/.nexustrader/nexustrader.db")
+try:
+    import database as _db
+    HAVE_DB = True
+except ImportError:
+    HAVE_DB = False
+    _db = None
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 def load_settings():
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
-    c.execute("SELECT key, value FROM settings")
-    rows = c.fetchall()
-    conn.close()
-    return {r[0]: r[1] for r in rows}
+    """Load all settings from the main database via database.py."""
+    if not HAVE_DB:
+        return {}
+    try:
+        conn = _db.get_db_connection()
+        c = conn.cursor()
+        c.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
+        c.execute("SELECT key, value FROM settings")
+        rows = c.fetchall()
+        conn.close()
+        return {r[0]: r[1] for r in rows}
+    except Exception as e:
+        logging.error(f"load_settings failed: {e}")
+        return {}
 
 def save_setting(key, value):
     if not should_apply_agent_mutation(AGENT_NAME):
         log_blocked_mutation(AGENT_NAME, key, value)
         return
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
-    conn.commit()
-    conn.close()
+    if not HAVE_DB:
+        return
+    _db.save_setting(key, value)
 
 def run_sentiment_self_improvement(trigger_deploy: bool = False):
     logging.info("Starting Sentiment Engine self-improvement session...")
@@ -78,9 +87,9 @@ Current news sentiment weight factor in Strategy Ensemble: {settings.get("recomm
         return f"API call failed: {e}"
         
     # Perform Meta-Prompt Optimization for Sentiment Prompt
+    base_dir = os.path.dirname(os.path.abspath(__file__))
     try:
         dev_summary = ""
-        base_dir = os.path.dirname(os.path.abspath(__file__))
         report_path = os.path.join(base_dir, "blog", "daily_summaries", "weekly_self_improvement.md")
         if os.path.exists(report_path):
             with open(report_path, "r") as f:

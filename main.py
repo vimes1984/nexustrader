@@ -300,47 +300,44 @@ class NexusTraderOrchestrator:
         
         # Save updated network parameters to database and track training statistics
         weights_json = learner.policy_net.to_json()
-        if self.mode != "simulation":
-            database.save_setting(f"policy_net_weights_{ticker}", weights_json)
-        
-        # Model DNA signature is a stable representation of the Policy Network's architecture topology
-        hidden_layers = int(database.load_setting("nn_hidden_layers", "1"))
-        hidden_dim = int(database.load_setting("nn_hidden_dim", "12"))
         import hashlib
-        topo_str = f"PolicyNet-{hidden_layers}x{hidden_dim}x{len(ensemble.strategies)}"
-        dna_hash = hashlib.md5(topo_str.encode('utf-8')).hexdigest()[:6].upper()
-        model_dna = f"NN-ARCH-{dna_hash}"
-        
-        # Increment and save lifetime training steps
         steps_key = f"lifetime_training_steps_{ticker}"
         steps = int(database.load_setting(steps_key, "0")) + 1
-        if self.mode != "simulation":
-            database.save_setting(steps_key, str(steps))
         last_save_time = time.strftime('%H:%M:%S', time.localtime())
         
-        # Also update the active brain profile's training_steps and weights in database!
-        if self.mode != "simulation":
-            active_brain_name = database.load_setting(f"active_policy_brain_{ticker}", "Default Brain")
-            try:
-                conn = database.get_db_connection()
-                cursor = conn.cursor()
-                cursor.execute(
-                    "UPDATE policy_brains SET training_steps = ?, weights = ? WHERE name = ? AND ticker = ?",
-                    (steps, weights_json, active_brain_name, ticker)
-                )
-                conn.commit()
-                conn.close()
-                logging.info(f"Successfully persisted updated weights and epochs count for active brain '{active_brain_name}' in database.")
-            except Exception as e:
-                logging.error(f"Error updating active brain weights and training steps: {e}")
-        
-        # Save weights to weights history table
         weights_dict = {
             ensemble.strategies[i].name: float(new_weights[i])
             for i in range(len(new_weights))
         }
-        active_brain_wh = database.load_setting(f"active_policy_brain_{ticker}", "Default Brain")
-        database.save_weights_history(time.time(), ticker, weights_dict, brain_name=active_brain_wh)
+        
+        if self.execution_engine.trading_mode != "simulation":
+            active_brain_name = database.load_setting(f"active_policy_brain_{ticker}", "Default Brain")
+            hidden_layers = int(database.load_setting("nn_hidden_layers", "1"))
+            hidden_dim = int(database.load_setting("nn_hidden_dim", "12"))
+            topo_str = f"PolicyNet-{hidden_layers}x{hidden_dim}x{len(ensemble.strategies)}"
+            dna_hash = hashlib.md5(topo_str.encode('utf-8')).hexdigest()[:6].upper()
+            model_dna = f"NN-ARCH-{dna_hash}"
+            # Single DB connection for all writes
+            try:
+                conn = database.get_db_connection()
+                cursor = conn.cursor()
+                cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+                               (f"policy_net_weights_{ticker}", weights_json))
+                cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+                               (steps_key, str(steps)))
+                cursor.execute(
+                    "UPDATE policy_brains SET training_steps = ?, weights = ? WHERE name = ? AND ticker = ?",
+                    (steps, weights_json, active_brain_name, ticker))
+                cursor.execute(
+                    "INSERT OR REPLACE INTO weights_history (timestamp, ticker, weights, brain_name) VALUES (?, ?, ?, ?)",
+                    (time.time(), ticker, json.dumps(weights_dict), active_brain_name))
+                conn.commit()
+                conn.close()
+            except Exception as e:
+                logging.error(f"Error persisting training state: {e}")
+        else:
+            active_brain_name = database.load_setting(f"active_policy_brain_{ticker}", "Default Brain")
+            model_dna = f"NN-ARCH-DEFAULT"
         
         # ------------------------------------------------------------
         # PPO + replay buffer integration
@@ -419,7 +416,7 @@ class NexusTraderOrchestrator:
         
         # Auto-switch to the best performing brain if enabled
         auto_switch = database.load_setting(f"auto_switch_brains_{ticker}", "true") == "true"
-        if auto_switch and self.mode != "simulation":
+        if auto_switch and self.execution_engine.trading_mode != "simulation":
             try:
                 conn = database.get_db_connection()
                 cursor = conn.cursor()
@@ -440,7 +437,7 @@ class NexusTraderOrchestrator:
 
         # ── Proton Mail Bridge trade notification ──
         try:
-            if self.mode == "live":
+            if self.execution_engine.trading_mode == "live":
                 trade_pnl_abs = float(pnl_percent) * float(getattr(self.execution_engine, 'balance', 0) or 0)
                 closed = [t for t in self.execution_engine.closed_trades if t.get('symbol') == ticker]
                 latest_closed = closed[-1] if closed else {}
@@ -3898,51 +3895,59 @@ def api_training_run(request: Request):
         "ticker": ticker,
     }
 
-if __name__ == "__main__":
-    import sys
-    is_headless = "--headless" in sys.argv
-    has_display = ("DISPLAY" in os.environ or "WAYLAND_DISPLAY" in os.environ) and not is_headless
-    
-    if has_display:
-        import threading
-        import time
-        
-        def run_server():
-            logging.info("Starting backend server thread...")
-            try:
-                uvicorn.run(app, host="0.0.0.0", port=8000, log_level="warning")
-            except Exception as e:
-                logging.error(f"Uvicorn server crashed: {e}")
 
-        server_thread = threading.Thread(target=run_server, daemon=True)
-        server_thread.start()
-        time.sleep(1.2)
-        
-        try:
-            import webview
-            logging.info("Launching standalone desktop window via pywebview...")
-            webview.create_window(
-                title="NexusTrader Desktop App",
-                url="http://127.0.0.1:8000",
-                width=1280,
-                height=850,
-                resizable=True
-            )
-            webview.start()
-            logging.info("GUI window closed. Exiting application.")
-        except Exception as e:
-            logging.error(f"Native GUI window failed: {e}. Keeping server thread alive.")
-            try:
-                while server_thread.is_alive():
-                    time.sleep(1.0)
-            except KeyboardInterrupt:
-                logging.info("Shutting down via KeyboardInterrupt.")
-    else:
-        logging.info("Headless environment detected (no DISPLAY). Running server on main thread...")
-        try:
-            uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info", access_log=False)
-        except KeyboardInterrupt:
-            logging.info("Shutting down server.")
+# ═══════════════════════════════════════════════════════════════════
+# Dashboard API Compatibility Routes (aliases for dashboard-v2 SPA)
+# These are thin wrappers that call the canonical endpoints.
+# ═══════════════════════════════════════════════════════════════════
+
+async def _get_json(request: Request):
+    '''Helper to safely parse JSON from any request.'''
+    try:
+        return await request.json()
+    except Exception:
+        return {}
+
+@app.get("/api/system/broker_config")
+def api_v2_broker_config_get():
+    '''Dashboard v2 broker config GET.'''
+    return {
+        "broker": database.load_setting("broker", "kraken"),
+        "api_key": database.load_setting("kraken_api_key", ""),
+        "api_secret": database.load_setting("kraken_api_secret", ""),
+        "trading_mode": getattr(orchestrator.execution_engine, 'trading_mode', 'paper'),
+        "connected": database.load_setting("kraken_connected", "false").lower() == "true",
+        "test_result": database.load_setting("last_broker_test", ""),
+    }
+
+@app.post("/api/system/broker_config")
+async def api_v2_broker_config_save(request: Request):
+    '''Dashboard v2 broker config POST.'''
+    data = await _get_json(request)
+    for k in ['broker', 'api_key', 'api_secret', 'trading_mode']:
+        if k in data:
+            db_key = 'kraken_' + k if k in ('api_key', 'api_secret') else k
+            database.save_setting(db_key, str(data[k]))
+    return {"ok": True}
+
+@app.get("/api/training/status")
+def api_v2_training_status():
+    '''Dashboard v2 training status.'''
+    ticker = orchestrator.tickers[0] if orchestrator.tickers else "BTC-USD"
+    steps = int(database.load_setting(f"lifetime_training_steps_{ticker}", "0"))
+    return {"status": "idle", "steps": steps, "ticker": ticker}
+
+@app.post("/api/optimizations/flush")
+def api_v2_flush_optimizations():
+    '''Dashboard v2 flush optimizations.'''
+    database.save_setting("saved_optimizations", "[]")
+    return {"ok": True, "flushed": True}
+
+@app.get("/api/gateway/reasoning")
+def api_v2_gateway_reasoning():
+    '''Dashboard v2 gateway reasoning.'''
+    return {"ok": True, "reasoning": "Not implemented."}
+
 if __name__ == "__main__":
     import sys
     is_headless = "--headless" in sys.argv

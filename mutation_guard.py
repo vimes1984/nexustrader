@@ -15,6 +15,11 @@ Usage in any agent:
 
 import logging
 
+try:
+    import database as _db
+except ImportError:
+    _db = None
+
 PROTECTED_KEYS = {
     "policy_net_weights_",
     "active_policy_brain_",
@@ -28,23 +33,25 @@ PROTECTED_KEYS = {
 }
 
 
+def _load_setting(key: str, default: str) -> str:
+    """Load a database setting safely. Returns default on any error."""
+    if _db is None:
+        return default
+    try:
+        return str(_db.load_setting(key, default))
+    except Exception:
+        return default
+
+
 def _is_frozen() -> bool:
     """Returns True if live mutation freeze is enabled (default True = safe)."""
-    try:
-        import database
-        val = database.load_setting("live_mutation_freeze", "true")
-        return str(val).strip().lower() in ("true", "1", "yes")
-    except Exception:
-        return True  # Fail-safe: always freeze if we can't check
+    val = _load_setting("live_mutation_freeze", "true")
+    return val.strip().lower() in ("true", "1", "yes")
 
 
 def _get_trading_mode() -> str:
     """Returns the current trading mode, defaulting to 'paper'."""
-    try:
-        import database
-        return database.load_setting("trading_mode", "paper").strip().lower()
-    except Exception:
-        return "paper"
+    return _load_setting("trading_mode", "paper").strip().lower()
 
 
 def is_live_mutation_allowed() -> bool:
@@ -85,11 +92,12 @@ def log_blocked_mutation(agent_name: str, key: str, value, reason: str = "live_m
         f"[MUTATION GUARD] BLOCKED | agent={agent_name} | key={key} | "
         f"value={value} | reason={reason}"
     )
+    if _db is None:
+        return
     try:
-        import database
         import time
         rec_key = f"mutation_recommendation_{int(time.time())}_{agent_name}_{key}"
-        database.save_setting(rec_key, str(value))
+        _db.save_setting(rec_key, str(value))
     except Exception:
         pass
 
