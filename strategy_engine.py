@@ -139,13 +139,14 @@ class MLPredictorStrategy(TradingStrategy):
         
         # Avoid division by zero
         close = df['close'].values + 1e-9
+        close_series = df['close']
         # Compute rolling SMAs if not already present
         if 'sma_20' not in df.columns:
             df['sma_20'] = df['close'].rolling(20).mean()
         if 'sma_50' not in df.columns:
             df['sma_50'] = df['close'].rolling(50).mean()
-        sma_20_ratio = df['sma_20'].fillna(close).values / close
-        sma_50_ratio = df['sma_50'].fillna(close).values / close
+        sma_20_ratio = df['sma_20'].fillna(close_series).values / close
+        sma_50_ratio = df['sma_50'].fillna(close_series).values / close
         bb_upper_ratio = df['bb_upper'].values / close
         bb_lower_ratio = df['bb_lower'].values / close
         
