@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 DEFAULT_ENDPOINT = "http://192.168.0.77:8080"
-DEFAULT_TIMEOUT = 15  # seconds — Llama 3B on CPU needs ~10-15s per query
+DEFAULT_TIMEOUT = 60  # seconds — Llama 3B on CPU needs ~10-15s per query
 DEFAULT_MAX_TOKENS = 120
 SYSTEM_PROMPT = (
     "You are a professional crypto trading analyst embedded in an automated "
