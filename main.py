@@ -1668,7 +1668,27 @@ def get_weights_history(ticker: str = "ETH-USD"):
         return []
 
 @app.post("/api/control")
-def control_simulation(action: str, speed: float = 0.2, mode: str = "live", brain: str = None, start_date: str = None, end_date: str = None):
+async def control_simulation_v2(request: Request):
+    """Control simulation: start/stop/pause/resume/reset. Accepts JSON body or query params."""
+    action = speed = mode = brain = start_date = end_date = None
+    # Try JSON body first
+    try:
+        data = await request.json()
+        action = data.get('action', '')
+        speed = data.get('speed', 0.2)
+        mode = data.get('mode', 'live')
+        brain = data.get('brain')
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+    except Exception:
+        pass
+    # Fall back to query params
+    if not action:
+        action = request.query_params.get('action', '')
+        speed = float(request.query_params.get('speed', 0.2))
+        mode = request.query_params.get('mode', 'live')
+    if not action:
+        return {"status": "ok", "mode": "live", "message": "No action specified, returning status."}
     if action == "start":
         orchestrator.start_stream(mode=mode, speed=speed, poll_interval=5, brain=brain, start_date=start_date, end_date=end_date)
         return {"status": "started", "mode": mode, "speed": speed, "brain": brain, "start_date": start_date, "end_date": end_date}
@@ -2338,12 +2358,19 @@ def activate_neural_brain(name: str, ticker: str, is_manual: bool = False):
     return {"status": "success", "message": f"Brain '{name}' activated."}
 
 @app.get("/api/neural/brain/auto_switch")
-def get_auto_switch(ticker: str):
+def get_auto_switch(ticker: str = ""):
+    if not ticker and hasattr(orchestrator, 'tickers') and orchestrator.tickers:
+        ticker = orchestrator.tickers[0]
     state = database.load_setting(f"auto_switch_brains_{ticker}", "true") == "true"
     return {"ticker": ticker, "auto_switch": state}
 
 @app.post("/api/neural/brain/auto_switch")
-def set_auto_switch(ticker: str, enable: bool):
+async def set_auto_switch_v2(request: Request):
+    data = await _get_json(request)
+    enable = data.get('enabled', False)
+    ticker = data.get('ticker', '')
+    if not ticker and hasattr(orchestrator, 'tickers') and orchestrator.tickers:
+        ticker = orchestrator.tickers[0]
     database.save_setting(f"auto_switch_brains_{ticker}", "true" if enable else "false")
     if enable:
         try:
@@ -3862,6 +3889,11 @@ def api_training_run(request: Request):
 # These endpoints are called by dashboard-v2/js/*.js modules
 # ═══════════════════════════════════════════════════════════════════
 
+# Helper for async JSON parsing
+async def _get_json(request: Request):
+    try: return await request.json()
+    except: return {}
+
 @app.get("/api/system/config")
 def api_system_config_v2():
     """Get trading system config for dashboard settings tab."""
@@ -4230,11 +4262,6 @@ def api_schedule_get():
 @app.post("/api/system/schedule")
 async def api_schedule_set(request: Request):
     return {"ok":True,"note":"Agent schedules managed via crontab on bot VM"}
-
-# Helper for async JSON parsing (repeated boilerplate)
-async def _get_json(request: Request):
-    try: return await request.json()
-    except: return {}
 
 
 if __name__ == "__main__":
