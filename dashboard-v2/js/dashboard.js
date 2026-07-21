@@ -75,7 +75,7 @@ const Dashboard = {
   },
 
   redrawChart() {
-    if (!this.chart?.chartSeries?.candles || !this.chartData?.length) return;
+    if (!this.chart?.chartSeries?.candles || !this.chartSeries?.candles || !this.chartData?.length) return; // fallback for chartSeries stored separately
     if (this.chartType === 'line') {
       const flat = this.chartData.map(d => ({ time: d.time, open: d.close, high: d.close, low: d.close, close: d.close }));
       this.chartSeries.candles.setData(flat);
@@ -139,7 +139,7 @@ const Dashboard = {
           });
           // Animate price marker on real-time tick
           if (this.chart) {
-            this.chart.applyOptions({ crosshair: { mode: LightweightCharts.CrosshairMode.Normal } });
+            this.applyOptions?.({ crosshair: { mode: LightweightCharts.CrosshairMode.Normal } });
           }
         } catch(e) {}
       }

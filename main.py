@@ -2376,7 +2376,10 @@ def get_auto_switch(ticker: str = ""):
 
 @app.post("/api/neural/brain/auto_switch")
 async def set_auto_switch_v2(request: Request):
-    data = await _get_json(request)
+    try:
+        data = await request.json()
+    except:
+        data = {}
     enable = data.get('enabled', False)
     ticker = data.get('ticker', '')
     if not ticker and hasattr(orchestrator, 'tickers') and orchestrator.tickers:
