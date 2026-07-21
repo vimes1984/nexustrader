@@ -393,7 +393,7 @@ class StrategyEnsemble:
         # Handle weight migration if saved weights are from old 12-strategy system
         if len(active_weights) != len(signals):
             import logging as _log
-            _log.warning(f"[MIGRATION] Weights {len(active_weights)} vs strategies {len(signals)} — truncating")
+            _log.debug(f"[MIGRATION] Weights {len(active_weights)} vs strategies {len(signals)} — truncating")
             active_weights = active_weights[:len(signals)] if len(active_weights) > len(signals) else np.pad(active_weights, (0, len(signals) - len(active_weights)), constant_values=1.0/len(signals))
             s = np.sum(active_weights)
             active_weights = active_weights / s if s > 0 else np.ones(len(signals)) / len(signals)

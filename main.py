@@ -262,7 +262,8 @@ class NexusTraderOrchestrator:
             current_prices = {}
             for t in self.tickers:
                 if t in self.data_ingestions:
-                    current_prices[t] = self.data_ingestions[t].live_price or 0.0
+                    di_t = self.data_ingestions.get(t)
+                    current_prices[t] = di_t.live_price or 0.0
             equity = self.execution_engine.get_equity(current_prices)
             drawdown_tracker.update(equity)
         
@@ -1048,7 +1049,8 @@ async def api_init_state(request: Request):
     ticker_prices = {}
     for t in tickers:
         if t in orc.data_ingestions:
-            p = orc.data_ingestions[t].live_price or 0.0
+            di_t = orc.data_ingestions.get(t)
+            p = di_t.live_price or 0.0
             current_prices[t] = p
             ticker_prices[t] = p
 
@@ -1261,7 +1263,8 @@ def get_status():
     current_prices = {}
     for t in orchestrator.tickers:
         if t in orchestrator.data_ingestions:
-            current_prices[t] = orchestrator.data_ingestions[t].live_price or 0.0
+            di_t = orchestrator.data_ingestions.get(t)
+            current_prices[t] = di_t.live_price or 0.0
     
     ee = orchestrator.execution_engine
     fiat_breakdown = {}
@@ -3492,7 +3495,7 @@ async def websocket_endpoint(websocket: WebSocket):
             "model_dna": model_dna,
             "active_brains": active_brains,
             "ticker_prices": {
-                t: (orchestrator.data_ingestions[t].live_price or
+                t: (orchestrator.data_ingestions[t].live_price if t in orchestrator.data_ingestions else
                     orchestrator.latest_ticks.get(t, {}).get("close", 0.0))
                 for t in orchestrator.tickers
             }
