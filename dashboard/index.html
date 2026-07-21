@@ -195,7 +195,11 @@
                     <i data-lucide="trending-up" style="width: 18px; height: 18px; color: var(--neon-green);"></i>
                     Strategy
                 </button>
-                <button class="nav-tab" data-tab="tab-agents" style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: transparent; border: none; border-radius: 8px; color: var(--text-secondary); font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer; text-align: left; transition: all 0.2s ease;">
+                                <button class="nav-tab" data-tab="tab-llm" style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: transparent; border: none; border-radius: 8px; color: var(--text-secondary); font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer; text-align: left; transition: all 0.2s ease;">
+                    <i data-lucide="brain-circuit" style="width: 18px; height: 18px; color: var(--neon-green);"></i>
+                    LLM
+                </button>
+<button class="nav-tab" data-tab="tab-agents" style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: transparent; border: none; border-radius: 8px; color: var(--text-secondary); font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer; text-align: left; transition: all 0.2s ease;">
                     <i data-lucide="bot" style="width: 18px; height: 18px;"></i>
                     AI Agent Nexus
                 </button>
@@ -853,7 +857,194 @@
                     </p>
                 </article>
             </main>
-        </div><div id="tab-agents" class="tab-content">
+        <
+        <!-- TAB CONTENT: LLM MANAGEMENT -->
+        <div id="tab-llm" class="tab-content">
+            <main class="main-content" style="grid-template-columns: 2fr 1fr; gap: 20px; align-items: start;">
+                <!-- LEFT COLUMN -->
+                <div style="display: flex; flex-direction: column; gap: 20px;">
+
+                    <!-- LLaMA Status Card -->
+                    <article class="glass-panel" style="padding: 24px;">
+                        <h2 class="panel-title" style="margin-bottom: 16px; display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="brain-circuit" style="color: var(--neon-green); width: 20px; height: 20px;"></i>
+                            LLaMA 3.2 3B — Local Inference Server
+                        </h2>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-bottom: 16px;">
+                            <div style="background: rgba(16,185,129,0.03); border: 1px solid rgba(16,185,129,0.15); border-radius: 8px; padding: 12px;">
+                                <span style="display: block; color: var(--text-muted); font-size: 9px; text-transform: uppercase; letter-spacing: 1px;">Status</span>
+                                <strong id="llm-status" style="color: var(--neon-green); font-size: 14px;">Checking...</strong>
+                            </div>
+                            <div style="background: rgba(0,240,255,0.03); border: 1px solid rgba(0,240,255,0.15); border-radius: 8px; padding: 12px;">
+                                <span style="display: block; color: var(--text-muted); font-size: 9px; text-transform: uppercase; letter-spacing: 1px;">Server</span>
+                                <strong id="llm-server" style="color: var(--neon-blue); font-size: 12px;">192.168.0.77:8080</strong>
+                            </div>
+                            <div style="background: rgba(168,85,247,0.03); border: 1px solid rgba(168,85,247,0.15); border-radius: 8px; padding: 12px;">
+                                <span style="display: block; color: var(--text-muted); font-size: 9px; text-transform: uppercase; letter-spacing: 1px;">Model</span>
+                                <strong id="llm-model" style="color: var(--neon-purple); font-size: 12px;">Llama-3.2-3B Q4</strong>
+                            </div>
+                            <div style="background: rgba(255,159,67,0.03); border: 1px solid rgba(255,159,67,0.15); border-radius: 8px; padding: 12px;">
+                                <span style="display: block; color: var(--text-muted); font-size: 9px; text-transform: uppercase; letter-spacing: 1px;">Speed</span>
+                                <strong id="llm-speed" style="color: var(--neon-orange); font-size: 12px;">~7.9 tok/s</strong>
+                            </div>
+                        </div>
+                        <div style="border-top: 1px solid var(--border-color); padding-top: 12px;">
+                            <p style="font-size: 11px; color: var(--text-secondary); margin: 0 0 8px 0;">
+                                Running on <strong>chris-System</strong> (Ryzen 3400G, 62GB RAM, CPU-only).
+                                llama.cpp server at port 8080. Polled every 15 minutes for sentiment updates.
+                            </p>
+                            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                <button class="btn btn-primary btn-sm" id="btn-llm-test" style="font-size: 10px; padding: 5px 10px;">
+                                    <i data-lucide="play" style="width: 11px; height: 11px;"></i> Test Connection
+                                </button>
+                                <button class="btn btn-sm" id="btn-llm-sentiment-now" style="font-size: 10px; padding: 5px 10px; border-color: rgba(0,240,255,0.3); color: var(--neon-blue);">
+                                    <i data-lucide="refresh-cw" style="width: 11px; height: 11px;"></i> Poll Sentiment Now
+                                </button>
+                                <button class="btn btn-sm" id="btn-llm-regime-now" style="font-size: 10px; padding: 5px 10px; border-color: rgba(168,85,247,0.3); color: var(--neon-purple);">
+                                    <i data-lucide="activity" style="width: 11px; height: 11px;"></i> Classify Regime
+                                </button>
+                            </div>
+                        </div>
+                    </article>
+
+                    <!-- Live Sentiment & Regime -->
+                    <article class="glass-panel" style="padding: 20px;">
+                        <h3 style="font-size: 13px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+                            <i data-lucide="message-square" style="width: 14px; height: 14px; color: var(--neon-blue);"></i>
+                            Latest LLaMA Analysis
+                        </h3>
+                        <div id="llm-latest-analysis" style="display: flex; flex-direction: column; gap: 8px;">
+                            <div style="font-size: 11px; color: var(--text-muted); padding: 20px; text-align: center;">
+                                <i data-lucide="loader" style="width: 16px; height: 16px; animation: spin 1s linear infinite;"></i>
+                                <br>Waiting for live data...
+                            </div>
+                        </div>
+                    </article>
+
+                    <!-- Recent Trade Explanations -->
+                    <article class="glass-panel" style="padding: 20px;">
+                        <h3 style="font-size: 13px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+                            <i data-lucide="file-text" style="width: 14px; height: 14px; color: var(--neon-purple);"></i>
+                            Trade Explanations
+                        </h3>
+                        <div id="llm-explanations" style="display: flex; flex-direction: column; gap: 8px; max-height: 300px; overflow-y: auto;">
+                            <div style="font-size: 11px; color: var(--text-muted); text-align: center; padding: 16px;">
+                                No trades explained yet. Explanations appear when positions open.
+                            </div>
+                        </div>
+                    </article>
+                </div>
+
+                <!-- RIGHT COLUMN: Controls & Config -->
+                <div style="display: flex; flex-direction: column; gap: 20px;">
+
+                    <!-- NN Architecture Selector -->
+                    <article class="glass-panel" style="padding: 20px;">
+                        <h3 style="font-size: 13px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+                            <i data-lucide="cpu" style="width: 14px; height: 14px; color: var(--neon-blue);"></i>
+                            Neural Network Architecture
+                        </h3>
+                        <p style="font-size: 10px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.4;">
+                            Select which policy network to use for strategy weighting.
+                            Changes take effect on next bot restart.
+                        </p>
+                        <div style="display: flex; flex-direction: column; gap: 8px;" id="nn-architecture-selector">
+                            <label style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border-color); cursor: pointer; font-size: 12px; transition: all 0.2s;" id="nn-opt-mlp">
+                                <input type="radio" name="nn-arch" value="mlp" checked style="accent-color: var(--neon-blue);">
+                                <div>
+                                    <strong style="color: var(--neon-blue);">MLP</strong>
+                                    <span style="color: var(--text-muted); display: block; font-size: 10px;">8 features → 12 hidden → 6 weights (default)</span>
+                                </div>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border-color); cursor: pointer; font-size: 12px; transition: all 0.2s;" id="nn-opt-lstm">
+                                <input type="radio" name="nn-arch" value="lstm" style="accent-color: var(--neon-purple);">
+                                <div>
+                                    <strong style="color: var(--neon-purple);">LSTM</strong>
+                                    <span style="color: var(--text-muted); display: block; font-size: 10px;">Token Embedder → 2-layer LSTM → 6 weights</span>
+                                </div>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border-color); cursor: pointer; font-size: 12px; transition: all 0.2s;" id="nn-opt-transformer">
+                                <input type="radio" name="nn-arch" value="transformer" style="accent-color: var(--neon-green);">
+                                <div>
+                                    <strong style="color: var(--neon-green);">Transformer</strong>
+                                    <span style="color: var(--text-muted); display: block; font-size: 10px;">4-head MHA encoder → mean pool → 6 weights</span>
+                                </div>
+                            </label>
+                        </div>
+                        <button class="btn btn-primary btn-sm" id="btn-save-nn-arch" style="margin-top: 12px; width: 100%; font-size: 10px; padding: 6px;">
+                            <i data-lucide="save" style="width: 11px; height: 11px;"></i> Save Architecture
+                        </button>
+                        <div id="nn-arch-status" style="font-size: 10px; margin-top: 6px; min-height: 16px;"></div>
+                    </article>
+
+                    <!-- LLM Configuration -->
+                    <article class="glass-panel" style="padding: 20px;">
+                        <h3 style="font-size: 13px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+                            <i data-lucide="settings" style="width: 14px; height: 14px; color: var(--text-muted);"></i>
+                            LLM Configuration
+                        </h3>
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <div>
+                                <label style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">Endpoint</label>
+                                <input type="text" id="llm-config-endpoint" value="http://192.168.0.77:8080" 
+                                    style="width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px; color: var(--text-primary); font-family: monospace; font-size: 11px; box-sizing: border-box;">
+                            </div>
+                            <div>
+                                <label style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">Poll Interval (seconds)</label>
+                                <input type="number" id="llm-config-interval" value="900" min="60" max="3600"
+                                    style="width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px; color: var(--text-primary); font-size: 11px; box-sizing: border-box;">
+                            </div>
+                            <div>
+                                <label style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">Timeout (seconds)</label>
+                                <input type="number" id="llm-config-timeout" value="60" min="10" max="120"
+                                    style="width: 100%; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px; color: var(--text-primary); font-size: 11px; box-sizing: border-box;">
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 8px; padding: 4px 0;">
+                                <input type="checkbox" id="llm-config-enabled" checked style="accent-color: var(--neon-green);">
+                                <label for="llm-config-enabled" style="font-size: 11px; color: var(--text-secondary);">Enable LLaMA sentiment polling</label>
+                            </div>
+                            <button class="btn btn-primary btn-sm" id="btn-save-llm-config" style="font-size: 10px; padding: 6px; width: 100%; margin-top: 4px;">
+                                <i data-lucide="save" style="width: 11px; height: 11px;"></i> Save Config
+                            </button>
+                            <div id="llm-config-status" style="font-size: 10px; min-height: 16px;"></div>
+                        </div>
+                    </article>
+
+                    <!-- Training Controls -->
+                    <article class="glass-panel" style="padding: 20px;">
+                        <h3 style="font-size: 13px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+                            <i data-lucide="play-circle" style="width: 14px; height: 14px; color: var(--neon-orange);"></i>
+                            Training Actions
+                        </h3>
+                        <div style="display: flex; flex-direction: column; gap: 6px;">
+                            <button class="btn btn-sm" id="btn-trigger-training" style="font-size: 10px; padding: 6px 10px; background: linear-gradient(135deg, rgba(255,159,67,0.15), transparent); border-color: rgba(255,159,67,0.3); color: var(--neon-orange); width: 100%;">
+                                <i data-lucide="zap" style="width: 11px; height: 11px;"></i> Trigger Offline Training Run
+                            </button>
+                            <button class="btn btn-sm" id="btn-run-historical-pipeline" style="font-size: 10px; padding: 6px 10px; border-color: var(--border-color); color: var(--text-secondary); width: 100%;">
+                                <i data-lucide="database" style="width: 11px; height: 11px;"></i> Run Historical Pipeline (30d)
+                            </button>
+                            <div id="training-status" style="font-size: 10px; color: var(--text-muted); margin-top: 4px;"></div>
+                        </div>
+                    </article>
+
+                    <!-- Unit Tests -->
+                    <article class="glass-panel" style="padding: 20px;">
+                        <h3 style="font-size: 13px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+                            <i data-lucide="check-circle" style="width: 14px; height: 14px; color: var(--neon-green);"></i>
+                            NN Module Tests
+                        </h3>
+                        <p style="font-size: 10px; color: var(--text-muted); margin-bottom: 10px;">73 unit tests across all NN modules.</p>
+                        <button class="btn btn-sm" id="btn-run-nn-tests" style="font-size: 10px; padding: 6px 10px; border-color: rgba(16,185,129,0.3); color: var(--neon-green); width: 100%;">
+                            <i data-lucide="play" style="width: 11px; height: 11px;"></i> Run NN Tests
+                        </button>
+                        <div id="nn-test-results" style="font-size: 10px; color: var(--text-muted); margin-top: 8px; max-height: 150px; overflow-y: auto;"></div>
+                    </article>
+
+                </div>
+            </main>
+        </div>
+
+/div><div id="tab-agents" class="tab-content">
             <main class="main-content" style="grid-template-columns: 2fr 1fr;">
                 <div class="main-left-column" style="display: flex; flex-direction: column; gap: 20px;">
                     <!-- Persona Panel Grid -->
@@ -1565,15 +1756,15 @@
                     <div style="color: var(--text-muted); padding-bottom: 8px; border-bottom: 1px solid var(--border-color); margin-bottom: 8px; font-weight: bold; font-size: 11px;">
                         PER-TICK RUNTIME FLOW (process_tick, called ~1-10s per ticker in live mode)
                     </div>
-                    <div><span style="color: var(--neon-blue);">data_ingestion.py</span> <span style="color: var(--text-muted);">&rarr;</span> <span style="color: var(--text-secondary);">Fetch price from CCXT / CSV. Compute RSI, MACD, BB, ATR.</span></div>
+                    <div><span style="color: var(--neon-blue);">data_ingestion.py</span> <span style="color: var(--text-muted);">&rarr;</span> <span style="color: var(--text-secondary);">Fetch price from CCXT (Kraken). Compute RSI, MACD, BB, ATR. Tokenize into 32-token vocab.</span></div>
                     <div style="padding-left: 20px;"><span style="color: var(--text-muted);">&#x2514;&#x2500;</span> <span style="color: var(--text-secondary);">row = {"close", "rsi", "macd", "bb_upper", "bb_lower", "atr", ...}</span></div>
 
                     <div><span style="color: var(--neon-purple);">main.py (process_tick)</span> <span style="color: var(--text-muted);">&rarr;</span></div>
                     <div style="padding-left: 20px;"><span style="color: var(--text-muted);">&#x251C;&#x2500;</span> <span style="color: var(--neon-blue);">quant_utils.estimate_ou_process()</span> <span style="color: var(--text-secondary);">&rarr; OU theta + regime (trending/mr)</span></div>
-                    <div style="padding-left: 20px;"><span style="color: var(--text-muted);">&#x251C;&#x2500;</span> <span style="color: var(--neon-blue);">learning_engine.get_state_vector()</span> <span style="color: var(--text-secondary);">&rarr; 8D vector [rsi, macd, bb, atr, ou_theta, ...]</span></div>
-                    <div style="padding-left: 20px;"><span style="color: var(--text-muted);">&#x251C;&#x2500;</span> <span style="color: var(--neon-blue);">learning_engine.select_weights(state)</span> <span style="color: var(--text-secondary);">&rarr; PolicyNetwork softmax &rarr; 12 weights</span></div>
+                    <div style="padding-left: 20px;"><span style="color: var(--text-muted);">&#x251C;&#x2500;</span> <span style="color: var(--neon-blue);">learning_engine.get_state_vector()</span> <span style="color: var(--text-secondary);">&rarr; 8D vector (MLP) or 24-seq token embeddings (LSTM/Transformer)</span></div>
+                    <div style="padding-left: 20px;"><span style="color: var(--text-muted);">&#x251C;&#x2500;</span> <span style="color: var(--neon-blue);">learning_engine.select_weights(state)</span> <span style="color: var(--text-secondary);">&rarr; PolicyNetwork (MLP/LSTM/Transformer) &rarr; 6 weights</span></div>
                     <div style="padding-left: 20px;"><span style="color: var(--text-muted);">&#x251C;&#x2500;</span> <span style="color: var(--neon-blue);">strategy_engine.get_weighted_signal()</span> <span style="color: var(--text-secondary);">&rarr; weighted signal (-1..1)</span></div>
-                    <div style="padding-left: 20px;"><span style="color: var(--text-muted);">&#x251C;&#x2500;</span> <span style="color: var(--neon-blue);">12 strategies</span> <span style="color: var(--text-secondary);">: ema_cross, rsi_reversal, bb_reversion, kalman, stophunt, ml_rf, momentum, volatility, mean_reversion, trend, scalping, breakout</span></div>
+                    <div style="padding-left: 20px;"><span style="color: var(--text-muted);">&#x251C;&#x2500;</span> <span style="color: var(--neon-blue);">12 strategies</span> <span style="color: var(--text-secondary);">: momentum_breakout, mean_reversion, trend_following, breakout_scalp, rsi_divergence, bb_squeeze (6 strategies per ticker after 72→36→6 purge)</span></div>
                     <div style="padding-left: 20px;"><span style="color: var(--text-muted);">&#x251C;&#x2500;</span> <span style="color: var(--neon-blue);">probability_engine.evaluate_trade()</span> <span style="color: var(--text-secondary);">&rarr; p_win, EV, Kelly fraction, is_viable</span></div>
                     <div style="padding-left: 20px;"><span style="color: var(--text-muted);">&#x251C;&#x2500;</span> <span style="color: var(--neon-blue);">evaluation.safety.KillSwitch.check()</span> <span style="color: var(--text-secondary);">&rarr; blocks if drawdown/position/exposure limits exceeded</span></div>
                     <div style="padding-left: 20px;"><span style="color: var(--text-muted);">&#x251C;&#x2500;</span> <span style="color: var(--neon-blue);">execution_engine.open_position()</span> <span style="color: var(--text-secondary);">&rarr; CCXT order (live) or simulated fill (paper/sim)</span></div>
@@ -1585,6 +1776,13 @@
                     <div style="padding-left: 20px;"><span style="color: var(--text-muted);">&#x251C;&#x2500;</span> <span style="color: var(--neon-blue);">evaluation.safety.DrawdownTracker.update(equity)</span></div>
                     <div style="padding-left: 20px;"><span style="color: var(--text-muted);">&#x251C;&#x2500;</span> <span style="color: var(--neon-blue);">strategy_engine.record_trade_outcome()</span> <span style="color: var(--text-secondary);">&rarr; update rolling win rates</span></div>
                     <div style="padding-left: 20px;"><span style="color: var(--text-muted);">&#x2514;&#x2500;</span> <span style="color: var(--neon-blue);">learning_engine.learn_from_trade()</span> <span style="color: var(--text-secondary);">&rarr; PolicyNetwork backprop</span></div>
+                </div>
+
+                
+                    <div style="color: var(--neon-green); padding-top: 8px; border-top: 1px solid var(--border-color); margin-top: 8px;">LLaMA INFERENCE PATH (async, per tick)</div>
+                    <div style="padding-left: 20px;"><span style="color: var(--text-muted);">&#x251C;&#x2500;</span> <span style="color: var(--neon-green);">llm_client.analyze_sentiment()</span> <span style="color: var(--text-secondary);">&rarr; llama.cpp server (chris-System:8080)</span></div>
+                    <div style="padding-left: 20px;"><span style="color: var(--text-muted);">&#x251C;&#x2500;</span> <span style="color: var(--neon-green);">llm_client.classify_regime()</span> <span style="color: var(--text-secondary);">&rarr; market regime detection</span></div>
+                    <div style="padding-left: 20px;"><span style="color: var(--text-muted);">&#x2514;&#x2500;</span> <span style="color: var(--neon-green);">llm_client.explain_trade()</span> <span style="color: var(--text-secondary);">&rarr; trade rationale generation</span>
                 </div>
 
                 <!-- Source file catalog -->
@@ -1599,7 +1797,7 @@
                     </div>
                     <div style="background: rgba(16, 185, 129, 0.03); border: 1px solid rgba(16, 185, 129, 0.15); border-radius: 8px; padding: 14px;">
                         <strong style="color: var(--neon-green);">learning_engine.py</strong>
-                        <p style="color: var(--text-secondary); margin: 4px 0 0 0;">Policy network (4-layer MLP: 8&rarr;12&rarr;12&rarr;12). REINFORCE-like backprop with PnL reward. State vector builder. Brain persistence in DB. Weight migration 7&rarr;12.</p>
+                        <p style="color: var(--text-secondary); margin: 4px 0 0 0;">Policy network — 3 architectures: MLP (8→12→6), LSTM (TokenEmbedder→64d→LSTM→Softmax), Transformer (4-head MHA→MeanPool→Softmax). Pure NumPy. REINFORCE-like policy gradient with replay buffer. Brain persistence + weight migration in DB. 73 unit tests.</p>
                     </div>
                     <div style="background: rgba(244, 63, 94, 0.03); border: 1px solid rgba(244, 63, 94, 0.15); border-radius: 8px; padding: 14px;">
                         <strong style="color: var(--neon-red);">execution_engine.py</strong>
@@ -1627,46 +1825,92 @@
                     </div>
                 </div>
 
-                <!-- Self-Learning Agent System -->
+                                <!-- Quant Team Agent System -->
                 <div style="border-radius: 10px; border: 1px solid var(--border-color); padding: 16px;">
                     <h3 style="font-size: 14px; font-weight: 600; margin: 0 0 12px 0; display: flex; align-items: center; gap: 6px;">
-                        <i data-lucide="bot" style="color: var(--neon-blue); width: 16px; height: 16px;"></i>
-                        Self-Learning Agent System (LLM-driven, runs via process_inference.py)
+                        <i data-lucide="users" style="color: var(--neon-purple); width: 16px; height: 16px;"></i>
+                        Autonomous Quant Team (9 Agents — OpenClaw Gateway cron jobs)
                     </h3>
+                    <p style="font-size: 10px; color: var(--text-muted); margin-bottom: 10px;">
+                        All agents run as isolated cron jobs via OpenClaw Gateway (192.168.0.197). Reports saved to blog/daily_summaries/. Agents never auto-apply — human reviews and applies changes via dashboard.
+                    </p>
                     <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; font-size: 11px;">
                         <div style="padding: 8px; border-radius: 6px; background: rgba(0,240,255,0.02);">
-                            <span style="color: var(--neon-blue); font-weight: 600;">Parameter Optimizer Agent</span><br>
-                            <span style="color: var(--text-secondary);">Reads trade and metric logs, writes parameter change suggestions to agent_runs table.</span>
-                        </div>
-                        <div style="padding: 8px; border-radius: 6px; background: rgba(168,85,247,0.02);">
-                            <span style="color: var(--neon-purple); font-weight: 600;">Network Optimizer Agent</span><br>
-                            <span style="color: var(--text-secondary);">Reads PolicyNetwork weight performance, proposes brain config tweaks.</span>
-                        </div>
-                        <div style="padding: 8px; border-radius: 6px; background: rgba(16,185,129,0.02);">
-                            <span style="color: var(--neon-green); font-weight: 600;">Sentiment Feeds Agent</span><br>
-                            <span style="color: var(--text-secondary);">Fetches crypto news feeds, correlates sentiment scores with price movement.</span>
+                            <span style="color: var(--neon-blue); font-weight: 600;">📊 Quant Optimizer</span><br>
+                            <span style="color: var(--text-secondary);">Daily 1AM: tunes TP/SL multipliers, signal threshold, learning rate from trade outcomes.</span>
                         </div>
                         <div style="padding: 8px; border-radius: 6px; background: rgba(244,63,94,0.02);">
-                            <span style="color: var(--neon-red); font-weight: 600;">Risk Check Agent</span><br>
-                            <span style="color: var(--text-secondary);">Monitors drawdown, sets cooldown periods, toggles risk mode between normal and conservative.</span>
+                            <span style="color: var(--neon-red); font-weight: 600;">🛡️ Risk Auditor</span><br>
+                            <span style="color: var(--text-secondary);">Daily 3AM: drawdown monitoring, correlation matrix, position sizing, NN hyperparameter validation.</span>
+                        </div>
+                        <div style="padding: 8px; border-radius: 6px; background: rgba(168,85,247,0.02);">
+                            <span style="color: var(--neon-purple); font-weight: 600;">⚖️ Allocator</span><br>
+                            <span style="color: var(--text-secondary);">Daily 4AM: Kelly ceilings, capital rotation, ticker rebalance on activation changes.</span>
                         </div>
                         <div style="padding: 8px; border-radius: 6px; background: rgba(255,159,67,0.02);">
-                            <span style="color: var(--neon-orange); font-weight: 600;">Allocation Check Agent</span><br>
-                            <span style="color: var(--text-secondary);">Suggests asset allocation rebalancing.</span>
+                            <span style="color: var(--neon-orange); font-weight: 600;">🔍 Asset Selector</span><br>
+                            <span style="color: var(--text-secondary);">Every 14 days: scans Kraken for new assets, disables delisted pairs (e.g. SUI-USD).</span>
+                        </div>
+                        <div style="padding: 8px; border-radius: 6px; background: rgba(16,185,129,0.02);">
+                            <span style="color: var(--neon-green); font-weight: 600;">💬 Sentiment Agent</span><br>
+                            <span style="color: var(--text-secondary);">OpenClaw-driven market sentiment analysis from news feeds. Feeds into signal pipeline.</span>
+                        </div>
+                        <div style="padding: 8px; border-radius: 6px; background: rgba(0,240,255,0.02);">
+                            <span style="color: var(--neon-blue); font-weight: 600;">🔧 Self-Dev Agent</span><br>
+                            <span style="color: var(--text-secondary);">Code improvement suggestions, bug detection, performance optimizations.</span>
+                        </div>
+                        <div style="padding: 8px; border-radius: 6px; background: rgba(168,85,247,0.02);">
+                            <span style="color: var(--neon-purple); font-weight: 600;">🎯 Self-Improve Agent</span><br>
+                            <span style="color: var(--text-secondary);">Strategy refinement proposals, ensemble composition tuning.</span>
+                        </div>
+                        <div style="padding: 8px; border-radius: 6px; background: rgba(16,185,129,0.02);">
+                            <span style="color: var(--neon-green); font-weight: 600;">📝 Blogger Agent</span><br>
+                            <span style="color: var(--text-secondary);">Daily trade summaries, PnL reports, market commentary posts.</span>
+                        </div>
+                        <div style="padding: 8px; border-radius: 6px; background: rgba(59,130,246,0.02);">
+                            <span style="color: #60a5fa; font-weight: 600;">🔬 Researcher Agent</span><br>
+                            <span style="color: var(--text-secondary);">Market research, new strategy ideas, academic paper summaries.</span>
                         </div>
                     </div>
-                    <p style="font-size: 11px; color: var(--text-muted); margin: 12px 0 0 0; border-top: 1px solid var(--border-color); padding-top: 10px;">
-                        All agent suggestions are <em>logged only</em> &mdash; they never apply automatically.
-                        MutationFreeze prevents DB writes from code paths originating in agent inference.
-                        Human applies via API or dashboard. Agent runs stored in <code style="color: var(--neon-blue);">agent_runs</code>
-                        table (LLM prompt + response), optimizations in <code style="color: var(--neon-blue);">optimizations</code>
-                        table (parameter change audit trail).
+                    <p style="font-size: 10px; color: var(--text-muted); margin: 12px 0 0 0; border-top: 1px solid var(--border-color); padding-top: 10px;">
+                        <strong>LLaMA Integration:</strong> Local Llama 3.2 3B (Q4_K_M, 1.9GB) runs on chris-System (Ryzen 3400G, 62GB RAM, CPU-only, ~7.9 tok/s).
+                        llm_client.py polls llama.cpp server at 192.168.0.77:8080 every 15 min for sentiment, regime classification, and trade explanations.
+                        LLaMA output feeds into the signal pipeline as a supplementary sentiment source alongside news-based sentiment.
+                    </p>
+                </div>
+                
+                <!-- NN Architecture selector -->
+                <div style="border-radius: 10px; border: 1px solid var(--border-color); padding: 16px; background: rgba(0,240,255,0.01);">
+                    <h3 style="font-size: 14px; font-weight: 600; margin: 0 0 12px 0; display: flex; align-items: center; gap: 6px;">
+                        <i data-lucide="cpu" style="color: var(--neon-blue); width: 16px; height: 16px;"></i>
+                        Neural Network Architectures (3 modes, configurable via nn_architecture)
+                    </h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; font-size: 11px;">
+                        <div style="padding: 10px; border-radius: 8px; border: 1px solid rgba(0,240,255,0.2); background: rgba(0,240,255,0.02);">
+                            <span style="color: var(--neon-blue); font-weight: 600;">MLP (Default)</span><br>
+                            <span style="color: var(--text-secondary);">8 features → 12 hidden ReLU → 6 strategy Softmax. Backward compatible, always available.</span><br>
+                            <span style="color: var(--text-muted); font-size: 9px;">learning_engine.py / PolicyNetwork</span>
+                        </div>
+                        <div style="padding: 10px; border-radius: 8px; border: 1px solid rgba(168,85,247,0.2); background: rgba(168,85,247,0.02);">
+                            <span style="color: var(--neon-purple); font-weight: 600;">LSTM</span><br>
+                            <span style="color: var(--text-secondary);">TokenEmbedder (32 vocab → 64d) → 2-layer LSTM → Softmax. Sequence-aware.</span><br>
+                            <span style="color: var(--text-muted); font-size: 9px;">tokenizer.py + sequential_policy_net.py</span>
+                        </div>
+                        <div style="padding: 10px; border-radius: 8px; border: 1px solid rgba(16,185,129,0.2); background: rgba(16,185,129,0.02);">
+                            <span style="color: var(--neon-green); font-weight: 600;">Transformer</span><br>
+                            <span style="color: var(--text-secondary);">4-head MHA encoder (2 layers) → Mean Pool → Softmax. Attention Is All You Need.</span><br>
+                            <span style="color: var(--text-muted); font-size: 9px;">multi_head_attention.py + transformer_policy_net.py</span>
+                        </div>
+                    </div>
+                    <p style="font-size: 10px; color: var(--text-muted); margin: 10px 0 0 0;">
+                        All pure NumPy, no dependencies. Full JSON serialization for DB persistence. 73 unit tests pass across all NN modules.
+                        Toggle via nn_architecture DB setting (requires restart). Manage in the <strong>LLM tab</strong>.
                     </p>
                 </div>
 
-                <!-- Source tree -->
+<!-- Source tree -->
                 <div>
-                    <h3 style="font-size: 13px; font-weight: 600; margin: 0 0 8px 0;">Source Tree (29 Python files)</h3>
+                    <h3 style="font-size: 13px; font-weight: 600; margin: 0 0 8px 0;">Source Tree (37+ Python files)</h3>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2px 20px; font-family: monospace; font-size: 11px; color: var(--text-secondary);">
                         <div>main.py (FastAPI server + orchestrator)</div>
                         <div>dashboard/ (index.html, app_v2.js, index_v2.css)</div>
@@ -1691,7 +1935,14 @@
                         <div>backtest_engine.py</div>
                         <div>monthly_researcher.py</div>
                         <div>evaluation/ (6 files)</div>
-                        <div>tests/ (4 test files)</div>
+                        <div>tokenizer.py (32 tokens)</div>
+                        <div>token_embedder.py (vocab→64d)</div>
+                        <div>sequential_policy_net.py (LSTM)</div>
+                        <div>multi_head_attention.py (4-head MHA)</div>
+                        <div>transformer_policy_net.py (Transformer)</div>
+                        <div>llm_client.py (llama.cpp client)</div>
+                        <div>historical_pipeline.py (training)</div>
+                        <div>tests/ (6 test files: test_nn_tokenizer, test_transformer + 4 original)</div>
                     </div>
                 </div>
 
@@ -1712,13 +1963,14 @@
                 <div style="border-radius: 10px; border: 1px solid rgba(244, 63, 94, 0.3); background: rgba(244, 63, 94, 0.02); padding: 12px;">
                     <h3 style="font-size: 12px; font-weight: 600; margin: 0 0 6px 0; color: var(--neon-red);">Current Limitations</h3>
                     <ul style="margin: 0; padding-left: 16px; font-size: 11px; color: var(--text-secondary); line-height: 1.6;">
-                        <li>Policy network is an MLP, not a deep RL agent &mdash; weights shift slowly, no replay buffer</li>
-                        <li>No GPU support &mdash; everything is CPU-only (scikit-learn, numpy)</li>
+                        <li>MLP is default NN; LSTM and Transformer built but not yet deployed live (overnight stability first)</li>
+                        <li>No GPU support &mdash; everything is CPU-only (numpy, llama.cpp on Ryzen 3400G)</li>
                         <li>Live exchange WebSocket feeds disconnect periodically (ccxt.pro reconnection)</li>
-                        <li>Kraken API balance is ~$89 equity / $4.81 cash &mdash; most trades hit "Insufficient funds"</li>
-                        <li>No historical backtest framework integrated with live pipeline (backtest_engine.py is standalone)</li>
-                        <li>MutationFreeze blocks agent config changes &mdash; acts as a safety gate, not a learning loop</li>
-                        <li>Sparse documentation &mdash; dashboard has inline docs, code has docstrings, no external wiki</li>
+                        <li>Kraken balance: $90.83 cash, ~$199 equity &mdash; small account, position sizes are micro</li>
+                        <li>LLaMA polling every 15 min on CPU (7.9 tok/s, 60s timeout) &mdash; inference latency is high</li>
+                        <li>Historical training pipeline built but not yet run with 2yr dataset</li>
+                        <li>SUI-USD recently disabled &mdash; yfinance returns "possibly delisted" for this pair</li>
+                        <li>Experience Replay buffer (capacity 200) for online training; PrioritizedExperienceReplay for PPO</li>
                     </ul>
                 </div>
             </article>
