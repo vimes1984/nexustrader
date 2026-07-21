@@ -130,16 +130,17 @@ const Dashboard = {
       if (tabEl) tabEl.textContent = '$' + data.price.toFixed(2);
     }
 
-    // Update chart
-    if (data.ohlc && this.chartSeries.candles) {
+    // Update chart (best-effort)
+    if (data.ohlc && this.chartSeries && this.chartSeries.candles) {
       try {
-      this.chartSeries.candles.update({
-        time: data.timestamp || Math.floor(Date.now() / 1000),
-        open: data.ohlc.open || data.price,
-        high: data.ohlc.high || data.price,
-        low: data.ohlc.low || data.price,
-        close: data.price,
-      });
+        this.chartSeries.candles.update({
+          time: data.timestamp || Math.floor(Date.now() / 1000),
+          open: data.ohlc.open || data.price,
+          high: data.ohlc.high || data.price,
+          low: data.ohlc.low || data.price,
+          close: data.price,
+        });
+      } catch (e) { /* chart update is best-effort */ }
     }
 
     // Update KPIs
@@ -163,9 +164,7 @@ const Dashboard = {
     if (data.position) {
       this.renderPosition(data.position);
     }
-      } catch(e) { /* chart update best-effort */ }
-    }
-    } catch(e) { /* ticks must never crash the dashboard */ }
+    } catch (e) { /* ticks must never crash the dashboard */ }
   },
 
   /** Update KPI cards */
