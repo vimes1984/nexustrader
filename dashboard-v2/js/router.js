@@ -23,6 +23,13 @@ const App = {
   // ── DOM Elements ──
   el: {},
 
+  /** Debug log — only when debug mode is on */
+  _debug(...args) {
+    if (document.body.classList.contains('debug')) {
+      this._debug(...args);
+    }
+  },
+
   /** Initialize everything */
   async init() {
     this.cacheDOM();
@@ -49,10 +56,10 @@ const App = {
     document.querySelectorAll('.nav-tab').forEach((tab, i) => {
       const orig = tab.onclick;
       tab.addEventListener('click', function(e) {
-        console.log('NAV-CLICK:', tab.dataset.tab, 'target:', e.target.tagName, e.target.className);
+        this._debug('NAV-CLICK:', tab.dataset.tab, 'target:', e.target.tagName, e.target.className);
       });
     });
-    console.log('initNav bound to', document.querySelectorAll('.nav-tab').length, 'nav items');
+    this._debug('initNav bound to', document.querySelectorAll('.nav-tab').length, 'nav items');
   },
 
   /** Cache frequently-used DOM elements */
@@ -174,7 +181,7 @@ const App = {
   /** Switch to a tab */
   switchTab(tabId) {
     try {
-      console.log('switchTab called:', tabId);
+      this._debug('switchTab called:', tabId);
       // Update nav buttons
       document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
       const btn = document.querySelector('.nav-tab[data-tab="' + tabId + '"]');
@@ -182,12 +189,12 @@ const App = {
 
       // Show/hide tab content
       const allTabs = document.querySelectorAll('.tab-content');
-      console.log('  found', allTabs.length, 'tab-content divs');
+      this._debug('  found', allTabs.length, 'tab-content divs');
       allTabs.forEach(c => c.style.display = 'none');
       const content = document.getElementById(tabId);
       if (content) {
         content.style.display = 'block';
-        console.log('  switched to', tabId);
+        this._debug('  switched to', tabId);
       } else {
         console.error('  tab not found:', tabId);
       }
