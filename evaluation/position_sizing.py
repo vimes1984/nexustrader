@@ -124,9 +124,9 @@ def compute_safe_fraction(
 
     safe_fraction = effective_kelly * drawdown_penalty
 
-    # Hard cap (upper bound)
-    safe_fraction = min(safe_fraction, ABSOLUTE_MAX_FRACTION)
-    # Minimum floor: only applies when drawdown is very mild (<5% of limit)
+    # Hard cap (upper bound) — never exceed 15% of portfolio in one trade
+    safe_fraction = min(safe_fraction, max_allocation, ABSOLUTE_MAX_FRACTION)
+    # Minimum floor: only applies when drawdown is very mild (<30% of limit)
     # This ensures small accounts can still trade tiny sizes to learn
     # but does NOT override the drawdown halt.
     if drawdown_penalty > 0 and current_drawdown_pct < drawdown_limit_pct * 0.3:

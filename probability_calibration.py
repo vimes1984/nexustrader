@@ -62,7 +62,11 @@ def calibration_bins(predictions: List[float], outcomes: List[int], bins: int = 
     for i in range(bins):
         low = i * bin_size
         high = low + bin_size
-        in_bin = [(p, o) for p, o in zip(predictions, outcomes) if low <= p < high]
+        # Last bin is inclusive of upper bound (handles predictions exactly 1.0)
+        if i == bins - 1:
+            in_bin = [(p, o) for p, o in zip(predictions, outcomes) if low <= p <= high]
+        else:
+            in_bin = [(p, o) for p, o in zip(predictions, outcomes) if low <= p < high]
         if not in_bin:
             continue
         preds_in_bin = [x[0] for x in in_bin]

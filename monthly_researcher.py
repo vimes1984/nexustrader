@@ -1,23 +1,17 @@
 import os
 import json
-import sqlite3
 import logging
-import database
+import database as _db
 
-DB_PATH = os.path.expanduser("~/.nexustrader/nexustrader.db")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 def run_monthly_researcher():
     logging.info("Starting monthly Quantitative Strategy Researcher Agent session...")
     
-    if not os.path.exists(DB_PATH):
-        logging.warning("Database not found. Skipping research optimization.")
-        return "Database not found."
-        
     try:
         # Load settings
-        conn = sqlite3.connect(DB_PATH)
-        conn.row_factory = sqlite3.Row
+        conn = _db.get_db_connection()
+        conn.row_factory = __import__('sqlite3').Row
         c = conn.cursor()
         
         # Load settings dict

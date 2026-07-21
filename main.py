@@ -45,6 +45,38 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 
 app = FastAPI(title="NexusTrader API", version="1.0.0")
 
+
+# ── Global exception handler: always return JSON ──
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+    errors = []
+    for e in exc.errors():
+        errors.append({"loc": " → ".join(str(x) for x in e.get("loc", [])), "msg": e.get("msg", ""), "type": e.get("type", "")})
+    return JSONResponse(
+        status_code=422,
+        content={"status": "error", "detail": "Validation failed", "errors": errors},
+    )
+
+
+@app.exception_handler(404)
+async def not_found_handler(request, exc):
+    return JSONResponse(
+        status_code=404,
+        content={"status": "error", "detail": "Not Found", "path": request.url.path},
+    )
+
+
+@app.exception_handler(500)
+async def internal_error_handler(request, exc):
+    return JSONResponse(
+        status_code=500,
+        content={"status": "error", "detail": "Internal Server Error"},
+    )
+
+
 @app.middleware("http")
 async def add_no_cache_headers(request: Request, call_next):
     response = await call_next(request)
@@ -582,14 +614,14 @@ class NexusTraderOrchestrator:
             try:
                 init_bal_str = database.load_setting("initial_portfolio_balance")
                 init_bal = float(init_bal_str) if init_bal_str else 100.0
-                conn = sqlite3.connect(database.DB_PATH)
-                cursor = conn.cursor()
-                cursor.execute(
+                conn2 = database.get_db_connection()
+                cursor2 = conn2.cursor()
+                cursor2.execute(
                     "INSERT OR REPLACE INTO portfolio_history (timestamp, equity, pnl) VALUES (?, ?, ?)",
                     (now_time, current_equity, current_equity - init_bal)
                 )
-                conn.commit()
-                conn.close()
+                conn2.commit()
+                conn2.close()
             except Exception as e:
                 logging.error(f"Error logging portfolio history point: {e}")
         
@@ -639,7 +671,12 @@ class NexusTraderOrchestrator:
         if not pos_open:
             # Dynamic signal threshold: higher for small accounts (fewer, higher-conviction trades)
             # Scales inversely with account balance: $200 -> 0.35, $1K -> 0.25, $10K -> 0.20
-            _min_sig = max(0.20, min(0.45, 1.0 / (1.0 + self.execution_engine.balance / 500.0)))
+            # Override via DB setting 'signal_threshold' (set by optimization agents)
+            _saved_threshold = database.load_setting("signal_threshold", None)
+            if _saved_threshold is not None:
+                _min_sig = max(0.10, min(0.80, float(_saved_threshold)))
+            else:
+                _min_sig = max(0.20, min(0.45, 1.0 / (1.0 + self.execution_engine.balance / 500.0)))
             if abs(weighted_signal) >= _min_sig:
                 direction = "BUY" if weighted_signal > 0 else "SELL"
                 
@@ -786,11 +823,12 @@ class NexusTraderOrchestrator:
 
     async def broadcast_message(self, message):
         """Sends JSON message to all active WebSocket connections."""
+        from fastapi import WebSocketDisconnect as _WSD
         disconnected = []
         for ws in self.connected_websockets:
             try:
                 await ws.send_text(json.dumps(message))
-            except Exception:
+            except (_WSD, Exception):
                 disconnected.append(ws)
         
         for ws in disconnected:
@@ -1121,7 +1159,7 @@ async def api_init_state(request: Request):
         "tickers":tickers, "ticker":default_ticker, "ticker_prices":ticker_prices,
         "active_brains":active_brains,
         "initial_balance":float(_db.load_setting("initial_portfolio_balance","100.0")),
-        "lifetime_steps":int(_db.load_setting("lifetime_steps","0")),
+        "lifetime_steps":int(_db.load_setting("lifetime_training_steps_" + tickers[0],"0")) if tickers else 0,
         "model_dna":_db.load_setting("model_dna","genesis"),
         "positions":positions,
         "risk_mode":_db.load_setting("risk_mode","conservative"),
@@ -1680,6 +1718,7 @@ def get_weights_history(ticker: str = "ETH-USD"):
 @app.post("/api/control")
 async def control_simulation_v2(request: Request):
     """Control simulation: start/stop/pause/resume/reset. Accepts JSON body or query params."""
+    from trading_modes import normalize_trading_mode, MODE_PAPER
     action = speed = mode = brain = start_date = end_date = None
     # Try JSON body first
     try:
@@ -1699,6 +1738,12 @@ async def control_simulation_v2(request: Request):
         mode = request.query_params.get('mode', 'live')
     if not action:
         return {"status": "ok", "mode": "live", "message": "No action specified, returning status."}
+    # Validate trading mode
+    mode = normalize_trading_mode(mode)
+    # Validate action
+    valid_actions = {"start", "stop", "reset"}
+    if action not in valid_actions:
+        return {"status": "error", "error": f"Invalid action '{action}'. Valid: {valid_actions}"}
     if action == "start":
         orchestrator.start_stream(mode=mode, speed=speed, poll_interval=5, brain=brain, start_date=start_date, end_date=end_date)
         return {"status": "started", "mode": mode, "speed": speed, "brain": brain, "start_date": start_date, "end_date": end_date}
@@ -1709,13 +1754,14 @@ async def control_simulation_v2(request: Request):
         orchestrator.stop_stream()
         
         # Reset the balance setting in SQLite database
-        database.save_setting("portfolio_balance", "100.00")
-        database.save_setting("initial_portfolio_balance", "100.00")
+        database.save_setting_directly("portfolio_balance", "100.00")
+        database.save_setting_directly("initial_portfolio_balance", "100.00")
         
         # Completely clear trades, ticks and portfolio history from SQLite
         conn = database.get_db_connection()
         cursor = conn.cursor()
         try:
+            cursor.execute("BEGIN IMMEDIATE")
             cursor.execute("DELETE FROM trades")
             cursor.execute("DELETE FROM ticks")
             cursor.execute("DELETE FROM portfolio_history")
@@ -1726,6 +1772,7 @@ async def control_simulation_v2(request: Request):
             conn.commit()
             logging.info("Cleared all trades, ticks, and portfolio history tables in DB reset.")
         except Exception as e:
+            conn.rollback()
             logging.error(f"Error clearing DB tables on reset: {e}")
         finally:
             conn.close()
@@ -1793,6 +1840,8 @@ def get_system_config():
 
 @app.post("/api/system/config")
 def update_system_config(trading_mode: str, risk_mode: str, max_drawdown: float, broker: str = "kraken", api_key: str = "", api_secret: str = "", trailing_stop: bool = False, cooldown: float = 4.0, tp_multiplier: float = 2.5, sl_multiplier: float = 1.5, nn_lr: float = 0.15, nn_floor: float = 0.05, nn_discount: float = 0.95, nn_exploration: float = 0.10, initial_balance: float = None, nn_hidden_layers: int = 1, nn_hidden_dim: int = 12, nn_dropout: float = 0.0, nn_optimizer: str = "Adam", nn_epochs: int = 250):
+    from trading_modes import normalize_trading_mode
+    trading_mode = normalize_trading_mode(trading_mode)
     # 1. Update config.json
     config_path = os.path.expanduser("~/.nexustrader/config.json")
     cfg = {}
@@ -3865,11 +3914,10 @@ def api_nn_tests_run():
         return {"ok": False, "error": str(e)[:200]}
 
 @app.post("/api/training/run")
-def api_training_run(request: Request):
+async def api_training_run(request: Request):
     """Trigger a historical training pipeline run for a ticker."""
-    import asyncio as _asyncio
     try:
-        data = _asyncio.run(request.json()) if hasattr(request, 'json') else {}
+        data = await request.json()
     except Exception:
         data = {}
     

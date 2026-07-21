@@ -1,21 +1,16 @@
 import os
 import json
-import sqlite3
 import numpy as np
 import logging
+import database as _db
 
-DB_PATH = os.path.expanduser("~/.nexustrader/nexustrader.db")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 def optimize_sentiment_weights():
     logging.info("Starting weekly sentiment source optimization...")
-    if not os.path.exists(DB_PATH):
-        logging.warning("Database file not found. Skipping optimization.")
-        return
-        
     try:
-        conn = sqlite3.connect(DB_PATH)
-        conn.row_factory = sqlite3.Row
+        conn = _db.get_db_connection()
+        conn.row_factory = __import__('sqlite3').Row
         c = conn.cursor()
         
         # Load completed trades

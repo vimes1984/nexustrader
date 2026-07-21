@@ -1,24 +1,24 @@
 import os
-import sqlite3
 import json
-import urllib.request
 import logging
 from mutation_guard import should_apply_agent_mutation, log_blocked_mutation
+import database as _db
 
 AGENT_NAME = "agent_self_developer"
 import subprocess
 
-DB_PATH = os.path.expanduser("~/.nexustrader/nexustrader.db")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 def load_settings():
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
-    c.execute("SELECT key, value FROM settings")
-    rows = c.fetchall()
-    conn.close()
-    return {r[0]: r[1] for r in rows}
+    try:
+        conn = _db.get_db_connection()
+        c = conn.cursor()
+        c.execute("SELECT key, value FROM settings")
+        rows = c.fetchall()
+        conn.close()
+        return {r[0]: r[1] for r in rows} if rows else {}
+    except Exception:
+        return {}
 
 def run_self_developer(trigger_deploy: bool = False):
     logging.info("Starting autonomous agent self-developer session...")
@@ -183,11 +183,7 @@ def save_setting(key, value):
     if not should_apply_agent_mutation(AGENT_NAME):
         log_blocked_mutation(AGENT_NAME, key, value)
         return
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
-    conn.commit()
-    conn.close()
+    _db.save_setting_directly(key, str(value))
 
 
 def optimize_own_prompt(settings):

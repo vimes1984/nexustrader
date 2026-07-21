@@ -383,13 +383,15 @@ class PPOAgent:
                 # Clipped: gradient is zero (clipping stops gradient flow)
                 pass
 
-            # Entropy gradient: -H = sum(p * log(p))
-            # d(-H)/d(logit_i) = p_i * (log(p_i) + 1 - sum(p_j * (log(p_j) + 1)))
-            # Simplified: p_i * log(p_i) - p_i * entropy_term
-            # We compute: p * (log(p) + 1) - p * sum(p * (log(p) + 1))
+            # Entropy gradient: H = -sum(p * log(p))
+            # dH/d(logit_i) = -p_i * (log(p_i) + 1 - sum_j p_j * (log(p_j) + 1))
+            # We compute entropy_grad = -dH/d(logit_i) = p_i * (log(p_i) + 1 - sum_j p_j * (log(p_j) + 1))
+            # Total loss L = L_CLIP - entropy_coef * H
+            # dL/d(logit_i) = d(L_CLIP)/d(logit_i) - entropy_coef * dH/d(logit_i)
+            #                = d(L_CLIP)/d(logit_i) + entropy_coef * entropy_grad
             log_p = np.log(np.clip(probs, 1e-12, 1.0))
             entropy_grad = probs * (log_p + 1.0 - np.sum(probs * (log_p + 1.0)))
-            d_z_actor -= self.entropy_coef * entropy_grad.reshape(1, -1)
+            d_z_actor += self.entropy_coef * entropy_grad.reshape(1, -1)
 
             # Backprop through policy_net
             for j in reversed(range(len(self.policy_net.W))):

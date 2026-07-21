@@ -928,3 +928,48 @@ def delete_active_asset(ticker: str):
     finally:
         conn.close()
 
+
+def run_db_maintenance():
+    """Perform routine database maintenance: trim old data, VACUUM, integrity check."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Trim old ticks: keep last 100K rows
+        tick_count = cursor.execute("SELECT COUNT(*) FROM ticks").fetchone()[0]
+        if tick_count > 100000:
+            excess = tick_count - 50000
+            cursor.execute(
+                "DELETE FROM ticks WHERE rowid IN (SELECT rowid FROM ticks ORDER BY timestamp ASC LIMIT ?)",
+                (excess,)
+            )
+            logging.info(f"DB maintenance: trimmed {excess} old tick rows")
+
+        # Trim old portfolio_history: keep last 1 year (8760 hourly entries)
+        ph_count = cursor.execute("SELECT COUNT(*) FROM portfolio_history").fetchone()[0]
+        if ph_count > 10000:
+            cursor.execute(
+                "DELETE FROM portfolio_history WHERE timestamp < (SELECT MIN(timestamp) FROM (SELECT timestamp FROM portfolio_history ORDER BY timestamp DESC LIMIT 8760))"
+            )
+            logging.info(f"DB maintenance: trimmed portfolio_history rows")
+
+        # Trim old agent_runs: keep last 5000
+        ar_count = cursor.execute("SELECT COUNT(*) FROM agent_runs").fetchone()[0]
+        if ar_count > 5000:
+            cursor.execute(
+                "DELETE FROM agent_runs WHERE id <= (SELECT id FROM agent_runs ORDER BY id DESC LIMIT 1 OFFSET 5000)"
+            )
+
+        conn.commit()
+        cursor.execute("PRAGMA integrity_check")
+        integrity = cursor.fetchone()[0]
+        if integrity == "ok":
+            logging.info("DB maintenance: integrity check passed")
+        else:
+            logging.warning(f"DB maintenance: integrity check result: {integrity}")
+
+        cursor.execute("PRAGMA optimize")
+        logging.info("DB maintenance: PRAGMA optimize completed")
+    except Exception as e:
+        logging.error(f"DB maintenance error: {e}")
+    finally:
+        conn.close()

@@ -286,11 +286,14 @@ class DataIngestion:
                         exchange_failures += 1
                         logging.error(f"[LIVE EXCHANGE POLLING FAILED #{exchange_failures}] {e}")
                         if exchange_failures >= max_exchange_failures:
-                            # Attempt reconnection with exponential backoff
-                            backoff = min(reconnect_delay * (2 ** (exchange_failures - max_exchange_failures)), 120)
-                            logging.warning(f"[EXCHANGE RECONNECT] Attempting reconnection in {backoff}s (try #{exchange_failures - max_exchange_failures + 1})")
+                            # Cap retry count to prevent exponential overflow
+                            retry_num = min(exchange_failures - max_exchange_failures + 1, 10)
+                            backoff = min(reconnect_delay * (2 ** retry_num), 120)
+                            logging.warning(f"[EXCHANGE RECONNECT] Attempting reconnection in {backoff}s (retry #{retry_num})")
                             time.sleep(backoff)
                             exchange = init_exchange()
+                        else:
+                            time.sleep(1)
                         price = None
                 
                 # Fallback to yfinance if exchange failed or unavailable

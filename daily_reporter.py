@@ -1,12 +1,11 @@
-import sqlite3
 import datetime
 import os
 import json
 import logging
 import subprocess
+import database as _db
 
 # Paths
-DB_PATH = os.path.expanduser("~/.nexustrader/nexustrader.db")
 BLOG_DIR = os.path.expanduser("~/nexustrader/blog")
 DAILY_DIR = os.path.join(BLOG_DIR, "daily_summaries")
 
@@ -14,7 +13,7 @@ DAILY_DIR = os.path.join(BLOG_DIR, "daily_summaries")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 def get_db_connection():
-    return sqlite3.connect(DB_PATH)
+    return _db.get_db_connection()
 
 def load_daily_trades():
     """Loads trades closed in the last 24 hours."""

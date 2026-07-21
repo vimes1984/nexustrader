@@ -189,19 +189,23 @@ class PolicyNetwork:
             # All strategies disagreed; pick the one that disagreed least
             action_idx = np.argmax(alignment_flat)  # max of negative values = least negative
         
-        # Standard REINFORCE gradient: ∇log π(a|s) = e_action - π
+        # --- REINFORCE policy gradient (Williams, 1992) ---
+        # Objective to maximize: J = E[A * log π(a|s)]
+        # We use gradient DESCENT: minimize L = -J = -A * log π(a|s)
+        # ∂(-J)/∂z_i = -A * (δ_{i,action} - π_i)
         one_hot = np.zeros_like(probs)
         one_hot[0, action_idx] = 1.0
-        d_z = scaled_reward * (one_hot - probs)
+        d_z = -scaled_reward * (one_hot - probs)
         
-        # Entropy bonus: total loss = PG_loss - beta * H
-        # ∂(PG_loss - beta*H)/∂z = PG_grad - beta * ∂H/∂z
+        # --- Entropy bonus: L = -J - beta * H where H = -sum(π log π) ---
+        # dL/dz = -∂J/∂z - beta * ∂H/∂z
         # ∂H/∂z_j = -π_j * (log π_j + H)  (derived from softmax Jacobian)
-        # PG_grad - beta*∂H/∂z = PG_grad + beta * π * (log π + H)
+        # entropy_grad = π * (H + log π) = -∂H/∂z
+        # So: dL/dz = -A*(e_a-π) - beta * (-entropy_grad) = -A*(e_a-π) + beta * entropy_grad
         log_p = np.log(probs + 1e-9)
         entropy = -np.sum(probs * log_p)
-        entropy_grad = probs * (entropy + log_p)  # = π * (H + log(π))
-        d_z += entropy_beta * entropy_grad  # PLUS sign: -beta * (-π*(H+log(π))) = +beta * π*(H+log(π))
+        entropy_grad = probs * (entropy + log_p)  # = π * (H + log(π)) = -∂H/∂z
+        d_z += entropy_beta * entropy_grad  # dL/dz = -A*(e_a-π) + beta*π*(H+logπ)
         
         dW = [None] * len(self.W)
         db = [None] * len(self.b)

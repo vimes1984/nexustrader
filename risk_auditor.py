@@ -21,10 +21,9 @@ def load_settings():
         return {}
 
 def save_setting(key, value):
-    if not should_apply_agent_mutation(AGENT_NAME):
-        log_blocked_mutation(AGENT_NAME, key, value)
-        return
-    _db.save_setting_directly(key, value)
+    # Use database.save_setting() which handles mutation freeze detection
+    # via call-stack inspection, optimization logging, and DB write.
+    _db.save_setting(key, str(value))
 
 def run_risk_audit(trigger_deploy: bool = False):
     logging.info("Starting Quantitative Portfolio Risk Audit...")
