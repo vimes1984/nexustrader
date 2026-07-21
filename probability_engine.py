@@ -226,14 +226,18 @@ class ProbabilityEngine:
         try:
             import database as _db2
             recent_trades = _db2.load_trades()
-            recent_n = min(len(recent_trades), 10)
+            recent_n = min(len(recent_trades), 20)
             if recent_n >= 3:
                 wins = sum(1 for t in recent_trades[-recent_n:] if t.get('pnl', 0) > 0)
                 wr = wins / recent_n
+                # When losing, LOWER the bar to take more shots.
+                # When winning, keep standards high.
                 if wr < 0.3:
-                    dyn_min = min(self.min_win_rate + 0.08, 0.70)
+                    dyn_min = max(self.min_win_rate - 0.10, 0.40)  # Lower bar to escape death spiral
                 elif wr < 0.5:
-                    dyn_min = min(self.min_win_rate + 0.03, 0.65)
+                    dyn_min = max(self.min_win_rate - 0.03, 0.45)  # Slight relaxation
+                elif wr > 0.7:
+                    dyn_min = min(self.min_win_rate + 0.05, 0.70)  # Raise bar when crushing it
         except:
             pass
         

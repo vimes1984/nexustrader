@@ -98,14 +98,14 @@ def compute_safe_fraction(
             "half_kelly": 0.02,
             "drawdown_penalty": 1.0,
             "calibration_cap": calibration_cap,
-            "safe_fraction": 0.02,  # 2% default when cold-starting
+            "safe_fraction": 0.05,  # 5% default when cold-starting
             "signal": "cold_start_default"
         }
     
     # Minimum safe fraction when we have data but it's poor (prevent death spiral)
     # If win rate is very low, still allow tiny positions to regain confidence
-    min_safe_fraction = 0.005
-    max_allocation = 0.15  # Hard cap: max 15% of portfolio per trade  # 0.5% minimum risk even with bad stats
+    min_safe_fraction = 0.06  # 6% minimum — ensures $5+ even on $90 accounts
+    max_allocation = 0.15  # Hard cap: max 15% of portfolio per trade
 
     # Apply half-kelly for safety
     half_kelly = kelly_raw * HALF_KELLY

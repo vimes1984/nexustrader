@@ -379,7 +379,7 @@ class ExecutionEngine:
             return False
         
         # Concentration limit: prevent too much capital in one position
-        total_equity = self.get_equity()
+        total_equity = self.get_equity(getattr(self, 'last_known_prices', {}))
         kf = evaluation.get("kelly_fraction", 0.05)
         position_value_est = self.balance * kf
         existing_exposure = 0.0
@@ -408,9 +408,9 @@ class ExecutionEngine:
         # Calculate position size in Euros
         position_value = self.balance * kelly_fraction
         
-        # Minimum position floor: $10 to beat fee-to-profit ratio
-        if position_value < 10.0:
-            logging.warning(f"[MIN SIZE] Position value ${position_value:.2f} below $10 minimum. Skipping {symbol}.")
+        # Minimum position floor: $5 to allow small-account trading
+        if position_value < 5.0:
+            logging.warning(f"[MIN SIZE] Position value ${position_value:.2f} below $5 minimum. Skipping {symbol}.")
             return False
         quantity = position_value / entry_price
         fee = position_value * self.transaction_fee_rate
