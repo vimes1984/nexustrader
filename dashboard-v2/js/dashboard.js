@@ -190,41 +190,52 @@ const Dashboard = {
 
   /** Load chart history for ticker */
   async loadHistory(ticker) {
-    if (ticker === 'portfolio' || !this.chart) return;
+    if (ticker === 'portfolio' || !this.chart || !this.chartSeries.candles) return;
     try {
       const data = await API.history(ticker);
-      if (!data) return;
+      if (!data || (Array.isArray(data) && !data.length)) return;
 
       // Handle both {candles:[...]} and flat [{...}] response formats
       const rows = Array.isArray(data) ? data : (data.candles || data.data || []);
+      if (!rows.length) return;
 
-      if (rows.length > 0 && this.chartSeries.candles) {
-        // Check if data has OHLC or just close prices
-        const hasOHLC = rows[0].open !== undefined;
-        if (hasOHLC) {
-          const candleData = rows.map(c => ({
-            time: c.timestamp || c.time,
-            open: c.open, high: c.high, low: c.low, close: c.close,
-          }));
-          this.chartSeries.candles.setData(candleData);
-        } else {
-          // Close-only data — use line series instead of candlesticks
-          const lineData = rows.map(c => ({
-            time: c.timestamp || c.time,
-            value: c.close || c.price || 0,
-          }));
-          this.chartSeries.candles.setData(lineData.map(d => ({
-            time: d.time, open: d.value, high: d.value, low: d.value, close: d.value,
-          })));
+      // Parse timestamp to Unix seconds (LightweightCharts needs number, not string)
+      const toTime = (ts) => {
+        if (typeof ts === 'number') return ts < 1e12 ? ts : ts / 1000;
+        if (typeof ts === 'string') {
+          const d = new Date(ts);
+          return isNaN(d.getTime()) ? null : Math.floor(d.getTime() / 1000);
         }
+        return null;
+      };
+
+      // Check if data has OHLC or just close prices
+      const hasOHLC = rows[0].open !== undefined;
+      const candleData = [];
+      for (const c of rows) {
+        const time = toTime(c.timestamp || c.time);
+        if (time == null) continue;
+        const open = Number(c.open ?? c.close ?? c.price ?? 0);
+        const high = Number(c.high ?? c.close ?? c.price ?? 0);
+        const low = Number(c.low ?? c.close ?? c.price ?? 0);
+        const close = Number(c.close ?? c.price ?? 0);
+        if (isNaN(open) || isNaN(close)) continue;
+        candleData.push({ time, open, high, low, close });
       }
-      if (rows.length > 0 && this.chartSeries.volume) {
-        const volData = rows.filter(v => v.volume != null).map(v => ({
-          time: v.timestamp || v.time,
-          value: v.volume || 0,
-          color: 'rgba(59,130,246,0.15)',
-        }));
-        if (volData.length > 0) this.chartSeries.volume.setData(volData);
+      if (candleData.length) {
+        this.chartSeries.candles.setData(candleData);
+      }
+
+      // Volume
+      if (this.chartSeries.volume) {
+        const volData = [];
+        for (const v of rows) {
+          const time = toTime(v.timestamp || v.time);
+          const vol = Number(v.volume || 0);
+          if (time == null || isNaN(vol)) continue;
+          volData.push({ time, value: vol, color: 'rgba(59,130,246,0.15)' });
+        }
+        if (volData.length) this.chartSeries.volume.setData(volData);
       }
     } catch (e) {
       console.error('Failed to load history:', e);
