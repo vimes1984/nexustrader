@@ -48,6 +48,7 @@ body {
   max-width: 1440px;
   margin: 0 auto;
   padding: 12px;
+  min-height: 100vh;
 }
 
 /* ── Header ── */
@@ -272,14 +273,16 @@ label { font-size: 12px; color: var(--text-secondary); display: block; margin-bo
 }
 
 /* ── Tab Content ── */
-.tab-content { display: none; }
-.tab-content.active { display: block; }
+.tab-content { display: none !important; }
+.tab-content.active { display: block !important; }
 
 /* ── Two-Column Layouts ── */
 .two-col {
   display: grid;
   grid-template-columns: 2fr 1fr;
   gap: 12px;
+  align-items: start;
+  align-items: start;
 }
 
 @media (max-width: 900px) {
@@ -388,6 +391,7 @@ label { font-size: 12px; color: var(--text-secondary); display: block; margin-bo
 .notification-dropdown-container { position: relative; }
 
 #notification-dropdown {
+  z-index: 99999;
   position: absolute;
   right: 0;
   top: calc(100% + 8px);
@@ -499,3 +503,13 @@ label { font-size: 12px; color: var(--text-secondary); display: block; margin-bo
 .mt-sm { margin-top: 8px; }
 .gap-sm { gap: 8px; }
 .flex-between { display: flex; justify-content: space-between; align-items: center; }
+
+
+/* ── Broker Config ── */
+.broker-config-panel { padding: 14px 16px; margin-bottom: 12px; }
+.broker-config-panel .broker-status { font-size: 11px; margin-bottom: 10px; padding: 8px; border-radius: 4px; }
+.broker-config-panel .broker-connected { background: rgba(16,185,129,0.1); color: var(--neon-green); }
+.broker-config-panel .broker-disconnected { background: rgba(244,63,94,0.1); color: var(--neon-red); }
+
+/* Broker Config */
+.broker-status-ok{color:var(--neon-green)}.broker-status-fail{color:var(--neon-red)}

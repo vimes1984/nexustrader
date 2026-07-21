@@ -3889,6 +3889,45 @@ def api_training_run(request: Request):
 # These endpoints are called by dashboard-v2/js/*.js modules
 # ═══════════════════════════════════════════════════════════════════
 
+@app.get("/api/system/broker_config")
+def api_broker_config():
+    """Get broker/exchange configuration for dashboard."""
+    return {
+        "broker": database.load_setting("broker", "kraken"),
+        "api_key": database.load_setting("kraken_api_key", ""),
+        "api_secret": database.load_setting("kraken_api_secret", ""),
+        "trading_mode": database.load_setting("trading_mode", "paper"),
+        "test_result": database.load_setting("last_broker_test", ""),
+    }
+
+@app.post("/api/system/broker_config")
+async def api_broker_config_save(request: Request):
+    data = await _get_json(request)
+    for k in ['broker','api_key','api_secret','trading_mode']:
+        if k in data:
+            db_key = 'kraken_' + k if k in ('api_key','api_secret') and data.get('broker','kraken') == 'kraken' else k
+            database.save_setting(db_key if db_key.startswith('kraken_') else k, str(data[k]))
+    return {"ok": True}
+
+@app.get("/api/system/broker_config")
+def api_broker_config():
+    return {
+        "broker": database.load_setting("broker","kraken"),
+        "api_key": database.load_setting("kraken_api_key",""),
+        "api_secret": database.load_setting("kraken_api_secret",""),
+        "trading_mode": getattr(orchestrator,'trading_mode','paper'),
+        "test_result": database.load_setting("last_broker_test",""),
+    }
+
+@app.post("/api/system/broker_config")
+async def api_broker_config_save(request: Request):
+    d = await _get_json(request)
+    for k in ['broker','api_key','api_secret','trading_mode']:
+        if k in d:
+            dbk = 'kraken_'+k if k in ('api_key','api_secret') else k
+            database.save_setting(dbk, str(d[k]))
+    return {"ok":True}
+
 # Helper for async JSON parsing
 async def _get_json(request: Request):
     try: return await request.json()

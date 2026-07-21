@@ -416,9 +416,19 @@
           </div>
         </div>
 
-        <div class="glass-panel" style="padding:14px 16px;margin-bottom:12px">
-          <div class="section-title">Broker Connection</div>
-          <button class="btn btn-primary" id="btn-test-broker">Test Connection</button>
+        <div class="glass-panel broker-config-panel">
+          <div class="section-title">Broker Configuration</div>
+          <div id="broker-status-display" style="font-size:11px;margin-bottom:10px"></div>
+          <div class="form-grid">
+            <div class="form-group"><label>Broker</label><select id="config-broker-type"><option value="kraken">Kraken</option><option value="coinbase">Coinbase</option><option value="binance">Binance</option></select></div>
+            <div class="form-group"><label>API Key</label><input type="text" id="config-broker-key" placeholder="Your API key"></div>
+            <div class="form-group"><label>API Secret</label><input type="password" id="config-broker-secret" placeholder="Your API secret"></div>
+            <div class="form-group"><label>Trading Mode</label><select id="config-trading-mode"><option value="paper">Paper Trading</option><option value="live">Live Trading</option></select></div>
+          </div>
+          <div class="card-row mt-sm">
+            <button class="btn btn-primary" id="btn-save-broker">Save Broker Config</button>
+            <button class="btn btn-success" id="btn-test-broker">Test Connection</button>
+          </div>
         </div>
 
         <div class="glass-panel" style="padding:14px 16px;margin-bottom:12px">

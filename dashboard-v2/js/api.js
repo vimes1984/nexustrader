@@ -30,10 +30,10 @@ const API = {
   put(path, body)  { return this.request('PUT', path, body); },
 
   // ── Status & Init ──
-  status()       { return this.get('/api/status'); },
-  initState()    { return this.get('/api/init'); },
-  health()       { return this.get('/api/health'); },
-  safetyStatus() { return this.get('/api/safety/status'); },
+  status()             { return this.get('/api/status'); },
+  initState()          { return this.get('/api/init'); },
+  health()             { return this.get('/api/health'); },
+  safetyStatus()       { return this.get('/api/safety/status'); },
 
   // ── Trading ──
   trades(ticker, limit = 50) { return this.get(`/api/trades?ticker=${ticker}&limit=${limit}`); },
@@ -88,6 +88,10 @@ const API = {
   setAgentLlm(data)           { return this.post('/api/system/agent_llm', data); },
   prompts()                   { return this.get('/api/system/prompts'); },
   savePrompt(data)            { return this.post('/api/system/prompts', data); },
+
+  // ── Broker ──
+  brokerConfig()              { return this.get('/api/system/broker_config'); },
+  setBrokerConfig(data)       { return this.post('/api/system/broker_config', data); },
 
   // ── System / Settings ──
   systemConfig()              { return this.get('/api/system/config'); },

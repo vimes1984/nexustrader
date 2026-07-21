@@ -18,6 +18,7 @@ const Settings = {
       if (e.detail === 'optimizations') this.refreshOpts();
     });
     byId('btn-test-broker')?.addEventListener('click', () => this.testBroker());
+    byId('btn-save-broker')?.addEventListener('click', () => this.saveBrokerConfig());
     byId('btn-reset-cooldowns')?.addEventListener('click', () => this.resetCooldowns());
     byId('btn-save-config')?.addEventListener('click', () => this.saveConfig());
     byId('btn-set-daily-goal')?.addEventListener('click', () => this.setDailyGoal());
@@ -32,32 +33,30 @@ const Settings = {
   },
 
   async refresh() {
-    await Promise.all([this.loadConfig(), this.loadDailyGoal()]);
+    await Promise.all([this.loadConfig(), this.loadDailyGoal(), this.loadBrokerConfig()]);
   },
 
   // ACTUAL API: {trading_mode, broker, api_key, api_secret, trailing_stop, cooldown,
   //               tp_multiplier, sl_multiplier, risk_mode, max_drawdown,
   //               nn_lr, nn_floor, nn_discount, nn_exploration, nn_hidden_layers,
   //               nn_hidden_dim, nn_dropout, nn_optimizer, nn_epochs, initial_balance}
+  // ACTUAL API: {trading_mode, broker, api_key, api_secret, trailing_stop, cooldown,
+  //               tp_multiplier, sl_multiplier, risk_mode, max_drawdown,
+  //               nn_lr, nn_floor, nn_discount, nn_exploration, initial_balance,
+  //               nn_hidden_layers, nn_hidden_dim, nn_dropout, nn_optimizer, nn_epochs}
   async loadConfig() {
     try {
       const data = await API.systemConfig();
       if (!data) return;
-      setInput('config-max-position', data.initial_balance);
-      setInput('config-max-drawdown', data.max_drawdown);
-      setInput('config-cooldown', data.cooldown);
-      setInput('config-tp', data.tp_multiplier);
-      setInput('config-sl', data.sl_multiplier);
-      setInput('config-nn-lr', data.nn_lr);
-      setInput('config-nn-dim', data.nn_hidden_dim);
-      setInput('config-nn-layers', data.nn_hidden_layers);
+      setInput('config-max-position', data.initial_balance || '');
+      setInput('config-max-drawdown', data.max_drawdown || '');
+      setInput('config-cooldown', data.cooldown || '');
+      setInput('config-tp', data.tp_multiplier || '');
+      setInput('config-sl', data.sl_multiplier || '');
+      setInput('config-nn-lr', data.nn_lr || '');
+      setInput('config-nn-dim', data.nn_hidden_dim || '');
+      setInput('config-nn-layers', data.nn_hidden_layers || '');
       setCheckbox('config-trailing-stop', data.trailing_stop);
-      // Display broker info
-      const infoEl = byId('config-broker-info');
-      if (infoEl) {
-        const keyHint = data.api_key ? data.api_key.slice(0, 12) + '...' : 'not set';
-        infoEl.textContent = 'Broker: ' + (data.broker || 'kraken') + ' | Mode: ' + (data.trading_mode || '?') + ' | Key: ' + keyHint;
-      }
     } catch (e) { /* silent */ }
   },
 
@@ -71,6 +70,37 @@ const Settings = {
       const el = byId('daily-goal-status');
       if (el) el.textContent = data.daily_income_goal ? 'Daily goal: $' + data.daily_income_goal : 'No goal set';
     } catch (e) { /* silent */ }
+  },
+
+
+  // ACTUAL API: {broker, api_key, api_secret, trading_mode, test_result}
+  async loadBrokerConfig() {
+    try {
+      const data = await API.brokerConfig();
+      if (!data) return;
+      setInput('config-broker-type', data.broker || 'kraken');
+      setInput('config-broker-key', data.api_key || '');
+      setInput('config-broker-secret', data.api_secret || '');
+      const modeEl = byId('config-trading-mode');
+      if (modeEl) modeEl.value = data.trading_mode || 'paper';
+      const statusEl = byId('broker-status-display');
+      if (statusEl && data.test_result) {
+        statusEl.innerHTML = '<span class="broker-status-ok">Last test: ' + data.test_result + '</span>';
+      }
+    } catch (e) { /* silent */ }
+  },
+
+  async saveBrokerConfig() {
+    try {
+      const data = {
+        broker: byId('config-broker-type')?.value || 'kraken',
+        api_key: byId('config-broker-key')?.value || '',
+        api_secret: byId('config-broker-secret')?.value || '',
+        trading_mode: byId('config-trading-mode')?.value || 'paper',
+      };
+      await API.setBrokerConfig(data);
+      App.toast('Broker config saved', 'success');
+    } catch (e) { App.toast('Save failed: ' + e.message, 'error'); }
   },
 
   async saveConfig() {
