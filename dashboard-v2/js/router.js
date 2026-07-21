@@ -100,27 +100,36 @@ const App = {
   /** Bind global event handlers */
   bindEvents() {
     // Play/Pause
-    byId('play-pause-btn').addEventListener('click', () => this.togglePause());
+    const playPauseBtn = byId('play-pause-btn');
+    if (playPauseBtn) playPauseBtn.addEventListener('click', () => this.togglePause());
     // Reset
-    byId('reset-btn').addEventListener('click', () => this.resetSim());
+    const resetBtn = byId('reset-btn');
+    if (resetBtn) resetBtn.addEventListener('click', () => this.resetSim());
     // Speed slider
     const speedSlider = byId('speed-slider');
-    speedSlider.addEventListener('input', () => {
-      this.state.speed = parseFloat(speedSlider.value);
-      byId('speed-label').textContent = this.state.speed.toFixed(2) + 's';
-      App.emit('speed', this.state.speed);
-    });
+    if (speedSlider) {
+      speedSlider.addEventListener('input', () => {
+        this.state.speed = parseFloat(speedSlider.value);
+        const label = byId('speed-label');
+        if (label) label.textContent = this.state.speed.toFixed(2) + 's';
+        App.emit('speed', this.state.speed);
+      });
+    }
     // Risk mode
-    byId('risk-mode-select').addEventListener('change', (e) => {
+    const riskSelect = byId('risk-mode-select');
+    if (riskSelect) riskSelect.addEventListener('change', (e) => {
       this.setRiskMode(e.target.value);
     });
     // Navigation drawer
-    byId('open-drawer-btn').addEventListener('click', () => this.openDrawer());
-    byId('close-drawer-btn').addEventListener('click', () => this.closeDrawer());
-    this.el.navOverlay.addEventListener('click', () => this.closeDrawer());
+    const openBtn = byId('open-drawer-btn');
+    if (openBtn) openBtn.addEventListener('click', () => this.openDrawer());
+    const closeBtn = byId('close-drawer-btn');
+    if (closeBtn) closeBtn.addEventListener('click', () => this.closeDrawer());
+    if (this.el.navOverlay) this.el.navOverlay.addEventListener('click', () => this.closeDrawer());
     // Notification bell
-    this.el.notificationBell.addEventListener('click', () => this.toggleNotifications());
-    byId('clear-notifications-btn').addEventListener('click', () => this.clearNotifications());
+    if (this.el.notificationBell) this.el.notificationBell.addEventListener('click', () => this.toggleNotifications());
+    const clearNotifBtn = byId('clear-notifications-btn');
+    if (clearNotifBtn) clearNotifBtn.addEventListener('click', () => this.clearNotifications());
     // Dev debug toggle
     byId('btn-dev-toggle')?.addEventListener('click', () => {
       document.body.classList.toggle('debug');
