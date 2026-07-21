@@ -409,8 +409,14 @@ class ExecutionEngine:
         sl = evaluation["stop_loss"]
         kelly_fraction = evaluation["kelly_fraction"]
 
-        # Calculate position size in Euros
-        position_value = self.balance * kelly_fraction
+        # Calculate position size: Kelly fraction * balance / stop_distance
+        # Kelly f* gives the fraction of capital to RISK, not the position size.
+        # Convert: stop_loss_pct = distance from entry to stop as fraction of entry.
+        # position_value = (balance * kelly_fraction) / stop_loss_pct
+        stop_loss_pct = abs(entry_price - sl) / entry_price if entry_price > 0 else 0.1
+        if stop_loss_pct < 0.001:
+            stop_loss_pct = 0.001  # At least 0.1% stop distance
+        position_value = (self.balance * kelly_fraction) / min(stop_loss_pct, 0.5)  # cap stop at 50%
         
         # Minimum position floor: $5 to allow small-account trading
         if position_value < 5.0:

@@ -24,13 +24,17 @@ def round_trip_cost(
 ) -> float:
     """Total cost in quote currency to open AND close a position.
 
-    Includes: entry fee + exit fee + spread + estimated slippage.
+    Breakdown (round trip):
+      - Entry fee:   notional * fee_rate
+      - Exit fee:    notional * fee_rate
+      - Spread cost: notional * spread  (half paid on entry, half on exit)
+      - Slippage:    notional * slippage * 2  (once on entry, once on exit)
     """
     fee_rate = maker_fee if is_maker else taker_fee
     entry_fee = notional * fee_rate
     exit_fee = notional * fee_rate  # assume same fee rate to close
     spread_cost = notional * spread
-    slippage_cost = notional * slippage
+    slippage_cost = notional * slippage * 2  # slippage on entry AND exit
     return entry_fee + exit_fee + spread_cost + slippage_cost
 
 
