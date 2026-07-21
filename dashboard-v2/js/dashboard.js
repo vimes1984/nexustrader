@@ -90,23 +90,27 @@ const Dashboard = {
 
   /** Handle tick data */
   onTick(msg) {
+    try {
     const data = msg.data || msg;
     if (!data) return;
 
     // Update price
     if (data.price) {
-      byId('ticker-price').textContent = `$${data.price.toFixed(2)}`;
+      const el = byId('ticker-price');
+      if (el) el.textContent = '$' + data.price.toFixed(2);
       if (data.change_pct) {
-        const el = byId('ticker-change');
-        el.textContent = `${data.change_pct >= 0 ? '+' : ''}${data.change_pct.toFixed(2)}%`;
-        el.style.color = data.change_pct >= 0 ? 'var(--neon-green)' : 'var(--neon-red)';
+        const cel = byId('ticker-change');
+        if (cel) {
+          cel.textContent = (data.change_pct >= 0 ? '+' : '') + data.change_pct.toFixed(2) + '%';
+          cel.style.color = data.change_pct >= 0 ? 'var(--neon-green)' : 'var(--neon-red)';
+        }
       }
     }
 
     // Update ticker tab prices
     if (data.ticker && data.price) {
-      const tabEl = byId(`tab-price-${data.ticker}`);
-      if (tabEl) tabEl.textContent = `$${data.price.toFixed(2)}`;
+      const tabEl = byId('tab-price-' + data.ticker);
+      if (tabEl) tabEl.textContent = '$' + data.price.toFixed(2);
     }
 
     // Update chart
@@ -126,11 +130,13 @@ const Dashboard = {
     // Simulation progress
     if (data.sim_progress !== undefined) {
       const container = byId('sim-progress-container');
-      if (data.sim_progress > 0 && data.sim_progress < 100) {
+      const bar = byId('sim-progress-bar');
+      const label = byId('sim-progress-label');
+      if (container && data.sim_progress > 0 && data.sim_progress < 100) {
         container.style.display = 'flex';
-        byId('sim-progress-bar').style.width = `${data.sim_progress}%`;
-        byId('sim-progress-label').textContent = `${Math.round(data.sim_progress)}%`;
-      } else {
+        if (bar) bar.style.width = data.sim_progress + '%';
+        if (label) label.textContent = Math.round(data.sim_progress) + '%';
+      } else if (container) {
         container.style.display = 'none';
       }
     }
@@ -139,31 +145,36 @@ const Dashboard = {
     if (data.position) {
       this.renderPosition(data.position);
     }
+    } catch(e) { /* ticks must never crash the dashboard */ }
   },
 
   /** Update KPI cards */
   updateKPIs(data) {
-    if (data.equity !== undefined) byId('val-equity').textContent = `$${data.equity.toFixed(2)}`;
-    if (data.balance !== undefined) byId('val-balance').textContent = `$${data.balance.toFixed(2)}`;
+    try {
+    if (data.equity !== undefined) { const el = byId('val-equity'); if (el) el.textContent = '$' + data.equity.toFixed(2); }
+    if (data.balance !== undefined) { const el = byId('val-balance'); if (el) el.textContent = '$' + data.balance.toFixed(2); }
     if (data.unrealized_pnl !== undefined) {
       const pnl = data.unrealized_pnl;
       const el = byId('val-unrealized-pnl');
-      el.textContent = `Active Trade Profit: $${pnl.toFixed(2)}`;
-      el.style.color = pnl >= 0 ? 'var(--neon-green)' : 'var(--neon-red)';
-    }
-    if (data.winrate !== undefined) byId('val-winrate').textContent = `${(data.winrate * 100).toFixed(1)}%`;
-    if (data.trade_count !== undefined) byId('val-trade-count').textContent = `${data.trade_count} trades completed`;
-    if (data.total_pnl !== undefined) {
-      byId('val-total-pnl').textContent = `$${data.total_pnl.toFixed(2)}`;
-      const el = byId('val-total-pnl-percent');
-      if (data.total_pnl_pct !== undefined) {
-        el.textContent = `${data.total_pnl_pct >= 0 ? '+' : ''}${data.total_pnl_pct.toFixed(2)}%`;
-        el.style.color = data.total_pnl_pct >= 0 ? 'var(--neon-green)' : 'var(--neon-red)';
+      if (el) {
+        el.textContent = 'Active Trade Profit: $' + pnl.toFixed(2);
+        el.style.color = pnl >= 0 ? 'var(--neon-green)' : 'var(--neon-red)';
       }
     }
-    // Portfolio equity tab
+    if (data.winrate !== undefined) { const el = byId('val-winrate'); if (el) el.textContent = (data.winrate * 100).toFixed(1) + '%'; }
+    if (data.trade_count !== undefined) { const el = byId('val-trade-count'); if (el) el.textContent = data.trade_count + ' trades completed'; }
+    if (data.total_pnl !== undefined) {
+      const el = byId('val-total-pnl');
+      if (el) el.textContent = '$' + data.total_pnl.toFixed(2);
+      const el2 = byId('val-total-pnl-percent');
+      if (el2 && data.total_pnl_pct !== undefined) {
+        el2.textContent = (data.total_pnl_pct >= 0 ? '+' : '') + data.total_pnl_pct.toFixed(2) + '%';
+        el2.style.color = data.total_pnl_pct >= 0 ? 'var(--neon-green)' : 'var(--neon-red)';
+      }
+    }
     const portEl = byId('tab-portfolio-equity');
-    if (portEl && data.equity !== undefined) portEl.textContent = `$${data.equity.toFixed(2)}`;
+    if (portEl && data.equity !== undefined) portEl.textContent = '$' + data.equity.toFixed(2);
+    } catch(e) { /* KPIs are visual-only, never break the page */ }
   },
 
   /** Load chart history for ticker */
