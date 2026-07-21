@@ -4,6 +4,36 @@
  * Calls window.handleInitState (exported from app_v2.js).
  */
 (function() {
+
+        // xhr helper — safe AJAX wrapper
+        function xhr(method, url, onSuccess, onError, body) {
+            try {
+                var req = new XMLHttpRequest();
+                req.open(method, url, true);
+                req.timeout = 30000;
+                if (body) req.setRequestHeader('Content-Type', 'application/json');
+                req.onload = function() {
+                    if (req.status >= 200 && req.status < 300) {
+                        if (onSuccess) onSuccess(req.responseText);
+                    } else {
+                        console.error('[XHR]', method, url, 'HTTP', req.status);
+                        if (onError) onError('HTTP ' + req.status);
+                    }
+                };
+                req.onerror = function() {
+                    console.error('[XHR]', method, url, 'network error');
+                    if (onError) onError('network error');
+                };
+                req.ontimeout = function() {
+                    console.error('[XHR]', method, url, 'timeout');
+                    if (onError) onError('timeout');
+                };
+                req.send(body || null);
+            } catch(e) {
+                console.error('[XHR] exception:', e);
+                if (onError) onError(e.message);
+            }
+        }
     'use strict';
     
     console.log('[ENHANCER] booting v2.0');
@@ -805,7 +835,9 @@ function boot() {
 
 
         // ============================================================
-        // LLM Tab handlers
+
+        // ============================================================
+        // LLM Tab handlers (xhr signature: method, url, onSuccess, onError, body)
         // ============================================================
         
         function initLLMTab() {
@@ -814,10 +846,11 @@ function boot() {
         }
         
         function pollLLMStatus() {
-            if (document.getElementById('llm-status')) {
-                xhr('GET', '/api/llm/status', null, function(resp) {
+            var statusEl = document.getElementById('llm-status');
+            if (!statusEl) return;
+            xhr('GET', '/api/llm/status', function(resp) {
+                try {
                     var s = JSON.parse(resp);
-                    var statusEl = document.getElementById('llm-status');
                     if (s.server_connected) {
                         statusEl.textContent = 'Connected';
                         statusEl.style.color = 'var(--neon-green)';
@@ -830,12 +863,12 @@ function boot() {
                     }
                     var servEl = document.getElementById('llm-server');
                     if (servEl) servEl.textContent = s.endpoint || 'not configured';
-                });
-            }
+                } catch(e) { console.error('LLM status parse:', e); }
+            });
         }
         
         function pollNNArchitecture() {
-            xhr('GET', '/api/nn/architecture', null, function(resp) {
+            xhr('GET', '/api/nn/architecture', function(resp) {
                 try {
                     var a = JSON.parse(resp);
                     var arch = a.architecture || 'mlp';
@@ -854,15 +887,17 @@ function boot() {
                         }
                     });
                     var stat = document.getElementById('nn-arch-status');
-                    if (stat && a.description) stat.textContent = 'Current: ' + arch.toUpperCase() + ' = ' + (a.description[arch] || '');
-                } catch(e) {
-                    console.error('NN arch poll error:', e);
-                }
+                    if (stat && a.description) {
+                        stat.textContent = 'Current: ' + arch.toUpperCase() + ' = ' + (a.description[arch] || '');
+                    }
+                } catch(e) { console.error('NN arch poll:', e); }
             });
         }
         
-        document.querySelectorAll('input[name="nn-arch"]').forEach(function(radio) {
-            radio.addEventListener('change', function() {
+        // NN architecture radio button highlighting
+        var nnRadios = document.querySelectorAll('input[name="nn-arch"]');
+        for (var ri = 0; ri < nnRadios.length; ri++) {
+            nnRadios[ri].addEventListener('change', function() {
                 ['mlp', 'lstm', 'transformer'].forEach(function(name) {
                     var label = document.getElementById('nn-opt-' + name);
                     if (label) {
@@ -870,17 +905,17 @@ function boot() {
                         label.style.background = 'transparent';
                     }
                 });
-                var checked = document.querySelector('input[name="nn-arch"]:checked');
-                if (checked) {
-                    var label = document.getElementById('nn-opt-' + checked.value);
+                if (this.checked) {
+                    var label = document.getElementById('nn-opt-' + this.value);
                     if (label) {
                         label.style.borderColor = 'var(--neon-blue)';
                         label.style.background = 'rgba(0,240,255,0.05)';
                     }
                 }
             });
-        });
+        }
         
+        // Save NN Architecture
         var btnSaveNN = document.getElementById('btn-save-nn-arch');
         if (btnSaveNN) {
             btnSaveNN.addEventListener('click', function() {
@@ -888,7 +923,8 @@ function boot() {
                 if (!checked) return;
                 btnSaveNN.disabled = true;
                 btnSaveNN.textContent = 'Saving...';
-                xhr('POST', '/api/nn/architecture', JSON.stringify({architecture: checked.value}), function(resp) {
+                var body = JSON.stringify({architecture: checked.value});
+                xhr('POST', '/api/nn/architecture', function(resp) {
                     var r = JSON.parse(resp);
                     var status = document.getElementById('nn-arch-status');
                     if (r.ok) {
@@ -899,17 +935,17 @@ function boot() {
                     }
                     btnSaveNN.disabled = false;
                     btnSaveNN.textContent = 'Save NN Architecture';
-                });
+                }, undefined, body);
             });
         }
         
-        // LLaMA Test
+        // LLaMA Test Connection
         var btnLLMTest = document.getElementById('btn-llm-test');
         if (btnLLMTest) {
             btnLLMTest.addEventListener('click', function() {
                 btnLLMTest.disabled = true;
                 btnLLMTest.textContent = 'Testing...';
-                xhr('POST', '/api/llm/test', '', function(resp) {
+                xhr('POST', '/api/llm/test', function(resp) {
                     var r = JSON.parse(resp);
                     var status = document.getElementById('llm-status');
                     if (r.ok) {
@@ -925,13 +961,13 @@ function boot() {
             });
         }
         
-        // Force Sentiment
+        // Force Sentiment Poll
         var btnSentiment = document.getElementById('btn-llm-sentiment-now');
         if (btnSentiment) {
             btnSentiment.addEventListener('click', function() {
                 btnSentiment.disabled = true;
                 btnSentiment.textContent = 'Analyzing...';
-                xhr('POST', '/api/llm/sentiment', '', function(resp) {
+                xhr('POST', '/api/llm/sentiment', function(resp) {
                     var r = JSON.parse(resp);
                     var container = document.getElementById('llm-latest-analysis');
                     if (container && r.ok && r.sentiment) {
@@ -946,13 +982,13 @@ function boot() {
             });
         }
         
-        // Force Regime
+        // Force Regime Classification
         var btnRegime = document.getElementById('btn-llm-regime-now');
         if (btnRegime) {
             btnRegime.addEventListener('click', function() {
                 btnRegime.disabled = true;
                 btnRegime.textContent = 'Classifying...';
-                xhr('POST', '/api/llm/regime', '', function(resp) {
+                xhr('POST', '/api/llm/regime', function(resp) {
                     var r = JSON.parse(resp);
                     var container = document.getElementById('llm-latest-analysis');
                     if (container && r.ok && r.regime) {
@@ -985,7 +1021,8 @@ function boot() {
                 
                 btnSaveLLM.disabled = true;
                 btnSaveLLM.textContent = 'Saving...';
-                xhr('POST', '/api/llm/config', JSON.stringify(config), function(resp) {
+                var body = JSON.stringify(config);
+                xhr('POST', '/api/llm/config', function(resp) {
                     var r = JSON.parse(resp);
                     var status = document.getElementById('llm-config-status');
                     if (r.ok) {
@@ -996,11 +1033,11 @@ function boot() {
                     }
                     btnSaveLLM.disabled = false;
                     btnSaveLLM.textContent = 'Save Config';
-                });
+                }, undefined, body);
             });
         }
         
-        // NN Tests
+        // Run NN Tests
         var btnNNTests = document.getElementById('btn-run-nn-tests');
         if (btnNNTests) {
             btnNNTests.addEventListener('click', function() {
@@ -1008,7 +1045,7 @@ function boot() {
                 btnNNTests.disabled = true;
                 btnNNTests.textContent = 'Running...';
                 if (results) results.textContent = 'Running...';
-                xhr('POST', '/api/nn/tests', '', function(resp) {
+                xhr('POST', '/api/nn/tests', function(resp) {
                     var r = JSON.parse(resp);
                     btnNNTests.disabled = false;
                     btnNNTests.textContent = 'Run NN Tests';
@@ -1020,7 +1057,7 @@ function boot() {
             });
         }
         
-        // Training triggers
+        // Trigger 30-day Training
         var btnTrain = document.getElementById('btn-trigger-training');
         if (btnTrain) {
             btnTrain.addEventListener('click', function() {
@@ -1028,16 +1065,18 @@ function boot() {
                 btnTrain.disabled = true;
                 btnTrain.textContent = 'Starting...';
                 if (s) s.textContent = 'Starting...';
-                xhr('POST', '/api/training/run', JSON.stringify({days:30,epochs:20}), function(resp) {
+                var body = JSON.stringify({days:30, epochs:20});
+                xhr('POST', '/api/training/run', function(resp) {
                     var r = JSON.parse(resp);
                     btnTrain.disabled = false;
                     btnTrain.textContent = 'Train with Last 30 Days';
                     if (s) { s.textContent = r.message || r.error; s.style.color = r.ok ? 'var(--neon-green)' : 'var(--neon-red)'; }
                     if (window.showToast) window.showToast(r.ok ? 'Training started' : 'Error: '+r.error, r.ok?'success':'error');
-                });
+                }, undefined, body);
             });
         }
         
+        // Run 90-Day Historical Pipeline
         var btnHistorical = document.getElementById('btn-run-historical-pipeline');
         if (btnHistorical) {
             btnHistorical.addEventListener('click', function() {
@@ -1045,17 +1084,17 @@ function boot() {
                 btnHistorical.disabled = true;
                 btnHistorical.textContent = 'Running...';
                 if (s) s.textContent = 'Fetching data...';
-                xhr('POST', '/api/training/run', JSON.stringify({days:90,epochs:30}), function(resp) {
+                var body = JSON.stringify({days:90, epochs:30});
+                xhr('POST', '/api/training/run', function(resp) {
                     var r = JSON.parse(resp);
                     btnHistorical.disabled = false;
                     btnHistorical.textContent = 'Run 90-Day Full Pipeline';
                     if (s) { s.textContent = r.message || r.error; s.style.color = r.ok ? 'var(--neon-green)' : 'var(--neon-red)'; }
                     if (window.showToast) window.showToast(r.ok ? 'Pipeline started' : 'Error: '+r.error, r.ok?'success':'error');
-                });
+                }, undefined, body);
             });
         }
 
-        // Init LLM tab when navigated to
         var llmNavBtn = document.querySelector('[data-tab="tab-llm"]');
         if (llmNavBtn) {
             llmNavBtn.addEventListener('click', function() {
