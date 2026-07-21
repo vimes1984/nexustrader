@@ -80,4 +80,4 @@ const Logs = {
     } catch (e) { /* silent */ }
   },
 };
-document.addEventListener('DOMContentLoaded', () => Logs.init());
+document.addEventListener('DOMContentLoaded', () => { Logs.init(); if (typeof lucide !== 'undefined') setTimeout(() => lucide.createIcons(), 200); });

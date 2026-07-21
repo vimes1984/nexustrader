@@ -77,6 +77,16 @@ const Dashboard = {
     if (App.state.activeTicker !== 'portfolio') {
       this.loadHistory(App.state.activeTicker);
     }
+    // Fetch weights on init too
+    this.fetchWeights();
+  },
+
+  /** Fetch strategy weights from API */
+  async fetchWeights() {
+    try {
+      const wData = await API.weights();
+      if (wData && wData.weights) this.renderWeights(wData.weights);
+    } catch (e) { /* weights fetch is best-effort */ }
   },
 
   /** Handle WebSocket messages */
@@ -151,8 +161,8 @@ const Dashboard = {
   /** Update KPI cards */
   updateKPIs(data) {
     try {
-    if (data.equity !== undefined) { const el = byId('val-equity'); if (el) el.textContent = '$' + data.equity.toFixed(2); }
-    if (data.balance !== undefined) { const el = byId('val-balance'); if (el) el.textContent = '$' + data.balance.toFixed(2); }
+    if (data.equity !== undefined) { const el = byId('val-equity'); if (el) el.textContent = '$' + Number(data.equity).toFixed(2); }
+    if (data.balance !== undefined) { const el = byId('val-balance'); if (el) el.textContent = '$' + Number(data.balance).toFixed(2); }
     if (data.unrealized_pnl !== undefined) {
       const pnl = data.unrealized_pnl;
       const el = byId('val-unrealized-pnl');
@@ -162,7 +172,8 @@ const Dashboard = {
       }
     }
     if (data.winrate !== undefined) { const el = byId('val-winrate'); if (el) el.textContent = (data.winrate * 100).toFixed(1) + '%'; }
-    if (data.trade_count !== undefined) { const el = byId('val-trade-count'); if (el) el.textContent = data.trade_count + ' trades completed'; }
+    const tc = data.today_trade_count ?? data.trade_count ?? (typeof data.closed_trades === 'number' ? data.closed_trades : (Array.isArray(data.trades) ? data.trades.length : undefined));
+    if (tc !== undefined) { const el = byId('val-trade-count'); if (el) el.textContent = tc + ' trades completed'; }
     if (data.total_pnl !== undefined) {
       const el = byId('val-total-pnl');
       if (el) el.textContent = '$' + data.total_pnl.toFixed(2);
@@ -179,23 +190,41 @@ const Dashboard = {
 
   /** Load chart history for ticker */
   async loadHistory(ticker) {
-    if (ticker === 'portfolio') return;
+    if (ticker === 'portfolio' || !this.chart) return;
     try {
       const data = await API.history(ticker);
-      if (data.candles && this.chartSeries.candles) {
-        const candleData = data.candles.map(c => ({
-          time: c.timestamp || c.time,
-          open: c.open, high: c.high, low: c.low, close: c.close,
-        }));
-        this.chartSeries.candles.setData(candleData);
+      if (!data) return;
+
+      // Handle both {candles:[...]} and flat [{...}] response formats
+      const rows = Array.isArray(data) ? data : (data.candles || data.data || []);
+
+      if (rows.length > 0 && this.chartSeries.candles) {
+        // Check if data has OHLC or just close prices
+        const hasOHLC = rows[0].open !== undefined;
+        if (hasOHLC) {
+          const candleData = rows.map(c => ({
+            time: c.timestamp || c.time,
+            open: c.open, high: c.high, low: c.low, close: c.close,
+          }));
+          this.chartSeries.candles.setData(candleData);
+        } else {
+          // Close-only data — use line series instead of candlesticks
+          const lineData = rows.map(c => ({
+            time: c.timestamp || c.time,
+            value: c.close || c.price || 0,
+          }));
+          this.chartSeries.candles.setData(lineData.map(d => ({
+            time: d.time, open: d.value, high: d.value, low: d.value, close: d.value,
+          })));
+        }
       }
-      if (data.volumes && this.chartSeries.volume) {
-        const volData = data.volumes.map(v => ({
+      if (rows.length > 0 && this.chartSeries.volume) {
+        const volData = rows.filter(v => v.volume != null).map(v => ({
           time: v.timestamp || v.time,
-          value: v.volume,
-          color: v.close >= v.open ? 'rgba(16,185,129,0.2)' : 'rgba(244,63,94,0.2)',
+          value: v.volume || 0,
+          color: 'rgba(59,130,246,0.15)',
         }));
-        this.chartSeries.volume.setData(volData);
+        if (volData.length > 0) this.chartSeries.volume.setData(volData);
       }
     } catch (e) {
       console.error('Failed to load history:', e);
@@ -208,11 +237,17 @@ const Dashboard = {
   },
 
   /** Handle status update */
-  onStatusUpdate(data) {
+  async onStatusUpdate(data) {
     this.updateKPIs(data);
     if (data.trades) this.renderTrades(data.trades);
     if (data.weights) this.renderWeights(data.weights);
     if (data.probability) this.renderProbability(data.probability);
+
+    // Fetch weights separately since /api/status doesn't include them
+    try {
+      const wData = await API.weights();
+      if (wData && wData.weights) this.renderWeights(wData.weights);
+    } catch (e) { /* weights are optional */ }
   },
 
   /** Render trade log */
@@ -225,7 +260,7 @@ const Dashboard = {
     }
     tbody.innerHTML = trades.slice(0, 20).map(t => `
       <tr>
-        <td style="color:var(--text-secondary)">${t.timestamp || t.time || ''}</td>
+        <td style="color:var(--text-secondary)">${(t.entry_time || t.exit_time || t.timestamp || t.time) ? new Date((t.entry_time || t.exit_time || t.timestamp || t.time) * 1000).toLocaleDateString() : ''}</td>
         <td>${t.symbol || t.ticker || ''}</td>
         <td style="color:${t.direction === 'long' ? 'var(--neon-green)' : 'var(--neon-red)'}">${t.direction || ''}</td>
         <td>$${(t.entry_price || 0).toFixed(2)}</td>
@@ -303,4 +338,10 @@ const Dashboard = {
 };
 
 // Init when ready
-document.addEventListener('DOMContentLoaded', () => Dashboard.init());
+document.addEventListener('DOMContentLoaded', () => {
+  Dashboard.init();
+  // Ensure icons render after charts init
+  if (typeof lucide !== 'undefined') {
+    setTimeout(() => lucide.createIcons(), 100);
+  }
+});

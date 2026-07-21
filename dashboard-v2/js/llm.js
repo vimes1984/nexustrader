@@ -128,4 +128,4 @@ const LLM = {
     }
   },
 };
-document.addEventListener('DOMContentLoaded', () => LLM.init());
+document.addEventListener('DOMContentLoaded', () => { LLM.init(); if (typeof lucide !== 'undefined') setTimeout(() => lucide.createIcons(), 200); });

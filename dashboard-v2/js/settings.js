@@ -296,4 +296,4 @@ const Settings = {
     }
   },
 };
-document.addEventListener('DOMContentLoaded', () => Settings.init());
+document.addEventListener('DOMContentLoaded', () => { Settings.init(); if (typeof lucide !== 'undefined') setTimeout(() => lucide.createIcons(), 200); });

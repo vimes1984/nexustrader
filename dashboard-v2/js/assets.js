@@ -92,4 +92,4 @@ const Assets = {
     } catch (e) { /* silent */ }
   },
 };
-document.addEventListener('DOMContentLoaded', () => Assets.init());
+document.addEventListener('DOMContentLoaded', () => { Assets.init(); if (typeof lucide !== 'undefined') setTimeout(() => lucide.createIcons(), 200); });

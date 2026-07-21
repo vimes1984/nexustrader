@@ -135,4 +135,4 @@ const Agents = {
     }
   },
 };
-document.addEventListener('DOMContentLoaded', () => Agents.init());
+document.addEventListener('DOMContentLoaded', () => { Agents.init(); if (typeof lucide !== 'undefined') setTimeout(() => lucide.createIcons(), 200); });

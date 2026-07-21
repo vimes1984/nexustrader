@@ -135,4 +135,4 @@ const Neural = {
     }
   },
 };
-document.addEventListener('DOMContentLoaded', () => Neural.init());
+document.addEventListener('DOMContentLoaded', () => { Neural.init(); if (typeof lucide !== 'undefined') setTimeout(() => lucide.createIcons(), 200); });

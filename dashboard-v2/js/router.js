@@ -32,6 +32,10 @@ const App = {
     this.connectWS();
     this.startPolling();
     this.renderNotifications();
+    // Initialize all lucide icons (hamburger, nav, header, etc.)
+    if (typeof lucide !== 'undefined') {
+      lucide.createIcons();
+    }
     App.emit('ready');
   },
 
@@ -136,6 +140,10 @@ const App = {
 
     this.state.activeTab = tabId.replace('tab-', '');
     App.emit('tabChange', this.state.activeTab);
+    // Re-render icons in the newly visible tab
+    if (typeof lucide !== 'undefined') {
+      setTimeout(() => lucide.createIcons(), 50);
+    }
   },
 
   /** Toggle play/pause */
@@ -197,6 +205,13 @@ const App = {
       // Update UI
       byId('risk-mode-select').value = this.state.riskMode;
       this.updateStatusBadge();
+
+      // Set price for active ticker
+      const prices = data.ticker_prices || {};
+      if (prices[this.state.activeTicker] && this.el.tickerPrice) {
+        const price = prices[this.state.activeTicker];
+        this.el.tickerPrice.textContent = '$' + Number(price).toFixed(2);
+      }
 
       // Render ticker switcher
       this.renderTickerSwitcher();
