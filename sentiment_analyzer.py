@@ -5,6 +5,48 @@ import re
 import os
 import json
 import database
+from typing import Optional, Tuple
+
+# ── FinBERT integration (optional) ──
+# When available, uses FinBERT (ProsusAI/finbert) for neural sentiment analysis.
+# Falls back gracefully to lexical if transformers/torch are not installed.
+_FINBERT_AVAILABLE = False
+try:
+    import torch
+    from transformers import AutoTokenizer, AutoModelForSequenceClassification
+    _FINBERT_TOKENIZER = AutoTokenizer.from_pretrained("ProsusAI/finbert")
+    _FINBERT_MODEL = AutoModelForSequenceClassification.from_pretrained("ProsusAI/finbert")
+    _FINBERT_AVAILABLE = True
+    logging.info("[FinBERT] Neural sentiment model loaded successfully.")
+except ImportError:
+    logging.info("[FinBERT] transformers/torch not available — using lexical sentiment only.")
+except Exception as e:
+    logging.warning(f"[FinBERT] Failed to load model: {e} — using lexical sentiment only.")
+
+
+def finbert_sentiment(text: str) -> Optional[Tuple[float, float]]:
+    """Analyze text sentiment using FinBERT.
+    
+    Returns (score, confidence) where score ∈ [-1, 1], confidence ∈ [0, 1].
+    Returns None if FinBERT is unavailable.
+    """
+    if not _FINBERT_AVAILABLE:
+        return None
+    try:
+        inputs = _FINBERT_TOKENIZER(text, return_tensors="pt", truncation=True, max_length=512)
+        with torch.no_grad():
+            outputs = _FINBERT_MODEL(**inputs)
+        probs = torch.nn.functional.softmax(outputs.logits, dim=-1).squeeze()
+        # FinBERT outputs: [positive, negative, neutral] logits
+        pos, neg, neu = probs[0].item(), probs[1].item(), probs[2].item()
+        # Map to [-1, 1] score: positive - negative, weighted by confidence
+        score = pos - neg
+        confidence = 1.0 - neu  # higher confidence = less neutral
+        return (score, confidence)
+    except Exception as e:
+        logging.debug(f"[FinBERT] Inference error: {e}")
+        return None
+
 
 # Lexicon for financial sentiment analysis fallback
 FINANCIAL_LEXICON = {
@@ -37,7 +79,19 @@ TICKER_KEYWORDS = {
 }
 
 def analyze_text_sentiment(text):
-    """Calculates a sentiment score between -1.0 and 1.0 based on lexical matching."""
+    """Calculates a sentiment score between -1.0 and 1.0.
+    
+    Uses FinBERT neural model when available, falls back to lexical matching.
+    """
+    # Try FinBERT first
+    finbert_result = finbert_sentiment(text)
+    if finbert_result is not None:
+        score, confidence = finbert_result
+        # Only use FinBERT if it has reasonable confidence (>30% non-neutral)
+        if confidence > 0.30:
+            return score
+    
+    # Fallback: lexical matching
     text = text.lower()
     score = 0.0
     words = re.findall(r'\b\w+\b', text)

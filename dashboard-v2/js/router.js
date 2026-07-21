@@ -225,6 +225,52 @@ const App = {
     }, { passive: true });
   },
 
+  // ── Keyboard Navigation ──
+  initKeyboardNav() {
+    const tabKeys = {
+      '1': 'tab-dashboard', '2': 'tab-neural', '3': 'tab-assets',
+      '4': 'tab-strategy', '5': 'tab-llm', '6': 'tab-agents',
+      '7': 'tab-settings', '8': 'tab-optimizations', '9': 'tab-architecture',
+      '0': 'tab-logs',
+    };
+
+    document.addEventListener('keydown', (e) => {
+      // Escape: close drawer
+      if (e.key === 'Escape') {
+        if (this.el.navDrawer?.style.left === '0px' || this.el.navDrawer?.style.left === '0') {
+          this.closeDrawer();
+          e.preventDefault();
+        }
+        return;
+      }
+
+      // Ctrl+[1-9,0] to switch tabs
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
+        const tabId = tabKeys[e.key];
+        if (tabId && byId(tabId)) {
+          e.preventDefault();
+          this.switchTab(tabId);
+        }
+      }
+
+      // Arrow up/down within drawer: cycle nav items
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        const drawer = this.el.navDrawer;
+        if (drawer?.style.left === '0px' || drawer?.style.left === '0') {
+          const tabs = drawer.querySelectorAll('.nav-tab');
+          const activeIdx = Array.from(tabs).findIndex(t => t === document.activeElement);
+          if (activeIdx >= 0) {
+            e.preventDefault();
+            const next = e.key === 'ArrowDown'
+              ? (activeIdx + 1) % tabs.length
+              : (activeIdx - 1 + tabs.length) % tabs.length;
+            tabs[next].focus();
+          }
+        }
+      }
+    });
+  },
+
   async loadInitState() {
     try {
       const data = await API.initState();
@@ -435,5 +481,48 @@ const App = {
 function setInput(id, val) { const el = byId(id); if (el) el.value = val ?? ''; }
 function setCheckbox(id, val) { const el = byId(id); if (el) el.checked = !!val; }
 function getInput(id) { return byId(id)?.value || ''; }
+
+// Form validation helpers
+function validateInput(id, validator) {
+  const el = byId(id);
+  if (!el) return true;
+  el.classList.remove('error', 'valid');
+  const msg = el.parentElement?.querySelector('.validation-message');
+  if (msg) msg.className = 'validation-message';
+  const val = el.value.trim();
+  const result = validator ? validator(val) : val.length > 0;
+  if (result === true || result === '') {
+    el.classList.add('valid');
+    if (msg) msg.className = 'validation-message valid';
+    return true;
+  }
+  el.classList.add('error');
+  if (msg) {
+    msg.className = 'validation-message error';
+    msg.textContent = result || 'Invalid value';
+  }
+  return false;
+}
+
+function showEmptyState(container, { icon, title, desc, action } = {}) {
+  if (!container) return;
+  container.innerHTML = '<div class="empty-state">' +
+    (icon ? '<div class="empty-state-icon">' + icon + '</div>' : '') +
+    (title ? '<div class="empty-state-title">' + title + '</div>' : '') +
+    (desc ? '<div class="empty-state-desc">' + desc + '</div>' : '') +
+    (action || '') +
+    '</div>';
+}
+
+function showSkeleton(container, count = 3) {
+  if (!container) return;
+  container.innerHTML = '';
+  for (let i = 0; i < count; i++) {
+    const s = document.createElement('div');
+    s.className = 'skeleton skeleton-text';
+    s.style.width = (60 + Math.random() * 35) + '%';
+    container.appendChild(s);
+  }
+}
 
 document.addEventListener('DOMContentLoaded', () => App.init());

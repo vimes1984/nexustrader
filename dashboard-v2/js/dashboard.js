@@ -40,10 +40,15 @@ const Dashboard = {
       upColor: '#10b981', downColor: '#f43f5e',
       borderUpColor: '#10b981', borderDownColor: '#f43f5e',
       wickUpColor: '#10b981', wickDownColor: '#f43f5e',
+      priceLineVisible: true,
+      lastValueVisible: true,
+      priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
     });
     this.chartSeries.volume = this.chart.addHistogramSeries({
       color: 'rgba(59,130,246,0.25)', priceFormat: { type: 'volume' }, priceScaleId: '',
     });
+    // Enable animation for real-time updates
+    this.chartSeries.candles.applyOptions({ priceFormat: { type: 'price', precision: 2, minMove: 0.01 } });
     this.chart.priceScale('').applyOptions({ scaleMargins: { top: 0.75, bottom: 0 } });
 
     // Doughnut chart for weights
@@ -123,7 +128,20 @@ const Dashboard = {
         if (te) te.textContent = '$' + Number(data.price).toFixed(2);
       }
       if (data.price != null && this.chartSeries?.candles) {
-        try { this.chartSeries.candles.update({ time: data.timestamp || Math.floor(Date.now()/1000), open: data.price, high: data.price, low: data.price, close: data.price }); } catch(e) {}
+        try {
+          const ts = data.timestamp || Math.floor(Date.now()/1000);
+          this.chartSeries.candles.update({
+            time: ts,
+            open: data.open || data.price,
+            high: data.high || data.price,
+            low: data.low || data.price,
+            close: data.price
+          });
+          // Animate price marker on real-time tick
+          if (this.chart) {
+            this.chart.applyOptions({ crosshair: { mode: LightweightCharts.CrosshairMode.Normal } });
+          }
+        } catch(e) {}
       }
       this.updateKPIs(data);
       if (data.sim_progress != null) {
@@ -207,7 +225,7 @@ const Dashboard = {
   renderTrades(trades) {
     const tbody = byId('recent-trades-list'); if (!tbody) return;
     if (!trades?.length) {
-      tbody.innerHTML = '<tr><td colspan="6" style="color:var(--text-muted);text-align:center;padding:20px">No trades yet — bot is collecting data</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state" style="padding:30px 20px"><div class="empty-state-icon" style="font-size:36px">📊</div><div class="empty-state-title">No trades yet</div><div class="empty-state-desc">The bot is collecting data and analyzing market conditions. Trades will appear here once executed.</div></div></td></tr>';
       return;
     }
     tbody.innerHTML = trades.slice(0, 20).map(t => {
@@ -231,7 +249,7 @@ const Dashboard = {
   renderWeights(weights) {
     const c = byId('weights-container'); if (!c) return;
     if (!weights || !Object.keys(weights).length) {
-      c.innerHTML = '<span style="color:var(--text-muted);font-size:11px">No weights available</span>';
+      c.innerHTML = '<div class="empty-state" style="padding:20px 10px"><div class="empty-state-icon" style="font-size:24px">⚖️</div><div class="empty-state-title">No weights</div><div class="empty-state-desc" style="font-size:10px">Strategy weights appear once trading begins.</div></div>';
     } else {
       const maxW = Math.max(...Object.values(weights), 0.01);
       c.innerHTML = Object.entries(weights).map(([n,w]) => `

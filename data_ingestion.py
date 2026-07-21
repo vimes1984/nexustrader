@@ -70,9 +70,11 @@ class DataIngestion:
 
     def compute_technical_indicators(self):
         """Computes technical indicators on the historical dataset."""
-        df = self.data
-        if df.empty:
-            return
+        self._require_lock()
+        with self._data_lock:
+            if self.data.empty:
+                return
+            df = self.data
 
         # Simple Moving Averages (SMA)
         df['sma_20'] = df['close'].rolling(window=20).mean()
@@ -98,9 +100,10 @@ class DataIngestion:
         rs = avg_gain / (avg_loss + 1e-9)
         df['rsi'] = 100.0 - (100.0 / (1.0 + rs))
 
-        # Bollinger Bands
+        # Bollinger Bands (20-period, 2 std dev, uses POPULATION std ddof=0)
+        # Standard Bollinger uses population standard deviation, not sample
         df['bb_mid'] = df['close'].rolling(window=20).mean()
-        df['bb_std'] = df['close'].rolling(window=20).std()
+        df['bb_std'] = df['close'].rolling(window=20).std(ddof=0)
         df['bb_upper'] = df['bb_mid'] + (2 * df['bb_std'])
         df['bb_lower'] = df['bb_mid'] - (2 * df['bb_std'])
 
@@ -124,7 +127,8 @@ class DataIngestion:
         df['stoch_d'] = df['stoch_k'].rolling(window=3).mean()
         
         # Clean up NaNs
-        self.data = df.bfill().ffill()
+        df = df.bfill().ffill()
+        self.data = df
 
     def subscribe(self, callback):
         """Subscribe to live/simulated price ticks."""
@@ -239,6 +243,7 @@ class DataIngestion:
                         'apiKey': api_key,
                         'secret': api_secret,
                         'enableRateLimit': True,
+                        'timeout': 15000,
                     })
                     exchange_failures = 0
                     logging.info(f"[LIVE POLLING] Initialized live ticker polling from exchange: {broker_type.upper()}")
@@ -303,48 +308,57 @@ class DataIngestion:
                         }
                 
                 if row is not None:
-                    if not self.data.empty:
-                        last_idx = self.data.index[-1]
-                        last_ts = self.data.loc[last_idx, 'timestamp']
-                        
-                        # Parse last timestamp
-                        if isinstance(last_ts, str):
-                            last_ts_dt = pd.to_datetime(last_ts)
-                        else:
-                            last_ts_dt = last_ts
+                    self._require_lock()
+                    with self._data_lock:
+                        if not self.data.empty:
+                            max_rows = 1000
+                            if len(self.data) > max_rows:
+                                # Trim to prevent unbounded memory growth
+                                self.data = self.data.iloc[-max_rows:].reset_index(drop=True)
                             
-                        now_dt = pd.Timestamp.now(tz=last_ts_dt.tz if hasattr(last_ts_dt, 'tz') else None)
-                        
-                        # Calculate interval duration limit in seconds
-                        seconds_limit = 3600
-                        if self.interval == '1m':
-                            seconds_limit = 60
-                        elif self.interval == '5m':
-                            seconds_limit = 300
-                        elif self.interval == '15m':
-                            seconds_limit = 900
-                        elif self.interval == '1d':
-                            seconds_limit = 86400
+                            last_idx = self.data.index[-1]
+                            last_ts = self.data.loc[last_idx, 'timestamp']
                             
-                        # If pandas Timestamps are timezone-naive/aware, strip tz for simple comparison
-                        now_naive = now_dt.tz_localize(None) if hasattr(now_dt, 'tz_localize') and now_dt.tz is not None else now_dt
-                        last_naive = last_ts_dt.tz_localize(None) if hasattr(last_ts_dt, 'tz_localize') and last_ts_dt.tz is not None else last_ts_dt
-                        time_diff = (now_naive - last_naive).total_seconds()
-                        
-                        if time_diff < seconds_limit:
-                            # Update the last candle
-                            self.data.loc[last_idx, 'close'] = price
-                            self.data.loc[last_idx, 'high'] = max(self.data.loc[last_idx, 'high'], price)
-                            self.data.loc[last_idx, 'low'] = min(self.data.loc[last_idx, 'low'], price)
+                            # Parse last timestamp
+                            if isinstance(last_ts, str):
+                                last_ts_dt = pd.to_datetime(last_ts)
+                            else:
+                                last_ts_dt = last_ts
+                                
+                            now_dt = pd.Timestamp.now(tz=last_ts_dt.tz if hasattr(last_ts_dt, 'tz') else None)
+                            
+                            # Calculate interval duration limit in seconds
+                            seconds_limit = 3600
+                            if self.interval == '1m':
+                                seconds_limit = 60
+                            elif self.interval == '5m':
+                                seconds_limit = 300
+                            elif self.interval == '15m':
+                                seconds_limit = 900
+                            elif self.interval == '1d':
+                                seconds_limit = 86400
+                                
+                            # If pandas Timestamps are timezone-naive/aware, strip tz for simple comparison
+                            now_naive = now_dt.tz_localize(None) if hasattr(now_dt, 'tz_localize') and now_dt.tz is not None else now_dt
+                            last_naive = last_ts_dt.tz_localize(None) if hasattr(last_ts_dt, 'tz_localize') and last_ts_dt.tz is not None else last_ts_dt
+                            time_diff = (now_naive - last_naive).total_seconds()
+                            
+                            if time_diff < seconds_limit:
+                                # Update the last candle
+                                self.data.loc[last_idx, 'close'] = price
+                                self.data.loc[last_idx, 'high'] = max(self.data.loc[last_idx, 'high'], price)
+                                self.data.loc[last_idx, 'low'] = min(self.data.loc[last_idx, 'low'], price)
+                            else:
+                                # Append new candle
+                                row['timestamp'] = last_ts_dt + pd.Timedelta(seconds=seconds_limit)
+                                self.data = pd.concat([self.data, pd.DataFrame([row])], ignore_index=True)
                         else:
-                            # Append new candle
-                            row['timestamp'] = last_ts_dt + pd.Timedelta(seconds=seconds_limit)
-                            self.data = pd.concat([self.data, pd.DataFrame([row])], ignore_index=True)
-                    else:
-                        self.data = pd.DataFrame([row])
+                            self.data = pd.DataFrame([row])
                         
                     self.compute_technical_indicators()
-                    updated_row = self.data.iloc[-1].to_dict()
+                    self._require_lock()
+                    with self._data_lock:
+                        updated_row = self.data.iloc[-1].to_dict()
                     
                     # Convert pandas Timestamp to string format for JSON serialization
                     if 'timestamp' in updated_row and not isinstance(updated_row['timestamp'], str):

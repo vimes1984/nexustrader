@@ -23,7 +23,7 @@ const Optimizations = {
       const data = await API.optimizations();
       const opts = data?.optimizations || [];
       if (!opts.length) {
-        el.innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:20px">No pending optimizations. Agents haven\'t suggested any changes yet.</p>';
+        el.innerHTML = '<div class="empty-state"><div class="empty-state-icon" style="font-size:36px">🧹</div><div class="empty-state-title">All optimized</div><div class="empty-state-desc">No pending optimizations. Agents haven\'t suggested any changes yet.</div></div>';
         return;
       }
       el.innerHTML = opts.map(o => {
@@ -46,7 +46,7 @@ const Optimizations = {
         </div>`;
       }).join('');
     } catch(e) {
-      el.innerHTML = '<p style="color:var(--neon-red);text-align:center;padding:20px">❌ Failed to load optimizations</p>';
+      el.innerHTML = '<div class="empty-state"><div class="empty-state-icon" style="font-size:36px">❌</div><div class="empty-state-title">Failed to load</div><div class="empty-state-desc">Could not fetch optimization data from the server.</div></div>';
     }
   },
 

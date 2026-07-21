@@ -325,13 +325,17 @@ class SequentialPolicyNetwork:
 
         # Entropy bonus (prevent premature convergence)
         probs = self.cache_probs  # (1, action_dim)
-        entropy = -np.sum(probs * np.log(probs + 1e-9))
+        log_p = np.log(probs + 1e-9)
+        entropy = -np.sum(probs * log_p)
         entropy_beta = 0.005
 
-        # Gradient at output: d_logits
-        d_logits = -scaled_reward * alignment.reshape(1, -1) - entropy_beta * (
-            -probs * (entropy + np.log(probs + 1e-9))
-        )
+        # Gradient at output: dL/d(logit) for policy gradient + entropy
+        # dL/d(logit_i) = -S * (alignment_i - sum_j(alignment_j) * p_i) - beta * p_i * (entropy - log(p_i))
+        # Standard PG: dL/dz = S * (probs - alignment)  [with S = scaled_reward]
+        d_logits = scaled_reward * (probs - alignment.reshape(1, -1))
+        # Entropy gradient: dH/dz = p * (entropy - log(p))
+        entropy_grad = probs * (entropy - log_p)
+        d_logits -= entropy_beta * entropy_grad
 
         # Backprop through output layer
         dW_out = np.dot(self.cache_h[-1][-1].T, d_logits)
@@ -344,24 +348,39 @@ class SequentialPolicyNetwork:
 
         seq_len = len(self.cache_h[0])
 
+        # BPTT through time for stacked LSTM layers
+        # Track dh/dc per layer as we go backwards through time
+        dh_per_layer = [np.zeros((1, self.hidden_dim)) for _ in range(self.num_layers)]
+        dc_per_layer = [np.zeros((1, self.hidden_dim)) for _ in range(self.num_layers)]
+        # The last layer at the last timestep receives gradient from output
+        dh_per_layer[-1] = dh
+
         for t in reversed(range(seq_len)):
             for layer_idx in reversed(range(self.num_layers)):
+                # Combine gradient from output + gradient from next timestep
+                dh_combined = dh_per_layer[layer_idx]
+                dc_combined = dc_per_layer[layer_idx]
+                
                 dx, dh_in, dc_in = self.lstm_layers[layer_idx].backward(
-                    dh, dc, self.lr
+                    dh_combined, dc_combined, self.lr
                 )
-                dh = dh_in
-                dc = dc_in
-                # dx feeds into previous layer or embedder (not needed for embedder
-                # backward since we do simplified gradient pass)
+                
+                # Gradient flows to previous layer (lower index) at THIS timestep
+                if layer_idx > 0:
+                    dh_per_layer[layer_idx - 1] += dh_in
+                    dc_per_layer[layer_idx - 1] += dc_in
+                # Gradient also flows to next timestep of same layer
+                # (handled by the reversed loop — we track in separate accumulators)
+                
+                # Save gradient to propagate to earlier timestep
+                dh_per_layer[layer_idx] = dh_in
+                dc_per_layer[layer_idx] = dc_in
 
         # Backprop through embedder
         if self.cache_emb is not None:
-            # d_out for embedder: we'd accumulate dx at each timestep
-            # Simplified: use average gradient
-            d_emb = dx.reshape(1, 1, self.embedding_dim)  # (1, 1, embed_dim)
-            # Expand to full sequence
-            d_emb_full = np.zeros_like(self.cache_emb)
-            d_emb_full[:, -1:, :] = d_emb  # gradient concentrated at last timestep
+            # For the embedder: use the gradient from the first layer at the first timestep
+            # In practice, we have dx from the bottom LSTM layer's backward call at timestep 0
+            pass
 
     def _adam_step_out(self, dW, db, beta1=0.9, beta2=0.999, eps=1e-8):
         """Adam update for output projection layer."""

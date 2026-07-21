@@ -105,9 +105,6 @@ def compute_safe_fraction(
             "signal": "cold_start_default"
         }
     
-    # Minimum safe fraction when we have data but it's poor (prevent death spiral)
-    # If win rate is very low, still allow tiny positions to regain confidence
-    min_safe_fraction = 0.06  # 6% minimum — ensures $5+ even on $90 accounts
     max_allocation = 0.15  # Hard cap: max 15% of portfolio per trade
 
     # Apply half-kelly for safety
@@ -127,9 +124,14 @@ def compute_safe_fraction(
 
     safe_fraction = effective_kelly * drawdown_penalty
 
-    # Hard cap
+    # Hard cap (upper bound)
     safe_fraction = min(safe_fraction, ABSOLUTE_MAX_FRACTION)
-    safe_fraction = max(safe_fraction, min_safe_fraction)
+    # Minimum floor: only when drawdown penalty hasn't halted trading
+    # This ensures small accounts can still trade tiny sizes to learn
+    # but does NOT override the drawdown halt.
+    if drawdown_penalty > 0:
+        min_safe_fraction = 0.02  # 2% for data-rich setups (was 0.06 — reduced to avoid overriding safety)
+        safe_fraction = max(safe_fraction, min_safe_fraction)
 
     # Determine signal
     if safe_fraction <= 0:

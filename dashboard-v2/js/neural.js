@@ -32,7 +32,7 @@ const Neural = {
     try {
       const data = await API.brains();
       if (!data?.brains?.length) {
-        el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted)">No trained brains yet. Run historical training first.</div>';
+        el.innerHTML = '<div class="empty-state"><div class="empty-state-icon" style="font-size:36px">🧠</div><div class="empty-state-title">No trained brains</div><div class="empty-state-desc">Run the historical training pipeline to create policy networks for your tickers.</div></div>';
         return;
       }
       el.innerHTML = data.brains.map(b => `
@@ -48,7 +48,7 @@ const Neural = {
           </div>
         </div>`).join('');
     } catch(e) {
-      el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--neon-red)">Failed to load brains</div>';
+      el.innerHTML = '<div class="empty-state"><div class="empty-state-icon" style="font-size:36px">❌</div><div class="empty-state-title">Connection error</div><div class="empty-state-desc">Could not load brain data from the server.</div></div>';
     }
   },
 

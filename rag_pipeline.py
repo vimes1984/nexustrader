@@ -250,9 +250,23 @@ class RAGPipeline:
             logger.info("No existing RAG index found, building new one...")
             return self.build_index()
 
-        self.index = faiss.read_index(idx_path)
-        with open(docs_path, "r") as f:
-            self.documents = json.load(f)
+        try:
+            self.index = faiss.read_index(idx_path)
+        except Exception as e:
+            logger.warning(f"Failed to load FAISS index (corrupted?): {e}")
+            return self.build_index()
+            
+        try:
+            with open(docs_path, "r") as f:
+                self.documents = json.load(f)
+        except Exception as e:
+            logger.warning(f"Failed to load documents.json (corrupted?): {e}")
+            return self.build_index()
+
+        # Validate index matches documents
+        if self.index.ntotal != len(self.documents):
+            logger.warning(f"Index ({self.index.ntotal}) vs documents ({len(self.documents)}) mismatch, rebuilding...")
+            return self.build_index()
 
         self.ensure_embedder()
         self._loaded = True

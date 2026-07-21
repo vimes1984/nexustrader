@@ -3897,426 +3897,52 @@ def api_training_run(request: Request):
         "message": f"Training started for {ticker} ({since_days}d, {epochs} epochs). This runs in background.",
         "ticker": ticker,
     }
-# ═══════════════════════════════════════════════════════════════════
-# Dashboard v2 API Routes — added 2026-07-21 for SPA support
-# These endpoints are called by dashboard-v2/js/*.js modules
-# ═══════════════════════════════════════════════════════════════════
 
-@app.get("/api/system/broker_config")
-def api_broker_config():
-    """Get broker/exchange configuration for dashboard."""
-    return {
-        "broker": database.load_setting("broker", "kraken"),
-        "api_key": database.load_setting("kraken_api_key", ""),
-        "api_secret": database.load_setting("kraken_api_secret", ""),
-        "trading_mode": database.load_setting("trading_mode", "paper"),
-        "test_result": database.load_setting("last_broker_test", ""),
-    }
+if __name__ == "__main__":
+    import sys
+    is_headless = "--headless" in sys.argv
+    has_display = ("DISPLAY" in os.environ or "WAYLAND_DISPLAY" in os.environ) and not is_headless
+    
+    if has_display:
+        import threading
+        import time
+        
+        def run_server():
+            logging.info("Starting backend server thread...")
+            try:
+                uvicorn.run(app, host="0.0.0.0", port=8000, log_level="warning")
+            except Exception as e:
+                logging.error(f"Uvicorn server crashed: {e}")
 
-@app.post("/api/system/broker_config")
-async def api_broker_config_save(request: Request):
-    data = await _get_json(request)
-    for k in ['broker','api_key','api_secret','trading_mode']:
-        if k in data:
-            db_key = 'kraken_' + k if k in ('api_key','api_secret') and data.get('broker','kraken') == 'kraken' else k
-            database.save_setting(db_key if db_key.startswith('kraken_') else k, str(data[k]))
-    return {"ok": True}
-
-@app.get("/api/system/broker_config")
-def api_broker_config():
-    return {
-        "broker": database.load_setting("broker","kraken"),
-        "api_key": database.load_setting("kraken_api_key",""),
-        "api_secret": database.load_setting("kraken_api_secret",""),
-        "trading_mode": getattr(orchestrator,'trading_mode','paper'),
-        "test_result": database.load_setting("last_broker_test",""),
-    }
-
-@app.post("/api/system/broker_config")
-async def api_broker_config_save(request: Request):
-    d = await _get_json(request)
-    for k in ['broker','api_key','api_secret','trading_mode']:
-        if k in d:
-            dbk = 'kraken_'+k if k in ('api_key','api_secret') else k
-            database.save_setting(dbk, str(d[k]))
-    return {"ok":True}
-
-# Helper for async JSON parsing
-async def _get_json(request: Request):
-    try: return await request.json()
-    except Exception: return {}
-
-@app.get("/api/system/config")
-def api_system_config_v2():
-    """Get trading system config for dashboard settings tab."""
-    return {
-        "ok": True,
-        "max_position_size": float(database.load_setting("max_position_size", "20")),
-        "max_drawdown": float(database.load_setting("max_drawdown", "0.25")),
-        "cooldown_minutes": int(database.load_setting("cooldown_minutes", "5")),
-        "signal_threshold": float(database.load_setting("signal_threshold", "0.50")),
-        "sl_multiplier": float(database.load_setting("sl_multiplier", "3.0")),
-        "tp_multiplier": float(database.load_setting("tp_multiplier", "5.0")),
-        "risk_mode": database.load_setting("risk_mode", "aggressive"),
-        "max_concurrent": int(database.load_setting("max_concurrent_positions", "3")),
-        "trading_mode": getattr(orchestrator, 'trading_mode', 'live'),
-    }
-
-@app.post("/api/system/config")
-async def api_system_config_save(request: Request):
-    data = await _get_json(request)
-    for k in ['max_position_size','max_drawdown','cooldown_minutes',
-              'signal_threshold','sl_multiplier','tp_multiplier','risk_mode']:
-        if k in data: database.save_setting(k, str(data[k]))
-    return {"ok": True}
-
-@app.post("/api/system/save_setting")
-async def api_save_setting(request: Request):
-    data = await _get_json(request)
-    k, v = data.get('key',''), data.get('value','')
-    if not k: return {"ok": False, "error": "key required"}
-    database.save_setting(k, str(v))
-    return {"ok": True}
-
-@app.post("/api/system/risk_mode")
-async def api_risk_mode(request: Request):
-    data = await _get_json(request)
-    mode = data.get('mode','aggressive')
-    database.save_setting("risk_mode", mode)
-    return {"ok": True, "risk_mode": mode}
-
-@app.get("/api/system/test_broker")
-def api_test_broker():
-    try:
-        from kraken_client import KrakenClient
-        balance = KrakenClient().get_balance()
-        return {"ok": True, "connected": True, "balance": balance}
-    except Exception as e:
-        return {"ok": False, "connected": False, "error": str(e)[:200]}
-
-@app.post("/api/system/reset_cooldowns")
-def api_reset_cooldowns():
-    for attr in ['cooldowns','ticker_cooldowns']:
-        obj = getattr(orchestrator, attr, None)
-        if obj is not None: obj.clear()
-    return {"ok": True}
-
-@app.get("/api/system/daily_goal")
-def api_daily_goal():
-    goal = float(database.load_setting("daily_profit_goal","1000"))
-    enabled = database.load_setting("daily_goal_enabled","false").lower()=="true"
-    today = getattr(orchestrator,'today_pnl',0)
-    return {"goal":goal,"enabled":enabled,"today_pnl":today,
-            "progress_pct":round(today/goal*100,1) if goal else 0,"remaining":round(goal-today,2)}
-
-@app.post("/api/system/daily_goal")
-async def api_daily_goal_set(request: Request):
-    data = await _get_json(request)
-    if 'goal' in data: database.save_setting("daily_profit_goal",str(data['goal']))
-    if 'enabled' in data: database.save_setting("daily_goal_enabled",str(data['enabled']).lower())
-    return {"ok": True}
-
-@app.get("/api/system/notifications")
-def api_notifications_get():
-    return {
-        "ok": True,
-        "smtp_host": database.load_setting("notif_smtp_host","192.168.0.77"),
-        "smtp_port": int(database.load_setting("notif_smtp_port","10250")),
-        "smtp_user": database.load_setting("notif_smtp_user",""),
-        "smtp_pass": database.load_setting("notif_smtp_pass",""),
-        "email_recipient": database.load_setting("notif_email_recipient",""),
-        "email_enabled": database.load_setting("notif_email_enabled","false").lower()=="true",
-    }
-
-@app.post("/api/system/notifications")
-async def api_notifications_save(request: Request):
-    data = await _get_json(request)
-    for k in ['smtp_host','smtp_port','smtp_user','smtp_pass','email_recipient','email_enabled']:
-        if k in data: database.save_setting("notif_"+k, str(data[k]))
-    return {"ok": True}
-
-@app.post("/api/system/notifications/test")
-def api_notifications_test():
-    try:
-        from proton_bridge import send_notification
-        r = send_notification(
-            to=database.load_setting("notif_email_recipient","churchill.c.j@gmail.com"),
-            subject="🔔 NexusTrader Test Alert",
-            body="Test from NexusTrader. If you see this, Proton Bridge works! 🍌")
-        return {"ok": True, "sent": True, "result": str(r)[:200]}
-    except Exception as e:
-        return {"ok": False, "sent": False, "error": str(e)[:300]}
-
-@app.get("/api/exchange/status")
-def api_exchange_status():
-    try:
-        from kraken_client import KrakenClient
-        return {"ok":True,"connected":True,"exchange":"Kraken"}
-    except Exception as e:
-        return {"ok":False,"connected":False,"error":str(e)[:200]}
-
-@app.post("/api/assets/save")
-async def api_assets_save(request: Request):
-    data = await _get_json(request)
-    t = data.get('ticker','')
-    if not t: return {"ok":False,"error":"ticker required"}
-    tickers = getattr(orchestrator,'tickers',[])
-    if t not in tickers: tickers.append(t)
-    database.save_setting("active_tickers",",".join(tickers))
-    return {"ok":True,"ticker":t}
-
-@app.post("/api/assets/delete")
-async def api_assets_delete(request: Request):
-    data = await _get_json(request)
-    t = data.get('ticker','')
-    if not t: return {"ok":False,"error":"ticker required"}
-    tickers = getattr(orchestrator,'tickers',[])
-    if t in tickers: tickers.remove(t)
-    database.save_setting("active_tickers",",".join(tickers))
-    return {"ok":True,"ticker":t,"removed":True}
-
-@app.post("/api/neural/brain/save")
-async def api_brain_save(request: Request):
-    data = await _get_json(request)
-    name = data.get('name', f"brain_{int(time.time())}")
-    try:
-        if hasattr(orchestrator,'save_brain'):
-            orchestrator.save_brain(name, data.get('weights',{}))
-        return {"ok":True,"name":name,"saved":True}
-    except Exception as e:
-        return {"ok":False,"error":str(e)[:200]}
-
-@app.post("/api/neural/brain/delete")
-async def api_brain_delete(request: Request):
-    data = await _get_json(request)
-    name = data.get('name','')
-    if not name: return {"ok":False,"error":"name required"}
-    database.save_setting(f"brain_{name}","")
-    return {"ok":True,"deleted":name}
-
-@app.get("/api/system/agent_runs")
-def api_agent_runs_v2():
-    import glob, os as _os2
-    base = _os2.path.dirname(_os2.path.abspath(__file__))
-    runs = []
-    for f in sorted(glob.glob(_os2.path.join(base,'blog','daily_summaries','*.md')),reverse=True)[:10]:
-        runs.append({"file":_os2.path.basename(f),"timestamp":_os2.path.getmtime(f),"size":_os2.path.getsize(f)})
-    return {"runs":runs,"count":len(runs)}
-
-@app.get("/api/system/agent_llm")
-def api_agent_llm_get():
-    return {
-        "enabled": database.load_setting("enable_local_llama","false").lower()=="true",
-        "model": "Llama-3.2-3B-Instruct-Q4_K_M",
-        "server_url": database.load_setting("llama_server_url","http://192.168.0.77:8080/v1/chat/completions"),
-        "fallback_to_openclaw": database.load_setting("llama_fallback_to_openclaw","true").lower()=="true",
-    }
-
-@app.post("/api/system/agent_llm")
-async def api_agent_llm_save(request: Request):
-    data = await _get_json(request)
-    if 'enabled' in data: database.save_setting("enable_local_llama", str(data['enabled']).lower())
-    if 'server_url' in data: database.save_setting("llama_server_url", data['server_url'])
-    if 'fallback_to_openclaw' in data: database.save_setting("llama_fallback_to_openclaw", str(data['fallback_to_openclaw']).lower())
-    return {"ok":True}
-
-@app.get("/api/system/prompts")
-def api_prompts_get():
-    return {
-        "self_dev": database.load_setting("prompt_self_developer",""),
-        "nn_optimizer": database.load_setting("prompt_nn_agent",""),
-        "risk_auditor": database.load_setting("prompt_risk_auditor",""),
-        "allocator": database.load_setting("prompt_allocator_agent",""),
-        "sentiment": database.load_setting("prompt_sentiment_agent",""),
-    }
-
-@app.post("/api/system/prompts")
-async def api_prompts_save(request: Request):
-    data = await _get_json(request)
-    for k,dbk in {'self_dev':'prompt_self_developer','nn_optimizer':'prompt_nn_agent',
-                   'risk_auditor':'prompt_risk_auditor','allocator':'prompt_allocator_agent',
-                   'sentiment':'prompt_sentiment_agent'}.items():
-        if k in data: database.save_setting(dbk, str(data[k]))
-    return {"ok":True}
-
-@app.get("/api/quant/status")
-def api_quant_status():
-    return {"agents": {
-        "self_developer": {"last_run":database.load_setting("last_self_dev","never"),"status":"idle"},
-        "nn_optimizer": {"last_run":database.load_setting("last_nn_opt","never"),"status":"idle"},
-        "risk_auditor": {"last_run":database.load_setting("last_risk_audit","never"),"status":"idle"},
-        "allocator": {"last_run":database.load_setting("last_allocator","never"),"status":"idle"},
-        "sentiment": {"last_run":database.load_setting("last_sentiment_agent","never"),"status":"idle"},
-    }, "llm_enabled": database.load_setting("enable_local_llama","false").lower()=="true"}
-
-@app.post("/api/quant/trigger")
-async def api_quant_trigger(request: Request):
-    data = await _get_json(request)
-    agent = data.get('agent','')
-    agents = {
-        'self_developer': ('agent_self_developer','run_self_developer'),
-        'nn_optimizer': ('nn_agent','run_nn_optimizer'),
-        'risk_auditor': ('risk_monitor','run_risk_audit'),
-        'allocator': ('allocator_agent','run_allocator'),
-        'sentiment': ('sentiment_agent','run_sentiment_agent'),
-    }
-    if agent not in agents: return {"ok":False,"error":f"Unknown agent: {agent}"}
-    try:
-        mod = __import__(agents[agent][0])
-        getattr(mod, agents[agent][1])()
-        database.save_setting(f"last_{agent}", datetime.utcnow().isoformat())
-        return {"ok":True,"agent":agent}
-    except Exception as e:
-        return {"ok":False,"error":str(e)[:200]}
-
-@app.get("/api/system/optimizations")
-def api_optimizations_list():
-    return {"optimizations": [
-        {"id":"widen_sl","title":"Widen Stop Losses","description":"SL=4x ATR (was 3x). 9/10 trades hit SL.","severity":"critical"},
-        {"id":"reduce_size","title":"Reduce Position Size","description":"Cap at 5%% (was 15%%) until winrate>30%%.","severity":"high"},
-        {"id":"entry_delay","title":"Add Entry Confirmation","description":"Wait 1 candle after signal before entry.","severity":"high"},
-        {"id":"disable_alt","title":"Disable ADA/DOGE","description":"0/2 winrate each. High meme volatility.","severity":"medium"},
-        {"id":"add_hedge","title":"BTC Correlation Hedge","description":"Monitor BTC for alt correlation risk.","severity":"medium"},
-    ], "count": 5}
-
-@app.post("/api/optimizations/apply/{opt_id}")
-def api_opt_apply(opt_id: str):
-    if opt_id == "widen_sl": database.save_setting("sl_multiplier","4.0")
-    elif opt_id == "reduce_size": database.save_setting("max_position_alloc","0.05")
-    elif opt_id == "entry_delay": database.save_setting("confirmation_candle_required","true")
-    elif opt_id == "disable_alt":
-        tickers = [t for t in getattr(orchestrator,'tickers',[]) if t not in ('ADA-USD','DOGE-USD')]
-        database.save_setting("active_tickers",",".join(tickers))
-    elif opt_id == "add_hedge": database.save_setting("btc_correlation_hedge","true")
-    else: return {"ok":False,"error":f"Unknown: {opt_id}"}
-    return {"ok":True,"applied":opt_id}
-
-@app.post("/api/optimizations/apply/all")
-def api_opt_apply_all():
-    for o in ["widen_sl","reduce_size","entry_delay","disable_alt","add_hedge"]:
-        try: api_opt_apply(o)
-        except Exception:
-            pass
-    return {"ok":True,"applied":["widen_sl","reduce_size","entry_delay","disable_alt","add_hedge"]}
-
-@app.post("/api/optimizations/review")
-def api_opt_review():
-    try:
-        from self_improvement_agent import run_self_improvement
-        run_self_improvement()
-        return {"ok":True}
-    except Exception as e:
-        return {"ok":False,"error":str(e)[:200]}
-
-@app.post("/api/system/optimize/parameters")
-def api_optimize_params():
-    try:
-        from self_improvement_agent import run_self_improvement
-        run_self_improvement()
-        return {"ok":True}
-    except Exception as e:
-        return {"ok":False,"error":str(e)[:200]}
-
-@app.post("/api/system/optimize/long_term")
-def api_optimize_lt():
-    try:
-        from long_term_quant import run_long_term_strategy_optimization
-        run_long_term_strategy_optimization()
-        return {"ok":True}
-    except Exception as e:
-        return {"ok":False,"error":str(e)[:200]}
-
-@app.post("/api/system/optimize/self_dev")
-def api_opt_self_dev():
-    try:
-        from agent_self_developer import run_self_developer
-        run_self_developer()
-        database.save_setting("last_self_dev",datetime.utcnow().isoformat())
-        return {"ok":True}
-    except Exception as e:
-        return {"ok":False,"error":str(e)[:200]}
-
-@app.post("/api/system/optimize/nn")
-def api_opt_nn():
-    try:
-        from nn_agent import run_nn_optimizer
-        run_nn_optimizer()
-        database.save_setting("last_nn_opt",datetime.utcnow().isoformat())
-        return {"ok":True}
-    except Exception as e:
-        return {"ok":False,"error":str(e)[:200]}
-
-@app.post("/api/system/optimize/sentiment")
-def api_opt_sentiment():
-    try:
-        from sentiment_agent import run_sentiment_agent
-        run_sentiment_agent()
-        database.save_setting("last_sentiment_agent",datetime.utcnow().isoformat())
-        return {"ok":True}
-    except Exception as e:
-        return {"ok":False,"error":str(e)[:200]}
-
-@app.post("/api/system/optimize/risk_audit")
-def api_opt_risk():
-    try:
-        from risk_monitor import run_risk_audit
-        run_risk_audit()
-        database.save_setting("last_risk_audit",datetime.utcnow().isoformat())
-        return {"ok":True}
-    except Exception as e:
-        return {"ok":False,"error":str(e)[:200]}
-
-@app.post("/api/system/optimize/allocator")
-def api_opt_alloc():
-    try:
-        from allocator_agent import run_allocator
-        run_allocator()
-        database.save_setting("last_allocator",datetime.utcnow().isoformat())
-        return {"ok":True}
-    except Exception as e:
-        return {"ok":False,"error":str(e)[:200]}
-
-@app.post("/api/system/backtest")
-async def api_backtest_v2(request: Request):
-    data = await _get_json(request)
-    t, d = data.get('ticker','BTC-USD'), int(data.get('days',30))
-    try:
-        from historical_pipeline import HistoricalPipeline
-        r = HistoricalPipeline(orchestrator).run_ticker(t, since_days=d, epochs=5)
-        return {"ok":True,"result":str(r)[:500]}
-    except Exception as e:
-        return {"ok":False,"error":str(e)[:200]}
-
-@app.post("/api/system/backup")
-def api_backup_create():
-    import shutil, os as _os2
-    base = _os2.path.dirname(_os2.path.abspath(__file__))
-    bdir = _os2.path.join(base,'backups')
-    _os2.makedirs(bdir, exist_ok=True)
-    src = _os2.path.expanduser('~/.nexustrader/nexustrader.db')
-    dst = _os2.path.join(bdir, f"backup_{int(time.time())}.db")
-    shutil.copy2(src,dst)
-    return {"ok":True,"backup":_os2.path.basename(dst),"size":_os2.path.getsize(dst)}
-
-@app.get("/api/system/backups")
-def api_backups_list():
-    import glob, os as _os2
-    bdir = _os2.path.join(_os2.path.dirname(_os2.path.abspath(__file__)),'backups')
-    fs = sorted(glob.glob(_os2.path.join(bdir,"*.db")),key=_os2.path.getmtime,reverse=True)
-    return {"backups":[{"filename":_os2.path.basename(f),"size":_os2.path.getsize(f),
-            "timestamp":_os2.path.getmtime(f)} for f in fs]}
-
-@app.get("/api/system/schedule")
-def api_schedule_get():
-    return {"ok":True,"agents":{"quant_optimizer":database.load_setting("last_self_improvement","never"),
-            "risk_auditor":database.load_setting("last_risk_audit","never"),
-            "allocator":database.load_setting("last_allocator","never")}}
-
-@app.post("/api/system/schedule")
-async def api_schedule_set(request: Request):
-    return {"ok":True,"note":"Agent schedules managed via crontab on bot VM"}
-
-
+        server_thread = threading.Thread(target=run_server, daemon=True)
+        server_thread.start()
+        time.sleep(1.2)
+        
+        try:
+            import webview
+            logging.info("Launching standalone desktop window via pywebview...")
+            webview.create_window(
+                title="NexusTrader Desktop App",
+                url="http://127.0.0.1:8000",
+                width=1280,
+                height=850,
+                resizable=True
+            )
+            webview.start()
+            logging.info("GUI window closed. Exiting application.")
+        except Exception as e:
+            logging.error(f"Native GUI window failed: {e}. Keeping server thread alive.")
+            try:
+                while server_thread.is_alive():
+                    time.sleep(1.0)
+            except KeyboardInterrupt:
+                logging.info("Shutting down via KeyboardInterrupt.")
+    else:
+        logging.info("Headless environment detected (no DISPLAY). Running server on main thread...")
+        try:
+            uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info", access_log=False)
+        except KeyboardInterrupt:
+            logging.info("Shutting down server.")
 if __name__ == "__main__":
     import sys
     is_headless = "--headless" in sys.argv

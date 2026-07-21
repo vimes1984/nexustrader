@@ -165,10 +165,29 @@ class PolicyNetwork:
         scaled_reward = np.clip(advantage * 100.0, -5.0, 5.0)
         
         probs = self.probs
-        entropy = -np.sum(probs * np.log(probs + 1e-9))
-        entropy_grad = -probs * (entropy + np.log(probs + 1e-9))
+        # Policy gradient: dL/d(logit_i) = -A * (delta_{i,action} - p_i)
+        # where A is the advantage scaled reward and action = argmax of alignment
+        # Alignment is a vector of strategy signal strengths * direction
+        #
+        # The gradient of -A * alignment · log(probs) w.r.t. logits:
+        # d/d(z_i) [-A * sum_j alignment_j * log(p_j)]
+        # = -A * [alignment_i - sum_j alignment_j * p_i]
+        # = -A * p_i * (alignment_i/p_i - sum(alignment))
+        # 
+        # Simpler form: cross-entropy style gradient
+        # dL/dz = probs * sum(alignment) - alignment
+        # where alignment is the target distribution
+        #
+        # For the standard policy gradient dL = -alignment * d(log_prob)
+        # dL/dz = probs - alignment (the standard softmax gradient)
+        d_z = scaled_reward * (probs - alignment.reshape(1, -1))
         
-        d_z = -scaled_reward * alignment.reshape(1, -1) - entropy_beta * entropy_grad
+        # Entropy bonus gradient: dH/dz where H = -sum(p * log(p))
+        # dH/dz = p * (entropy - log(p))
+        log_p = np.log(probs + 1e-9)
+        entropy = -np.sum(probs * log_p)
+        entropy_grad = probs * (entropy - log_p)
+        d_z -= entropy_beta * entropy_grad
         
         dW = [None] * len(self.W)
         db = [None] * len(self.b)
@@ -409,15 +428,14 @@ class LearningEngine:
         return raw_weights.tolist()
 
     def learn_from_trade(self, state, strategy_signals, trade_direction, pnl_percent):
+        """Performs backward propagation on the Policy Network using the trade PnL as reward."""
         # Ensure strategy_signals matches action_dim; pad/trim if needed
         target_len = self.policy_net.action_dim
         if len(strategy_signals) > target_len:
             strategy_signals = strategy_signals[:target_len]
         elif len(strategy_signals) < target_len:
             strategy_signals = list(strategy_signals) + [0.0] * (target_len - len(strategy_signals))
-        """Performs backward propagation on the Policy Network using the trade PnL as reward."""
-        # Ensure forward activations are cached for this state before backpropagation
-        self.policy_net.forward(state)
+        # backward() calls forward() internally — no need for separate forward() call
         # The reward is the actual trade percentage profit/loss (e.g. +0.024 for +2.4%)
         self.policy_net.backward(state, strategy_signals, trade_direction, pnl_percent)
         

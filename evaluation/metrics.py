@@ -116,20 +116,27 @@ def brier_score(probabilities: Sequence[float], outcomes: Sequence[int]) -> floa
 
 
 def calibration_error(probabilities: Sequence[float], outcomes: Sequence[int], bins: int = 10) -> float:
-    """Expected calibration error (ECE). Lower is better."""
+    """Expected calibration error (ECE). Lower is better.
+    
+    Uses fixed-width probability bins [0, 0.1), [0.1, 0.2), ..., [0.9, 1.0]
+    and computes |avg(predicted) - actual_freq| weighted by bin size.
+    """
     if len(probabilities) == 0:
         return 0.0
-    pairs = sorted(zip(probabilities, outcomes), key=lambda x: x[0])
-    n = len(pairs)
-    bin_size = max(1, n // bins)
+    n = len(probabilities)
     total_error = 0.0
-    for i in range(0, n, bin_size):
-        bin_pairs = pairs[i:i + bin_size]
-        if not bin_pairs:
+    bin_size = 1.0 / bins
+    
+    for i in range(bins):
+        low = i * bin_size
+        high = low + bin_size
+        # Gather all samples with predicted probability in [low, high)
+        in_bin = [(p, o) for p, o in zip(probabilities, outcomes) if low <= p < high]
+        if not in_bin:
             continue
-        avg_prob = sum(p for p, _ in bin_pairs) / len(bin_pairs)
-        actual_freq = sum(o for _, o in bin_pairs) / len(bin_pairs)
-        total_error += abs(avg_prob - actual_freq) * (len(bin_pairs) / n)
+        avg_prob = sum(p for p, _ in in_bin) / len(in_bin)
+        actual_freq = sum(o for _, o in in_bin) / len(in_bin)
+        total_error += abs(avg_prob - actual_freq) * (len(in_bin) / n)
     return total_error
 
 
@@ -139,7 +146,19 @@ def expected_value(p_win: float, win_amount: float, loss_amount: float) -> float
 
 
 def kelly_fraction(p_win: float, win_loss_ratio: float) -> float:
-    """Kelly criterion fraction. Caps at 0.25 for safety. Returns 0 if no edge."""
+    """Kelly criterion fraction for a single trade.
+    
+    Uses full Kelly: f* = (p * (b+1) - 1) / b = p - q/b
+    where p = win prob, q = 1-p, b = win/loss ratio.
+    
+    NOTE: For multiple simultaneous correlated positions, full Kelly can be
+    dangerously over-optimistic. Halve it (half-Kelly) or use the safe fraction
+    from position_sizing.compute_safe_fraction() which accounts for drawdowns,
+    calibration, and correlation.
+    
+    Returns:
+        Fraction of capital [0.0, 0.25]
+    """
     if win_loss_ratio <= 0 or p_win <= 0 or p_win >= 1:
         return 0.0
     b = win_loss_ratio

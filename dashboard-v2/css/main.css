@@ -95,6 +95,42 @@ body {
 .btn-danger { background: rgba(244, 63, 94, 0.1); border-color: rgba(244, 63, 94, 0.2); color: var(--neon-red); }
 .btn-danger:hover { background: rgba(244, 63, 94, 0.2); }
 
+/* ═══════════ FORM VALIDATION ═══════════ */
+input.error, select.error, textarea.error {
+  border-color: var(--neon-red) !important;
+  box-shadow: 0 0 0 2px rgba(244, 63, 94, 0.15) !important;
+}
+input.valid, select.valid, textarea.valid {
+  border-color: var(--neon-green) !important;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.1) !important;
+}
+.validation-message {
+  font-size: 10px; margin-top: 2px; display: none;
+}
+.validation-message.error { display: block; color: var(--neon-red); }
+.validation-message.valid { display: block; color: var(--neon-green); }
+input:user-invalid, select:user-invalid, textarea:user-invalid {
+  border-color: var(--neon-red);
+  box-shadow: 0 0 0 2px rgba(244, 63, 94, 0.1);
+}
+
+/* ═══════════ EMPTY STATE ═══════════ */
+.empty-state {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; padding: 40px 20px; text-align: center;
+}
+.empty-state-icon {
+  font-size: 48px; margin-bottom: 16px; opacity: 0.4;
+}
+.empty-state-title {
+  font-size: 16px; font-weight: 600; color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+.empty-state-desc {
+  font-size: 12px; color: var(--text-muted);
+  max-width: 320px; line-height: 1.5; margin-bottom: 16px;
+}
+
 /* ═══════════ FORM ELEMENTS ═══════════ */
 input, select, textarea {
   background: rgba(255, 255, 255, 0.05);
@@ -324,16 +360,29 @@ label { font-size: 12px; color: var(--text-secondary); display: block; margin-bo
 /* ═══════════ PRINT STYLES ═══════════ */
 @media print {
   .no-print, .controls-bar, #nav-drawer, #nav-drawer-overlay, #toast-container,
-  .chart-type-toggles, .btn, .ticker-tab, select, input[type="range"] {
+  .chart-type-toggles, .btn, .ticker-tab, select, input[type="range"],
+  #notification-dropdown, #notification-bell-btn, #btn-dev-toggle {
     display: none !important;
   }
-  body { background: white; color: black; font-size: 12px; }
-  .glass-panel { background: white; border: 1px solid #ccc; backdrop-filter: none; border-radius: 0; }
-  .kpi-value { color: #000 !important; }
+  body {
+    background: white !important; color: black !important; font-size: 11px;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .glass-panel { background: white !important; border: 1px solid #ccc !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; border-radius: 0; break-inside: avoid; }
+  .kpi-card { break-inside: avoid; page-break-inside: avoid; }
+  .kpi-value, .kpi-sub, .kpi-title { color: #000 !important; }
   .dashboard-container { padding: 0; max-width: 100%; }
-  .tab-content { display: block !important; }
-  .chart-container { height: 200px; }
-  #main-chart { height: 200px; }
+  .tab-content { display: block !important; page-break-before: auto; }
+  .tab-content.active { display: block !important; }
+  .tab-content:not(.active) { display: none !important; }
+  .chart-container { height: 180px; min-height: 0; }
+  #main-chart { height: 180px; }
+  .ticker-switcher { display: none !important; }
+  .trade-table th { background: #f5f5f5 !important; color: #333 !important; }
+  .trade-table td { color: #333 !important; }
+  .status-badge { border: 1px solid #ccc; }
+  .section-title { border-bottom-color: #ccc; }
+  @page { margin: 1.5cm; }
 }
 
 /* ═══════════ ERROR RECOVERY ═══════════ */
