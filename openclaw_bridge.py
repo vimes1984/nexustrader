@@ -1,7 +1,7 @@
-"""Bridge: routes agent LLM queries through the OpenClaw Gateway API.
+"""Bridge: routes agent LLM queries through OpenClaw Gateway API or local LLaMA.
 
 Replaces direct Gemini/OpenAI/Anthropic calls in quant agent files.
-All agents call this instead of query_gemini_robust().
+All agents call query_auto() (or query_openclaw() / query_llama() directly).
 Handles auth, HTTP errors, backoff, and JSON parsing.
 """
 import json
@@ -14,9 +14,13 @@ import urllib.error
 
 logger = logging.getLogger(__name__)
 
-# Default OpenClaw Gateway endpoint (LAN). Override via DB setting 'openclaw_gateway_url'.
+# OpenClaw Gateway defaults (LAN).
 DEFAULT_GATEWAY_URL = "http://192.168.0.197:18789/v1/chat/completions"
 DEFAULT_GATEWAY_TOKEN = "c49d2de941b0ec6a93e2fd89bf293ee8cd9f8e805cdda2d6"
+
+# Local LLaMA server defaults (llama.cpp OpenAI-compatible API on LAN)
+DEFAULT_LLAMA_URL = "http://192.168.0.77:8080/v1/chat/completions"
+DEFAULT_LLAMA_TOKEN = ""  # no auth needed on LAN
 
 # Agent name -> display string (mirrors agent_map in quant_utils.py)
 AGENT_NAMES = {
@@ -71,6 +75,41 @@ def get_gateway_config():
     return url, token
 
 
+def _do_http_request(url, headers, body, timeout_sec, display, attempt, max_retries):
+    """Core HTTP request with retry logic. Returns (text, ok)."""
+    for retry in range(max_retries):
+        try:
+            req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+            resp = urllib.request.urlopen(req, timeout=timeout_sec)
+            data = json.loads(resp.read().decode("utf-8"))
+            text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            if not text:
+                text = data.get("content", "")
+            if not text and isinstance(data, list) and data:
+                text = data[0].get("message", {}).get("content", "")
+            if text:
+                return text, True
+            raise ValueError("Empty response")
+        except urllib.error.HTTPError as e:
+            err_body = e.read().decode("utf-8", errors="replace")[:500]
+            logger.warning(f"[LLMBridge] HTTP {e.code} for {display}: {err_body}")
+            if retry < max_retries - 1:
+                time.sleep(2 ** retry)
+        except urllib.error.URLError as e:
+            logger.warning(f"[LLMBridge] Connection error for {display}: {e.reason}")
+            if retry < max_retries - 1:
+                time.sleep(2 ** retry)
+        except Exception as e:
+            logger.warning(f"[LLMBridge] Error for {display}: {e}")
+            if retry < max_retries - 1:
+                time.sleep(2 ** retry)
+    return None, False
+
+
+# ═══════════════════════════════════════════════════════════════
+#  QUERY FUNCTIONS
+# ═══════════════════════════════════════════════════════════════
+
 def query_openclaw(
     prompt,
     agent_name="default",
@@ -80,20 +119,7 @@ def query_openclaw(
     temperature=0.7,
     system_prompt=None,
 ):
-    """Send a prompt to the OpenClaw Gateway API and return the response text.
-
-    Args:
-        prompt: The prompt string to send.
-        agent_name: Logical agent name for logging (e.g. 'quant', 'nn').
-        model: Model identifier (default: deepseek-flash).
-        max_tokens: Max response tokens.
-        max_retries: Number of retries on failure.
-        temperature: Model temperature.
-        system_prompt: Optional system-level instruction prepended as a system message.
-
-    Returns:
-        Response text string, or error message string on failure.
-    """
+    """Send a prompt to the OpenClaw Gateway API and return the response text."""
     url, token = get_gateway_config()
     display = AGENT_NAMES.get(agent_name, agent_name)
 
@@ -115,34 +141,86 @@ def query_openclaw(
     }
     body = json.dumps(payload).encode("utf-8")
 
-    for attempt in range(max_retries):
-        try:
-            req = urllib.request.Request(url, data=body, headers=headers, method="POST")
-            resp = urllib.request.urlopen(req, timeout=30)
-            data = json.loads(resp.read().decode("utf-8"))
-            text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-            if not text:
-                text = data.get("content", "")
-            logger.info(f"[OpenClawBridge] {display} response OK ({len(text)} chars)")
-            return text
-
-        except urllib.error.HTTPError as e:
-            err_body = e.read().decode("utf-8", errors="replace")[:500]
-            logger.warning(f"[OpenClawBridge] HTTP {e.code} for {display}: {err_body}")
-            if attempt < max_retries - 1:
-                time.sleep(2 ** attempt)
-
-        except urllib.error.URLError as e:
-            logger.warning(f"[OpenClawBridge] Connection error for {display}: {e.reason}")
-            if attempt < max_retries - 1:
-                time.sleep(2 ** attempt)
-
-        except Exception as e:
-            logger.error(f"[OpenClawBridge] Unexpected error for {display}: {e}")
-            if attempt < max_retries - 1:
-                time.sleep(2 ** attempt)
-
+    text, ok = _do_http_request(url, headers, body, 30, display, 0, max_retries)
+    if ok:
+        logger.info(f"[OpenClawBridge] {display} response OK ({len(text)} chars)")
+        return text
     return f"[OpenClawBridge ERROR] Failed after {max_retries} retries for {display}"
+
+
+def query_llama(
+    prompt,
+    agent_name="default",
+    max_tokens=2048,
+    max_retries=3,
+    temperature=0.7,
+    system_prompt=None,
+):
+    """Send a prompt to the LOCAL LLaMA server on chris-System (192.168.0.77:8080).
+
+    Uses llama.cpp's OpenAI-compatible /v1/chat/completions endpoint.
+    Falls back to OpenClaw Gateway if local LLaMA is unreachable and fallback enabled.
+    """
+    url = _load_db_setting("llama_server_url", "") or DEFAULT_LLAMA_URL
+    token = _load_db_setting("llama_server_token", "") or DEFAULT_LLAMA_TOKEN
+    fallback = _load_db_setting("llama_fallback_to_openclaw", "true").lower() == "true"
+    display = AGENT_NAMES.get(agent_name, agent_name)
+
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": prompt})
+
+    payload = {
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        "stream": False,
+    }
+    body = json.dumps(payload).encode("utf-8")
+
+    text, ok = _do_http_request(url, headers, body, 60, display, 0, max_retries)
+    if ok:
+        logger.info(f"[LlamaBridge] {display} response OK ({len(text)} chars)")
+        return text
+
+    # Fallback to OpenClaw Gateway
+    if fallback:
+        logger.info(f"[LlamaBridge] Falling back to OpenClaw Gateway for {display}")
+        return query_openclaw(
+            prompt, agent_name=agent_name, max_tokens=max_tokens,
+            temperature=temperature, system_prompt=system_prompt,
+        )
+
+    return f"[LlamaBridge ERROR] Failed after {max_retries} retries for {display}"
+
+
+def query_auto(
+    prompt,
+    agent_name="default",
+    max_tokens=2048,
+    max_retries=3,
+    temperature=0.7,
+    system_prompt=None,
+):
+    """Auto-route: uses local LLaMA if DB setting enable_local_llama=true, else OpenClaw Gateway.
+
+    This is the recommended entry point for all Quant Team agents.
+    Set DB setting 'enable_local_llama' to 'true' to use your LAN LLaMA server.
+    """
+    use_local = _load_db_setting("enable_local_llama", "false").lower() == "true"
+    if use_local:
+        return query_llama(prompt, agent_name=agent_name, max_tokens=max_tokens,
+                           max_retries=max_retries, temperature=temperature,
+                           system_prompt=system_prompt)
+    else:
+        return query_openclaw(prompt, agent_name=agent_name, max_tokens=max_tokens,
+                              max_retries=max_retries, temperature=temperature,
+                              system_prompt=system_prompt)
 
 
 def extract_json_block(text):

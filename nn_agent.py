@@ -76,8 +76,8 @@ Recent closed trades for analysis:
     
     try:
         logging.info("Requesting Neural Network evaluation from Gemini...")
-        from openclaw_bridge import query_openclaw, extract_json_block
-        advice_text = query_openclaw(prompt, agent_name="nn")
+        from openclaw_bridge import query_auto, extract_json_block
+        advice_text = query_auto(prompt, agent_name="nn")
         
         advice_clean = advice_text
         json_block = ""
@@ -129,8 +129,8 @@ Recent Developer/Quant logs:
 Critically analyze this context. Redesign your own prompt template to focus it even more tightly on achieving $1,000 USD/day, ensuring it asks for correct neural checks and keeps its final settings JSON format.
 Return ONLY a JSON block containing the key "revised_prompt_nn_agent" with your improved prompt template as the value (do not include markdown wrappers like ```json).
 """
-        from openclaw_bridge import query_openclaw, extract_json_block
-        raw_text = query_openclaw(meta_prompt, agent_name="nn", max_tokens=2048)
+        from openclaw_bridge import query_auto, extract_json_block
+        raw_text = query_auto(meta_prompt, agent_name="nn", max_tokens=2048)
         if raw_text.startswith("```json"):
             raw_text = raw_text[7:]
         if raw_text.endswith("```"):

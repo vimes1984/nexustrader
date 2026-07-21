@@ -437,6 +437,27 @@ class NexusTraderOrchestrator:
             except Exception as e:
                 logging.error(f"[AUTO-BRAIN-SWITCH ERROR] Failed to auto-switch brain: {e}")
 
+        # ── Proton Mail Bridge trade notification ──
+        try:
+            if self.mode == "live":
+                trade_pnl_abs = float(pnl_percent) * float(getattr(self.execution_engine, 'balance', 0) or 0)
+                closed = [t for t in self.execution_engine.closed_trades if t.get('symbol') == ticker]
+                latest_closed = closed[-1] if closed else {}
+                trade_data = {
+                    "symbol": ticker,
+                    "direction": direction.upper(),
+                    "entry_price": float(latest_closed.get("entry_price", 0)),
+                    "exit_price": float(latest_closed.get("exit_price", 0)),
+                    "pnl": trade_pnl_abs,
+                    "pnl_pct": float(pnl_percent) * 100,
+                    "duration_seconds": float(latest_closed.get("duration_seconds", 0)),
+                    "reason": str(latest_closed.get("exit_reason", "unknown")),
+                }
+                from proton_bridge import send_trade_notification
+                send_trade_notification(trade_data)
+        except Exception as e:
+            logging.warning(f"[ProtonBridge] Failed to send trade notification: {e}")
+
     def process_tick(self, row, ticker):
         """Orchestrates single price tick logic for a specific ticker."""
         # Periodically refresh news sentiment in a background thread to prevent loop blocking
@@ -2825,6 +2846,18 @@ def trigger_test_notification():
         email_sent = False
         if settings.get("notif_email_enabled") == "true":
             email_sent = notification_manager.send_smtp_email(settings, "NexusTrader - Notification Test", body)
+
+        # Also try Proton Bridge
+        proton_sent = False
+        proton_msg = ""
+        try:
+            from proton_bridge import send_notification
+            recipient = settings.get("notif_email_recipient", "churchill.c.j@gmail.com")
+            ok, msg = send_notification(recipient, "NexusTrader - Notification Test", body)
+            proton_sent = ok
+            proton_msg = msg
+        except Exception as pe:
+            proton_msg = str(pe)
             
         wa_sent = False
         if settings.get("notif_whatsapp_enabled") == "true":
@@ -2834,6 +2867,8 @@ def trigger_test_notification():
             "status": "success", 
             "message": "Test notifications triggered.",
             "email_sent": email_sent,
+            "proton_bridge_sent": proton_sent,
+            "proton_bridge_msg": proton_msg,
             "whatsapp_sent": wa_sent
         }
     except Exception as e:
@@ -3670,12 +3705,15 @@ def api_llm_regime_force():
 
 @app.get("/api/llm/config")
 def api_llm_config_get():
-    """Get LLM configuration."""
+    """Get LLM configuration including local LLaMA settings."""
     return {
         "endpoint": getattr(getattr(orchestrator, 'llm_client', None), 'endpoint', 'http://192.168.0.77:8080'),
         "poll_interval_sec": orchestrator.llm_sentiment_interval if hasattr(orchestrator, 'llm_sentiment_interval') else 900,
         "timeout_sec": getattr(getattr(orchestrator, 'llm_client', None), 'timeout', 60),
         "enabled": orchestrator.llm_enabled if hasattr(orchestrator, 'llm_enabled') else False,
+        "use_local_llama": database.load_setting("enable_local_llama", "false").lower() == "true",
+        "llama_server_url": database.load_setting("llama_server_url", "http://192.168.0.77:8080/v1/chat/completions"),
+        "llama_fallback_to_openclaw": database.load_setting("llama_fallback_to_openclaw", "true").lower() == "true",
     }
 
 @app.post("/api/llm/config")
@@ -3708,6 +3746,21 @@ def api_llm_config_save(request: Request):
     if 'enabled' in data:
         orchestrator.llm_enabled = bool(data['enabled'])
         changes.append('enabled')
+
+    # Update local LLaMA toggle
+    if 'use_local_llama' in data:
+        database.save_setting("enable_local_llama", str(data['use_local_llama']).lower())
+        changes.append('use_local_llama')
+
+    # Update LLaMA server URL
+    if 'llama_server_url' in data:
+        database.save_setting("llama_server_url", str(data['llama_server_url']))
+        changes.append('llama_server_url')
+
+    # Update fallback setting
+    if 'llama_fallback_to_openclaw' in data:
+        database.save_setting("llama_fallback_to_openclaw", str(data['llama_fallback_to_openclaw']).lower())
+        changes.append('llama_fallback_to_openclaw')
     
     return {"ok": True, "changes": changes}
 

@@ -77,9 +77,9 @@ The "find" blocks MUST MATCH EXACTLY (whitespace, newlines, etc.) to the existin
     )
 
     try:
-        from openclaw_bridge import query_openclaw, extract_json_block
+        from openclaw_bridge import query_auto, extract_json_block
         logging.info("Requesting new feature design via OpenClaw Gateway...")
-        raw_text = query_openclaw(contents_prompt, system_prompt=(
+        raw_text = query_auto(contents_prompt, system_prompt=(
             "You are an autonomous AI software engineer. "
             "Analyze the provided codebase and return ONLY valid JSON — no markdown, no commentary."
         ))
@@ -227,8 +227,8 @@ Recent Blogger Reports:
 
 Return ONLY a JSON object with key "revised_prompt_self_developer" containing your improved prompt template (no markdown wrappers).
 """
-        from openclaw_bridge import query_openclaw, extract_json_block
-        raw_text = query_openclaw(prompt, system_prompt="You are a prompt engineer. Return only valid JSON.")
+        from openclaw_bridge import query_auto, extract_json_block
+        raw_text = query_auto(prompt, system_prompt="You are a prompt engineer. Return only valid JSON.")
         raw_text = extract_json_block(raw_text)
         res_data = json.loads(raw_text)
         revised = res_data.get("revised_prompt_self_developer")

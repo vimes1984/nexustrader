@@ -226,7 +226,7 @@ def run_self_improvement():
         conn.close()
         
         # 5. AI PhD Quant & Mathematician Critical Analysis
-        # NOTE: LLM calls now route through openclaw_bridge.query_openclaw()
+        # NOTE: LLM calls now route through openclaw_bridge.query_auto()
         
         report_lines.append("\n### 💡 AI Parameter Optimizer Evaluation:")
         try:
@@ -264,8 +264,8 @@ Current Session Data:
 - Kalman threshold: {best_threshold}
 - Volatility ATR multipliers: TP = {best_tp_mult}x, SL = {best_sl_mult}x
 """
-            from openclaw_bridge import query_openclaw
-            advice_text = query_openclaw(prompt, agent_name="quant")
+            from openclaw_bridge import query_auto
+            advice_text = query_auto(prompt, agent_name="quant")
             
             # Separate the advice and the JSON block
             advice_clean = advice_text
@@ -380,8 +380,8 @@ Current Session Data:
 Critically analyze this context. Redesign your own prompt template to focus it even more tightly on achieving $1,000 USD/day, ensuring it asks for correct statistical checks and keeps its final settings JSON format.
 Return ONLY a JSON block containing the key "revised_prompt_self_improvement" with your improved prompt template as the value (do not include markdown wrappers like ```json).
 """
-        from openclaw_bridge import query_openclaw
-        raw_text = query_openclaw(prompt, agent_name="quant", max_tokens=2048)
+        from openclaw_bridge import query_auto
+        raw_text = query_auto(prompt, agent_name="quant", max_tokens=2048)
         if raw_text.startswith("```json"):
             raw_text = raw_text[7:]
         if raw_text.endswith("```"):
