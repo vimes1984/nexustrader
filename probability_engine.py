@@ -214,21 +214,24 @@ class ProbabilityEngine:
             pass
         
         # Entry quality check: RSI must align with direction
+        # Relaxed threshold: allow trend-following entries up to RSI 75
+        # because breakouts often trigger at elevated/ depressed RSI levels
         entry_ok = True
         rsi_v = row.get('rsi', 50)
-        if direction == "BUY" and rsi_v > 65:
+        if direction == "BUY" and rsi_v > 75:
             entry_ok = False
-        elif direction == "SELL" and rsi_v < 35:
+        elif direction == "SELL" and rsi_v < 25:
             entry_ok = False
         
-        # Volume confirmation
+        # Volume confirmation — only reject if we have enough data to compute a baseline
         volume = row.get('volume', 0)
         avg_volume = row.get('avg_volume', 0)
         # Compute rolling avg volume from history if available
         if avg_volume is None or avg_volume <= 0:
             if history_df is not None and 'volume' in history_df.columns and len(history_df) >= 20:
                 avg_volume = history_df['volume'].tail(20).mean()
-        if avg_volume and avg_volume > 0 and volume > 0 and volume / avg_volume < 0.5:
+        # Threshold relaxed from 0.5 to 0.3: avoid false rejection in low-vol periods
+        if avg_volume is not None and avg_volume > 0 and volume > 0 and volume / avg_volume < 0.3:
             entry_ok = False
         
         # Dynamic min_win_rate based on recent performance
@@ -241,17 +244,17 @@ class ProbabilityEngine:
             if recent_n >= 3:
                 wins = sum(1 for t in recent_trades[-recent_n:] if t.get('pnl', 0) > 0)
                 wr = wins / recent_n
-                # When losing, LOWER the bar to take more shots AND halve position size.
-                # When winning, keep standards high and full size.
+                # CORRECTED: When losing, RAISE the bar (require higher confidence) AND reduce size.
+                # Lowering the bar during losses leads to degenerate spiral.
                 if wr < 0.3:
-                    dyn_min = max(self.min_win_rate - 0.10, 0.40)  # Lower bar to escape death spiral
-                    death_spiral_risk_mult = 0.5  # Halve position size on losing streak
+                    dyn_min = min(self.min_win_rate + 0.10, 0.75)  # Raise bar: require higher win prob when cold
+                    death_spiral_risk_mult = 0.4  # Halve-plus position size on losing streak
                 elif wr < 0.5:
-                    dyn_min = max(self.min_win_rate - 0.03, 0.45)  # Slight relaxation
-                    death_spiral_risk_mult = 0.75  # 75% size on choppy streak
+                    dyn_min = min(self.min_win_rate + 0.03, 0.65)  # Slight tightening
+                    death_spiral_risk_mult = 0.7  # 70% size on choppy streak
                 elif wr > 0.7:
-                    dyn_min = min(self.min_win_rate + 0.05, 0.70)  # Raise bar when crushing it
-                    death_spiral_risk_mult = 1.0  # Full size on hot streak
+                    dyn_min = max(self.min_win_rate - 0.03, 0.45)  # Slightly relax when hot
+                    death_spiral_risk_mult = 1.15  # Slight increase when crushing it
         except:
             pass
         

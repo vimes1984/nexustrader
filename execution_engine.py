@@ -374,6 +374,11 @@ class ExecutionEngine:
 
     def open_position(self, symbol, evaluation, strategy_signals):
         """Opens a position or queues a limit order based on trade viability."""
+        with _exec_lock:
+            return self._open_position_internal(symbol, evaluation, strategy_signals)
+
+    def _open_position_internal(self, symbol, evaluation, strategy_signals):
+        """Internal: called with _exec_lock held."""
         # Check Loss Cooldown
         cooldown_end = float(database.load_setting(f"cooldown_end_{symbol}", "0.0"))
         if time.time() < cooldown_end:
@@ -389,10 +394,31 @@ class ExecutionEngine:
         # Concentration limit: prevent too much capital in one position
         total_equity = self.get_equity(getattr(self, 'last_known_prices', {}))
         kf = evaluation.get("kelly_fraction", 0.05)
-        position_value_est = self.balance * kf
+        edir = evaluation.get("direction", "BUY")
+        eprice = evaluation.get("entry_price", 0.0)
+        esl = evaluation.get("stop_loss", 0.0)
+        
+        # Calculate committed capital from existing positions
         existing_exposure = 0.0
         for pos in self.active_positions.values():
             existing_exposure += pos.get('quantity', 0) * pos.get('entry_price', 0)
+        
+        # Available balance = remaining free capital (not locked in positions)
+        committed_capital = existing_exposure
+        available_balance = max(0.0, self.balance - committed_capital)
+        
+        # Multi-asset Kelly: fraction of REMAINING capital, not total balance
+        # This prevents over-betting when multiple concurrent positions exist
+        kelly_cap = min(kf, 0.25)  # Never bet more than 25% of remaining capital
+        position_value_est = available_balance * kelly_cap
+        
+        # Also apply the existing single-asset Kelly-computed position value
+        stop_loss_pct_est = abs(eprice - esl) / eprice if eprice > 0 else 0.1
+        if stop_loss_pct_est < 0.001:
+            stop_loss_pct_est = 0.001
+        kelly_position_value = (available_balance * kf) / min(stop_loss_pct_est, 0.5)
+        position_value_est = min(position_value_est, kelly_position_value)
+        
         if total_equity > 0 and position_value_est > 0:
             new_total_exposure = (existing_exposure + position_value_est) / total_equity
             if new_total_exposure > self.max_total_exposure:
@@ -413,14 +439,15 @@ class ExecutionEngine:
         sl = evaluation["stop_loss"]
         kelly_fraction = evaluation["kelly_fraction"]
 
-        # Calculate position size: Kelly fraction * balance / stop_distance
+        # Calculate position size: Kelly fraction * available_balance / stop_distance
         # Kelly f* gives the fraction of capital to RISK, not the position size.
         # Convert: stop_loss_pct = distance from entry to stop as fraction of entry.
-        # position_value = (balance * kelly_fraction) / stop_loss_pct
+        # position_value = (available_balance * kelly_fraction) / stop_loss_pct
+        # Using available_balance (balance - committed_capital) prevents multi-asset over-betting
         stop_loss_pct = abs(entry_price - sl) / entry_price if entry_price > 0 else 0.1
         if stop_loss_pct < 0.001:
             stop_loss_pct = 0.001  # At least 0.1% stop distance
-        position_value = (self.balance * kelly_fraction) / min(stop_loss_pct, 0.5)  # cap stop at 50%
+        position_value = (available_balance * kelly_fraction) / min(stop_loss_pct, 0.5)  # cap stop at 50%
         
         # Minimum position floor: $5 to allow small-account trading
         if position_value < 5.0:
@@ -444,57 +471,44 @@ class ExecutionEngine:
             adjusted_tp = tp + slippage_cost
             adjusted_sl = sl
 
+        # Execute order (live broker or paper simulation)
         if self.trading_mode == "live":
-            # For live trading, execute immediately on the broker API
             success, actual_qty = self.execute_order_on_broker(symbol, direction.lower(), quantity, entry_price)
             if not success:
                 logging.error(f"Could not execute entry order for {symbol} on live broker. Position aborted. Placing on temporary 5-minute retry cooldown.")
-                # Set a 5-minute retry cooldown to prevent tight infinite loop API spamming
                 database.save_setting(f"cooldown_end_{symbol}", str(time.time() + 300))
                 return False
-                
-            self.balance -= fee
-            database.save_setting("portfolio_balance", self.balance)
-            
-            self.active_positions[symbol] = {
-                "symbol": symbol,
-                "direction": direction,
-                "entry_price": effective_entry,  # Use slippage-adjusted price
-                "quantity": actual_qty,
-                "take_profit": adjusted_tp,
-                "stop_loss": adjusted_sl,
-                "entry_time": time.time(),
-                "strategy_signals": strategy_signals,
-                "entry_state": evaluation.get("state", []),
-                "sentiment_sources": evaluation.get("sentiment_sources", {}),
-                "fee_paid": fee
-            }
-            logging.info(f"Opened live {direction} position for {symbol}: Qty {actual_qty:.6f} at {effective_entry:.2f} (slippage adj). Fee: {fee:.2f}")
-            return True
+            exec_label = "live"
         else:
-            # Paper trading: simulate market order with slippage (immediate fill)
             actual_qty = quantity
-            self.balance -= fee
-            database.save_setting("portfolio_balance", self.balance)
+            exec_label = "paper"
             
-            self.active_positions[symbol] = {
-                "symbol": symbol,
-                "direction": direction,
-                "entry_price": effective_entry,  # Slippage-adjusted entry
-                "quantity": actual_qty,
-                "take_profit": adjusted_tp,
-                "stop_loss": adjusted_sl,
-                "entry_time": time.time(),
-                "strategy_signals": strategy_signals,
-                "entry_state": evaluation.get("state", []),
-                "sentiment_sources": evaluation.get("sentiment_sources", {}),
-                "fee_paid": fee
-            }
-            logging.info(f"Opened paper {direction} position for {symbol}: Qty {actual_qty:.6f} at {effective_entry:.2f} (incl. slippage). Fee: {fee:.2f}")
-            return True
+        self.balance -= fee
+        database.save_setting("portfolio_balance", self.balance)
+        
+        self.active_positions[symbol] = {
+            "symbol": symbol,
+            "direction": direction,
+            "entry_price": effective_entry,  # Slippage-adjusted entry
+            "quantity": actual_qty,
+            "take_profit": adjusted_tp,
+            "stop_loss": adjusted_sl,
+            "entry_time": time.time(),
+            "strategy_signals": strategy_signals,
+            "entry_state": evaluation.get("state", []),
+            "sentiment_sources": evaluation.get("sentiment_sources", {}),
+            "fee_paid": fee
+        }
+        logging.info(f"Opened {exec_label} {direction} position for {symbol}: Qty {actual_qty:.6f} at {effective_entry:.2f} (incl. slippage). Fee: {fee:.2f}")
+        return True
 
     def update_positions(self, symbol, current_price):
         """Checks active positions for TP/SL hits. Uses slippage-adjusted exit prices."""
+        with _exec_lock:
+            return self._update_positions_internal(symbol, current_price)
+
+    def _update_positions_internal(self, symbol, current_price):
+        """Internal: called with _exec_lock held."""
         # Evaluate active positions for this symbol (TP/SL check)
         if symbol not in self.active_positions:
             return None
@@ -506,10 +520,22 @@ class ExecutionEngine:
         tp = pos["take_profit"]
         sl = pos["stop_loss"]
 
+        # Track current price on position for API / dashboard display
+        pos["current_price"] = current_price
+
+        # Compute unrealized PnL for display
+        if direction == "BUY":
+            pos["unrealized_pnl"] = (current_price - entry_price) * quantity
+        else:
+            pos["unrealized_pnl"] = (entry_price - current_price) * quantity
+        entry_value = entry_price * quantity if entry_price > 0 else 1e-9
+        pos["unrealized_pnl_pct"] = pos["unrealized_pnl"] / entry_value
+
         # Trailing Stop-Loss logic — config-driven
         trailing_stop_enabled = database.load_setting("trailing_stop_enabled", "true").lower() == "true"
         if trailing_stop_enabled:
-            trail_offset_pct = float(database.load_setting("trailing_stop_offset_pct", "0.005"))
+            # Default trail offset widened from 0.5% to 1.5% for crypto noise tolerance
+            trail_offset_pct = float(database.load_setting("trailing_stop_offset_pct", "0.015"))
             if direction == "BUY":
                 if "original_sl" not in pos:
                     pos["original_sl"] = sl
@@ -646,6 +672,11 @@ class ExecutionEngine:
         
         current_prices: dict of symbol -> current_price (default empty dict)
         """
+        with _exec_lock:
+            return self._get_equity_internal(current_prices)
+
+    def _get_equity_internal(self, current_prices=None):
+        """Internal: requires _exec_lock held by caller."""
         if current_prices is None:
             current_prices = {}
         if self.trading_mode == "live":

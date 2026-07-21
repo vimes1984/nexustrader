@@ -132,23 +132,25 @@ class MLPredictorStrategy(TradingStrategy):
         logging.info("ML Strategy trained successfully.")
 
     def _extract_features(self, df):
-        # Create normalized features
-        rsi = df['rsi'].values
-        macd = df['macd'].values
-        macd_sig = df['macd_signal'].values
+        # Create normalized features — operate on a COPY to avoid mutating caller's data
+        df_copy = df.copy()
+        
+        rsi = df_copy['rsi'].values
+        macd = df_copy['macd'].values
+        macd_sig = df_copy['macd_signal'].values
         
         # Avoid division by zero
-        close = df['close'].values + 1e-9
-        close_series = df['close']
+        close = df_copy['close'].values + 1e-9
+        close_series = df_copy['close']
         # Compute rolling SMAs if not already present
-        if 'sma_20' not in df.columns:
-            df['sma_20'] = df['close'].rolling(20).mean()
-        if 'sma_50' not in df.columns:
-            df['sma_50'] = df['close'].rolling(50).mean()
-        sma_20_ratio = df['sma_20'].fillna(close_series).values / close
-        sma_50_ratio = df['sma_50'].fillna(close_series).values / close
-        bb_upper_ratio = df['bb_upper'].values / close
-        bb_lower_ratio = df['bb_lower'].values / close
+        if 'sma_20' not in df_copy.columns:
+            df_copy['sma_20'] = df_copy['close'].rolling(20).mean()
+        if 'sma_50' not in df_copy.columns:
+            df_copy['sma_50'] = df_copy['close'].rolling(50).mean()
+        sma_20_ratio = df_copy['sma_20'].fillna(close_series).values / close
+        sma_50_ratio = df_copy['sma_50'].fillna(close_series).values / close
+        bb_upper_ratio = df_copy['bb_upper'].values / close
+        bb_lower_ratio = df_copy['bb_lower'].values / close
         
         return np.column_stack([
             rsi, macd, macd_sig, sma_20_ratio, sma_50_ratio, bb_upper_ratio, bb_lower_ratio
@@ -342,6 +344,39 @@ class StrategyEnsemble:
             if isinstance(strat, MLPredictorStrategy):
                 strat.train(history_df)
 
+    def update_base_weights(self):
+        """Persists performance-biased weights back to self.weights after each trade.
+        
+        This ensures the weight decay/boost from trade outcomes is remembered
+        across calls, not recomputed fresh each time from equal weights.
+        """
+        active = np.array(self.weights)
+        
+        for i, strat in enumerate(self.strategies):
+            perf = self.strategy_performance.get(strat.name, [])
+            if len(perf) >= 10:
+                recent = perf[-20:]
+                win_rate = sum(1 for r in recent if r['correct']) / len(recent)
+                # Moderate exponential adjustment: max ±20% per update
+                adjustment = 1.0
+                if win_rate > 0.60:
+                    adjustment = 1.0 + min((win_rate - 0.60) * 0.5, 0.20)
+                elif win_rate < 0.40 and len(perf) >= 15:
+                    adjustment = 1.0 - min((0.40 - win_rate) * 0.5, 0.20)
+                active[i] *= adjustment
+        
+        # Normalize
+        s = np.sum(active)
+        if s > 0:
+            active = active / s
+        
+        # Exponential smoothing: blend 70% old, 30% new to prevent oscillation
+        self.weights = self.weights * 0.7 + active * 0.3
+        # Re-normalize after blend
+        s = np.sum(self.weights)
+        if s > 0:
+            self.weights = self.weights / s
+
     def get_weighted_signal(self, row, history_df=None):
         """Calculates the weighted ensemble signal with performance-biased weighting.
         
@@ -365,7 +400,7 @@ class StrategyEnsemble:
         
         signals = np.array(signals)
         
-        # Compute active weights starting from policy network weights
+        # Compute active weights starting from performance-updated base weights
         active_weights = np.array(self.weights)
         
         # Layer 1: OU Regime Detection (trending vs mean-reverting)
@@ -391,7 +426,7 @@ class StrategyEnsemble:
                     elif regime == 'mean_reversion':
                         active_weights[i] *= 1.0 - 0.4 * regime_strength
         
-        # Layer 2: Recent Performance Biasing
+        # Layer 2: Recent Performance Biasing (runtime adjustment)
         for i, strat in enumerate(self.strategies):
             perf = self.strategy_performance.get(strat.name, [])
             if len(perf) >= 10:

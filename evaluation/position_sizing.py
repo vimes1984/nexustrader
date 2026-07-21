@@ -126,11 +126,11 @@ def compute_safe_fraction(
 
     # Hard cap (upper bound)
     safe_fraction = min(safe_fraction, ABSOLUTE_MAX_FRACTION)
-    # Minimum floor: only when drawdown penalty hasn't halted trading
+    # Minimum floor: only applies when drawdown is very mild (<5% of limit)
     # This ensures small accounts can still trade tiny sizes to learn
     # but does NOT override the drawdown halt.
-    if drawdown_penalty > 0:
-        min_safe_fraction = 0.02  # 2% for data-rich setups (was 0.06 — reduced to avoid overriding safety)
+    if drawdown_penalty > 0 and current_drawdown_pct < drawdown_limit_pct * 0.3:
+        min_safe_fraction = 0.01  # 1% floor only when drawdown is well under control
         safe_fraction = max(safe_fraction, min_safe_fraction)
 
     # Determine signal

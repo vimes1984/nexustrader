@@ -74,7 +74,7 @@ class DataIngestion:
         with self._data_lock:
             if self.data.empty:
                 return
-            df = self.data
+            df = self.data.copy()
 
         # Simple Moving Averages (SMA)
         df['sma_20'] = df['close'].rolling(window=20).mean()
@@ -128,7 +128,10 @@ class DataIngestion:
         
         # Clean up NaNs
         df = df.bfill().ffill()
-        self.data = df
+        # Assign back under lock
+        self._require_lock()
+        with self._data_lock:
+            self.data = df
 
     def subscribe(self, callback):
         """Subscribe to live/simulated price ticks."""
