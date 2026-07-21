@@ -3521,7 +3521,7 @@ def read_root():
         "Pragma": "no-cache",
         "Expires": "0"
     }
-    return FileResponse(get_resource_path("dashboard/index.html"), headers=headers)
+    return FileResponse(get_resource_path("dashboard-v2/index.html"), headers=headers)
 
 @app.get("/sw.js")
 def get_service_worker():
@@ -3550,6 +3550,7 @@ async def redirect_dashboard_trailing():
     return RedirectResponse(url="/")
 
 app.mount("/dashboard", StaticFiles(directory=get_resource_path("dashboard")), name="dashboard")
+app.mount("/dashboard-v2", StaticFiles(directory=get_resource_path("dashboard-v2")), name="dashboard-v2")
 
 
 # ---------------------------------------------------------------------------
