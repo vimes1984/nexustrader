@@ -52,7 +52,8 @@ const Neural = {
       const data = await API.nnArchitecture();
       const form = byId('nn-arch-form');
       if (!form) return;
-      byId('arch-type').value = data.type || 'simple';
+      const arch = data.architecture || data.type || 'mlp';
+      byId('arch-type').value = arch;
       byId('arch-hidden-dim').value = data.hidden_dim || 12;
       byId('arch-hidden-layers').value = data.hidden_layers || 1;
       byId('arch-lr').value = data.learning_rate || 0.01;
