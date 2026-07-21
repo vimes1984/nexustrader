@@ -26,7 +26,7 @@ const App = {
   /** Debug log — only when debug mode is on */
   _debug(...args) {
     if (document.body.classList.contains('debug')) {
-      this._debug(...args);
+      console.log(...args);
     }
   },
 
