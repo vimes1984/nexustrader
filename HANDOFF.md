@@ -30,21 +30,10 @@ We transitioned the system from a hardcoded `$1,000 USD/day` target to a dynamic
   $$\text{Capital} = \frac{\text{Daily Goal}}{\text{Trades per Day} \times \text{Kelly Fraction} \times \text{Expectancy \%}}$$
 * **Prompt Preprocessing**: `query_gemini_robust` dynamically intercepts and replaces all target goal numbers in agent prompts with the user's active setting (e.g. `$2,000 USD/day` if adjusted).
 
----
-
-## 4. LLM Routing & The Antigravity Proxy (CRITICAL ⚠️)
-The sandbox credentials for LLM queries utilize **Antigravity API Keys** (which start with the prefix `AQ.`).
-* **Gemini Restriction**: Standard public Google Gemini API endpoints will reject these keys as invalid.
-* **The Proxy**: We run `antigravity_proxy.py` on `127.0.0.1:8001`. This proxy wraps the local `google.antigravity` python package (which correctly parses the `AQ.` keys) and exposes a standard Gemini REST interface.
-* **Routing Logic**: `query_gemini_robust` automatically performs a health check on `http://127.0.0.1:8001/health`. If online, it routes all Gemini requests locally through the proxy.
-* **Local Run Command**: If testing agent self-development or LLM queries locally, execute the proxy first:
-  ```bash
-  python3 antigravity_proxy.py &
-  ```
 
 ---
 
-## 5. Deployment, Backups, & Operations CLI
+## 4. Deployment, Backups, & Operations CLI
 
 * **Run All Tests**: We have **71 passing unit tests** covering all mathematical, database, and API layers:
   ```bash
@@ -66,6 +55,6 @@ The sandbox credentials for LLM queries utilize **Antigravity API Keys** (which 
 
 ---
 
-## 6. Next Steps for Optimization
+## 5. Next Steps for Optimization
 * **Expectancy Scaling**: Mined trades currently show a negative expectancy of `-0.03%` due to commission/slippage drag. Optimize the ATR multipliers and neural gating weights to turn expectancy positive.
 * **Shadow vs Live Validation**: Validate parameters using walk-forward shadow mode testing before shifting live capital from Paper simulation.
