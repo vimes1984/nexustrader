@@ -37,6 +37,14 @@ const App = {
       lucide.createIcons();
     }
     App.emit('ready');
+    // Debug: log all nav-tab clicks to help diagnose nav issues
+    document.querySelectorAll('.nav-tab').forEach((tab, i) => {
+      const orig = tab.onclick;
+      tab.addEventListener('click', function(e) {
+        console.log('NAV-CLICK:', tab.dataset.tab, 'target:', e.target.tagName, e.target.className);
+      });
+    });
+    console.log('initNav bound to', document.querySelectorAll('.nav-tab').length, 'nav items');
   },
 
   /** Cache frequently-used DOM elements */
@@ -146,21 +154,33 @@ const App = {
 
   /** Switch to a tab */
   switchTab(tabId) {
-    // Update nav buttons
-    document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-    const btn = document.querySelector(`.nav-tab[data-tab="${tabId}"]`);
-    if (btn) btn.classList.add('active');
+    try {
+      console.log('switchTab called:', tabId);
+      // Update nav buttons
+      document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+      const btn = document.querySelector('.nav-tab[data-tab="' + tabId + '"]');
+      if (btn) btn.classList.add('active');
 
-    // Show/hide tab content
-    document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
-    const content = document.getElementById(tabId);
-    if (content) content.style.display = 'block';
+      // Show/hide tab content
+      const allTabs = document.querySelectorAll('.tab-content');
+      console.log('  found', allTabs.length, 'tab-content divs');
+      allTabs.forEach(c => c.style.display = 'none');
+      const content = document.getElementById(tabId);
+      if (content) {
+        content.style.display = 'block';
+        console.log('  switched to', tabId);
+      } else {
+        console.error('  tab not found:', tabId);
+      }
 
-    this.state.activeTab = tabId.replace('tab-', '');
-    App.emit('tabChange', this.state.activeTab);
-    // Re-render icons in the newly visible tab
-    if (typeof lucide !== 'undefined') {
-      setTimeout(() => lucide.createIcons(), 50);
+      this.state.activeTab = tabId.replace('tab-', '');
+      App.emit('tabChange', this.state.activeTab);
+      // Re-render icons in the newly visible tab
+      if (typeof lucide !== 'undefined') {
+        setTimeout(() => lucide.createIcons(), 50);
+      }
+    } catch(e) {
+      console.error('switchTab error:', e);
     }
   },
 
@@ -201,14 +221,14 @@ const App = {
 
   /** Open nav drawer */
   openDrawer() {
-    this.el.navDrawer.style.left = '0';
-    this.el.navOverlay.style.display = 'block';
+    if (this.el.navDrawer) this.el.navDrawer.style.left = '0';
+    if (this.el.navOverlay) this.el.navOverlay.style.display = 'block';
   },
 
   /** Close nav drawer */
   closeDrawer() {
-    this.el.navDrawer.style.left = '-280px';
-    this.el.navOverlay.style.display = 'none';
+    if (this.el.navDrawer) this.el.navDrawer.style.left = '-280px';
+    if (this.el.navOverlay) this.el.navOverlay.style.display = 'none';
   },
 
   /** Load initial state from API */

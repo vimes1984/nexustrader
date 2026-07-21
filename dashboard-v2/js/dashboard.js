@@ -19,9 +19,15 @@ const Dashboard = {
 
   /** Initialize Lightweight Charts */
   initCharts() {
+    try {
     // Price chart
     const chartEl = byId('main-chart');
-    if (chartEl) {
+    if (chartEl && LightweightCharts) {
+      // Ensure chart container has dimensions
+      if (!chartEl.clientWidth || !chartEl.clientHeight) {
+        chartEl.style.width = chartEl.style.width || '100%';
+        chartEl.style.height = chartEl.style.height || '400px';
+      }
       this.chart = LightweightCharts.createChart(chartEl, {
         width: chartEl.clientWidth,
         height: chartEl.clientHeight || 400,
@@ -68,6 +74,7 @@ const Dashboard = {
         },
       });
     }
+    } catch(e) { console.error('initCharts failed:', e); }
   },
 
   /** Handle init state */
@@ -125,6 +132,7 @@ const Dashboard = {
 
     // Update chart
     if (data.ohlc && this.chartSeries.candles) {
+      try {
       this.chartSeries.candles.update({
         time: data.timestamp || Math.floor(Date.now() / 1000),
         open: data.ohlc.open || data.price,
@@ -154,6 +162,8 @@ const Dashboard = {
     // Position details
     if (data.position) {
       this.renderPosition(data.position);
+    }
+      } catch(e) { /* chart update best-effort */ }
     }
     } catch(e) { /* ticks must never crash the dashboard */ }
   },
