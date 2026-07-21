@@ -3567,6 +3567,14 @@ def get_service_worker():
     }
     return FileResponse(get_resource_path("dashboard/sw.js"), media_type="application/javascript", headers=headers)
 
+@app.get("/favicon.ico")
+async def favicon():
+    """Serve favicon."""
+    try:
+        return FileResponse(get_resource_path("dashboard/icon-192.png"), media_type="image/png")
+    except Exception:
+        return Response(status_code=204)
+
 @app.get("/manifest.json")
 def get_manifest():
     headers = {

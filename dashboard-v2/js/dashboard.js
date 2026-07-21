@@ -219,7 +219,7 @@ const Dashboard = {
         <td style="color:${t.direction === 'long' ? 'var(--neon-green)' : 'var(--neon-red)'}">${t.direction || ''}</td>
         <td>$${(t.entry_price || 0).toFixed(2)}</td>
         <td>$${(t.exit_price || 0).toFixed(2)}</td>
-        <td style="color:${(t.pnl || 0) >= 0 ? 'var(--neon-green)' : 'var(--neon-red')}">${t.pnl_pct !== undefined ? (t.pnl_pct >= 0 ? '+' : '') + t.pnl_pct.toFixed(2) + '%' : '$' + (t.pnl || 0).toFixed(2)}</td>
+        <td style="color:${(t.pnl || 0) >= 0 ? 'var(--neon-green)' : 'var(--neon-red)'}">${t.pnl_pct !== undefined ? (t.pnl_pct >= 0 ? '+' : '') + t.pnl_pct.toFixed(2) + '%' : '$' + (t.pnl || 0).toFixed(2)}</td>
       </tr>
     `).join('');
   },
