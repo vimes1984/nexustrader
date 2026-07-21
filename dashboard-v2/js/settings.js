@@ -1,6 +1,16 @@
 /**
  * settings.js — Trading System + Notifications + Optimizations tabs
  */
+
+function setInput(id, val) {
+  const el = byId(id);
+  if (el) el.value = val ?? '';
+}
+function setCheckbox(id, val) {
+  const el = byId(id);
+  if (el) el.checked = !!val;
+}
+
 const Settings = {
   init() {
     document.addEventListener('nt:tabChange', (e) => {
@@ -32,24 +42,29 @@ const Settings = {
   async loadConfig() {
     try {
       const data = await API.systemConfig();
-      byId('config-max-position')?.setValue(data.max_position_size || '');
-      byId('config-max-drawdown')?.setValue(data.max_drawdown || '');
-      byId('config-cooldown')?.setValue(data.cooldown_minutes || '');
-      // Render backtest results
-      const el = byId('backtest-results');
-      if (el && data.backtest_summary) el.innerHTML = `<pre style="font-size:11px;white-space:pre-wrap">${JSON.stringify(data.backtest_summary, null, 2)}</pre>`;
+      // Map API response to HTML fields
+      setInput('config-max-position', data.max_position_size);
+      setInput('config-max-drawdown', data.max_drawdown);
+      setInput('config-cooldown', data.cooldown);
+      setInput('config-tp', data.tp_multiplier);
+      setInput('config-sl', data.sl_multiplier);
+      setInput('config-nn-lr', data.nn_lr);
+      setInput('config-nn-dim', data.nn_hidden_dim);
+      setInput('config-nn-layers', data.nn_hidden_layers);
+      if (typeof data.trailing_stop === 'boolean') setCheckbox('config-trailing-stop', data.trailing_stop);
+      // Broker info (read-only display)
+      const brokerEl = byId('config-broker-info');
+      if (brokerEl) brokerEl.textContent = `Broker: ${data.broker || 'kraken'} | Key: ${(data.api_key || '').slice(0,12)}... | Mode: ${data.trading_mode}`;
     } catch (e) { /* silent */ }
   },
 
   async loadDailyGoal() {
     try {
       const data = await API.dailyGoal();
-      byId('daily-goal-amount')?.setValue(data.amount || '');
-      byId('daily-goal-enabled')?.setChecked(data.enabled || false);
+      setInput('daily-goal-amount', data.goal);
+      setCheckbox('daily-goal-enabled', data.enabled);
       const el = byId('daily-goal-status');
-      if (el) el.innerHTML = data.progress
-        ? `Progress: $${data.progress} / $${data.goal} (${data.pct || 0}%)`
-        : 'No goal set';
+      if (el) el.textContent = `Progress: $${data.today_pnl || 0} / $${data.goal || 1000} (${data.progress_pct || 0}%)`;
     } catch (e) { /* silent */ }
   },
 
@@ -127,14 +142,13 @@ const Settings = {
   async refreshNotifications() {
     try {
       const data = await API.notifications();
-      if (data.smtp) {
-        byId('notif-smtp-host')?.setValue(data.smtp.host || '');
-        byId('notif-smtp-port')?.setValue(data.smtp.port || 587);
-        byId('notif-smtp-user')?.setValue(data.smtp.user || '');
-        byId('notif-smtp-pass')?.setValue(data.smtp.password || '');
-      }
-      byId('notif-email-enabled')?.setChecked(data.email_enabled || false);
-      byId('notif-email-recipient')?.setValue(data.email_recipient || '');
+      // API returns flat keys: smtp_host, smtp_port, smtp_user, email_enabled, email_recipient
+      setInput('notif-smtp-host', data.smtp_host);
+      setInput('notif-smtp-port', data.smtp_port);
+      setInput('notif-smtp-user', data.smtp_user);
+      setInput('notif-smtp-pass', data.smtp_pass);
+      setCheckbox('notif-email-enabled', data.email_enabled);
+      setInput('notif-email-recipient', data.email_recipient);
     } catch (e) { /* silent */ }
   },
 

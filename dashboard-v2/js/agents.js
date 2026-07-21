@@ -64,8 +64,8 @@ const Agents = {
   async loadLlmConfig() {
     try {
       const data = await API.agentLlm();
-      byId('agent-llm-enabled')?.setChecked(data.enabled || false);
-      byId('agent-llm-model')?.setValue(data.model || '');
+      byId('agent-llm-enabled')?.checked = data.enabled || false;
+      byId('agent-llm-model')?.value = data.model || '';
     } catch (e) { /* silent */ }
   },
 

@@ -42,10 +42,11 @@ const LLM = {
   async loadConfig() {
     try {
       const data = await API.llmConfig();
-      byId('llm-host')?.setValue(data.host || '');
-      byId('llm-port')?.setValue(data.port || 8080);
-      byId('llm-model-name')?.setValue(data.model || '');
-      byId('llm-temperature')?.setValue(data.temperature || 0.7);
+      // API returns: {server_url, model, enabled, fallback_to_openclaw}
+      if (data.server_url) {
+        try { const u = new URL(data.server_url); setInput('llm-host', u.hostname); setInput('llm-port', u.port || '8080'); } catch(e) {}
+      }
+      setInput('llm-model-name', data.model);
     } catch (e) { /* silent */ }
   },
 
