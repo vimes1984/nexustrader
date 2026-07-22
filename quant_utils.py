@@ -202,7 +202,7 @@ def query_gemini_robust(api_key: str, prompt, model: str = "gemini-flash-latest"
     except Exception:
         pass
         
-    goal_val = 1000.0
+    goal_val = 10.0  # Realistic: ~5% of $200 account. Old $1000/day = 500% daily — unrealistic.
     try:
         if 'settings' in locals() and "daily_income_goal" in settings:
             goal_val = float(settings["daily_income_goal"])

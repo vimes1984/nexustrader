@@ -17,7 +17,8 @@ const Strategy = {
     panel.innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:20px">Loading signals...</p>';
     try {
       const data = await API.strategyStatus();
-      const signals = Array.isArray(data) ? data : (data?.signals || data?.strategies || []);
+      const raw = data?.signals || data?.strategies || data || {};
+      const signals = Array.isArray(raw) ? raw : Object.entries(raw).map(([ticker, v]) => (typeof v === 'object' ? { name: ticker, ticker, ...v } : { name: ticker, ticker, signal: v }));
       if (!signals.length) {
         panel.innerHTML = '<div class="glass-panel" style="padding:20px;text-align:center"><p style="color:var(--text-muted);margin-bottom:8px">No active signals</p><p style="font-size:11px;color:var(--text-secondary)">The bot is accumulating data before strategies can fire. Check back in a few minutes.</p></div>';
         return;

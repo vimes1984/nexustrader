@@ -20,13 +20,27 @@ class EMACrossoverStrategy(TradingStrategy):
         self.slow_window = slow_window
 
     def generate_signal(self, row, history=None):
-        macd = row.get('macd', 0)
-        macd_signal = row.get('macd_signal', 0)
+        # Check for actual EMA values in the row first
+        # Row may contain pre-computed ema_fast / ema_slow from data ingestion
+        close = row.get('close', 0)
+        ema_fast = row.get('ema_fast', None)
+        ema_slow = row.get('ema_slow', None)
         
-        # Simple crossover: MACD crosses signal line
-        if macd > macd_signal:
+        if ema_fast is not None and ema_slow is not None and ema_slow > 0:
+            # True EMA crossover
+            if ema_fast > ema_slow:
+                return 1.0
+            elif ema_fast < ema_slow:
+                return -1.0
+            return 0.0
+        
+        # Fallback: MACD line is EMA(12) - EMA(26), so MACD crossing zero
+        # is equivalent to EMA fast crossing EMA slow
+        macd = row.get('macd', 0)
+        # Use MACD crossing zero = EMA crossover
+        if macd > 0:
             return 1.0
-        elif macd < macd_signal:
+        elif macd < 0:
             return -1.0
         return 0.0
 
@@ -248,9 +262,11 @@ class VWAPCrossoverStrategy(TradingStrategy):
     def generate_signal(self, row, history=None):
         close = row.get('close', 0)
         vwap = row.get('vwma_20', close)
-        if close > vwap * 1.0005:
+        # Require a meaningful deviation from VWAP (0.15% vs 0.05%) to reduce noise
+        # 0.05% buffer was too tight — produces whipsaw signals in ranging markets
+        if close > vwap * 1.0015:
             return 1.0
-        elif close < vwap * 0.9995:
+        elif close < vwap * 0.9985:
             return -1.0
         return 0.0
 
@@ -294,6 +310,8 @@ class StrategyEnsemble:
     def __init__(self, history_df=None):
         self.strategies = [
             EMACrossoverStrategy(),
+            RSIStrategy(),
+            BollingerBandsStrategy(),
             MLPredictorStrategy(),
             KalmanTrendStrategy(),
             MACDHistogramCrossoverStrategy(),
@@ -402,6 +420,15 @@ class StrategyEnsemble:
         
         # Compute active weights starting from performance-updated base weights
         active_weights = np.array(self.weights)
+        
+        # NEWER: Ensure active_weights matches signals length BEFORE any indexing loops.
+        # Policy network may output different action_dim than current strategy count.
+        if len(active_weights) != len(signals):
+            import logging as _log
+            _log.warning(f"[MIGRATION] Weights {len(active_weights)} vs strategies {len(signals)} — resizing")
+            active_weights = active_weights[:len(signals)] if len(active_weights) > len(signals) else np.pad(active_weights, (0, len(signals) - len(active_weights)), constant_values=1.0/len(signals))
+            s = np.sum(active_weights)
+            active_weights = active_weights / s if s > 0 else np.ones(len(signals)) / len(signals)
         
         # Layer 1: OU Regime Detection (trending vs mean-reverting)
         from quant_utils import estimate_ou_process

@@ -54,10 +54,10 @@ class KillSwitch:
 
     def __init__(
         self,
-        max_daily_loss: float = 500.0,
-        max_position_per_symbol: float = 5000.0,
-        max_total_exposure: float = 25000.0,
-        max_drawdown_pct: float = 0.15,  # 15% max drawdown
+        max_daily_loss: float = 10.0,
+        max_position_per_symbol: float = 50.0,
+        max_total_exposure: float = 100.0,
+        max_drawdown_pct: float = 0.10,  # 10% max drawdown (tighter for small account)
     ):
         self.max_daily_loss = max_daily_loss
         self.max_position_per_symbol = max_position_per_symbol
@@ -91,17 +91,19 @@ class KillSwitch:
             self._base_equity = current_equity
 
         # Dynamic limits scaled to account size
-        # For a $200 account: $20 daily loss, $50 per-position, $150 total exposure
-        # These scale linearly as the account grows
+        # For a $200 baseline account: $10 daily loss, $50 per-position, $100 total exposure
+        # These scale up linearly as the account grows.
+        # BUGFIX: Defaults of $500/$5000/$25000 were absurd for a $200 account.
+        # They'd never trip. Now they provide real circuit-breaking.
         if current_equity is not None and current_equity > 0:
             scale = current_equity / 200.0  # Scale from $200 baseline
-            max_daily = max(self.max_daily_loss, 20.0 * scale)
-            max_per_pos = max(self.max_position_per_symbol, 50.0 * scale)
-            max_exposure = max(self.max_total_exposure, 150.0 * scale)
+            max_daily = max(10.0, 10.0 * scale)
+            max_per_pos = max(20.0, 50.0 * scale)
+            max_exposure = max(30.0, 100.0 * scale)
         else:
-            max_daily = self.max_daily_loss
-            max_per_pos = self.max_position_per_symbol
-            max_exposure = self.max_total_exposure
+            max_daily = 10.0
+            max_per_pos = 50.0
+            max_exposure = 100.0
 
         # Daily reset every 24h
         if time.time() - self.daily_reset_time > 86400:

@@ -130,7 +130,9 @@ def compute_safe_fraction(
     # This ensures small accounts can still trade tiny sizes to learn
     # but does NOT override the drawdown halt.
     if drawdown_penalty > 0 and current_drawdown_pct < drawdown_limit_pct * 0.3:
-        min_safe_fraction = 0.01  # 1% floor only when drawdown is well under control
+        # Floor: ensure at least 2.5% ($5 min trade on $200 account)
+        # For small accounts the cold-start floor must exceed exchange minimums
+        min_safe_fraction = 0.035  # 3.5% floor — $5 min on Kraken ($143×3.5%=$5.01)
         safe_fraction = max(safe_fraction, min_safe_fraction)
 
     # Determine signal

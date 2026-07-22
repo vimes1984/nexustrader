@@ -90,13 +90,29 @@ class DataIngestion:
         df['macd_hist'] = df['macd'] - df['macd_signal']
 
         # Relative Strength Index (RSI) — Wilder's Smoothed RMA (14-period)
-        # Standard: uses exponential moving average (alpha = 1/period) not SMA
+        # Wilder's method: avg_gain[13] = SMA(gain, 14), then RMA: avg_t = avg_{t-1} + (val_t - avg_{t-1})/14
+        # pd.ewm(alpha=1/14, adjust=False) does NOT seed with SMA — it seeds with the first value.
+        # We must manually implement Wilder's RMA for correctness.
         delta = df['close'].diff()
         gain = delta.where(delta > 0, 0.0)
         loss = (-delta.where(delta < 0, 0.0))
-        # Wilder's smoothing: first value is SMA, subsequent values are EMA with alpha=1/14
-        avg_gain = gain.ewm(alpha=1.0/14.0, adjust=False).mean()
-        avg_loss = loss.ewm(alpha=1.0/14.0, adjust=False).mean()
+        
+        # Wilder's smoothing: first avg = SMA(14), subsequent values = RMA (alpha=1/14)
+        sma14_gain = gain.rolling(window=14).mean()
+        sma14_loss = loss.rolling(window=14).mean()
+        avg_gain = gain.copy()
+        avg_loss = loss.copy()
+        # First 13 values: undefined (set to 0, RSI will be NaN until period 14)
+        avg_gain.iloc[:13] = np.nan
+        avg_loss.iloc[:13] = np.nan
+        # Period 14 (index 13): SMA(14)
+        avg_gain.iloc[13] = sma14_gain.iloc[13]
+        avg_loss.iloc[13] = sma14_loss.iloc[13]
+        # Periods 15+: RMA (Wilder's recursive smoothing)
+        for i in range(14, len(df)):
+            avg_gain.iloc[i] = avg_gain.iloc[i-1] + (gain.iloc[i] - avg_gain.iloc[i-1]) / 14.0
+            avg_loss.iloc[i] = avg_loss.iloc[i-1] + (loss.iloc[i] - avg_loss.iloc[i-1]) / 14.0
+        
         rs = avg_gain / (avg_loss + 1e-9)
         df['rsi'] = 100.0 - (100.0 / (1.0 + rs))
 
@@ -114,8 +130,14 @@ class DataIngestion:
         
         # Standard ATR using maximum of the three ranges
         tr = pd.concat([high_low, high_close_prev, low_close_prev], axis=1).max(axis=1)
-        # First ATR is SMA(14), subsequent values are RMA (Wilder's: alpha=1/14)
-        df['atr'] = tr.ewm(alpha=1.0/14.0, adjust=False).mean()
+        # Wilder's ATR: first value = SMA(TR, 14), then RMA with alpha=1/14
+        sma14_tr = tr.rolling(window=14).mean()
+        atr = tr.copy()
+        atr.iloc[:13] = np.nan
+        atr.iloc[13] = sma14_tr.iloc[13]
+        for i in range(14, len(df)):
+            atr.iloc[i] = atr.iloc[i-1] + (tr.iloc[i] - atr.iloc[i-1]) / 14.0
+        df['atr'] = atr
         
         # Volume Weighted Moving Average (VWMA)
         df['vwma_20'] = (df['close'] * df['volume']).rolling(window=20).sum() / (df['volume'].rolling(window=20).sum() + 1e-9)

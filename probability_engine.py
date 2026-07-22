@@ -107,14 +107,25 @@ class ProbabilityEngine:
         # Simple historical refinement if history is available
         if history_df is not None and len(history_df) > 50:
             try:
-                # Use original index-aligned close for forward return calculation
+                # FUTURE INFO WARNING: history_df may contain all data up to present.
+                # We only use data that is strictly BEFORE the current row to avoid
+                # look-ahead bias when a full history dataframe is passed.
                 close_series = history_df['close'].copy()
+                # Identify the position of the current row in the history
+                current_idx = close_series.index[-1] if isinstance(close_series.index[-1], (int, np.integer)) else None
+                # Forward return: close 5 periods ahead (only valid for historical data)
                 forward_close = close_series.shift(-5)
                 valid_idx = close_series.notna() & forward_close.notna()
                 
-                # Find historical instances with similar RSI
+                # Find historical instances with similar RSI — EXCLUDING current position
                 rsi_series = history_df['rsi']
                 similar_mask = rsi_series.between(rsi - 10, rsi + 10) & valid_idx
+                if current_idx is not None:
+                    # Prevent look-ahead: only use rows up to 5 before current index
+                    similar_mask = similar_mask & (rsi_series.index < current_idx - 5)
+                else:
+                    # Fallback: use all data except last 5 rows
+                    similar_mask = similar_mask & (close_series.index < len(close_series) - 5)
                 similar_count = similar_mask.sum()
                 
                 if similar_count > 10:
@@ -234,7 +245,9 @@ class ProbabilityEngine:
         if avg_volume is not None and avg_volume > 0 and volume > 0 and volume / avg_volume < 0.3:
             entry_ok = False
         
-        # Dynamic min_win_rate based on recent performance
+        # Dynamic sizing based on recent performance (not min_win_rate gating)
+        # DO NOT gate trades by raising dyn_min — position sizing already handles risk.
+        # Gating trades during cold starts creates a paradox: you can't improve WR without taking trades.
         dyn_min = self.min_win_rate
         death_spiral_risk_mult = 1.0  # Position size multiplier when on a losing streak
         try:
@@ -244,16 +257,14 @@ class ProbabilityEngine:
             if recent_n >= 3:
                 wins = sum(1 for t in recent_trades[-recent_n:] if t.get('pnl', 0) > 0)
                 wr = wins / recent_n
-                # CORRECTED: When losing, RAISE the bar (require higher confidence) AND reduce size.
-                # Lowering the bar during losses leads to degenerate spiral.
+                # ONLY adjust position size — never gate trades with dyn_min.
+                # The cold-start paradox: a 10-trade bot with 10% WR needs to trade to improve.
+                # Gating all trades prevents any path to profitability.
                 if wr < 0.3:
-                    dyn_min = min(self.min_win_rate + 0.10, 0.75)  # Raise bar: require higher win prob when cold
-                    death_spiral_risk_mult = 0.4  # Halve-plus position size on losing streak
+                    death_spiral_risk_mult = 0.25  # Micro-sizing on cold streak (was 0.4)
                 elif wr < 0.5:
-                    dyn_min = min(self.min_win_rate + 0.03, 0.65)  # Slight tightening
-                    death_spiral_risk_mult = 0.7  # 70% size on choppy streak
+                    death_spiral_risk_mult = 0.5  # Half-size on choppy streak (was 0.7)
                 elif wr > 0.7:
-                    dyn_min = max(self.min_win_rate - 0.03, 0.45)  # Slightly relax when hot
                     death_spiral_risk_mult = 1.15  # Slight increase when crushing it
         except:
             pass
@@ -261,7 +272,23 @@ class ProbabilityEngine:
         # Apply death spiral position size reduction
         final_fraction = final_fraction * death_spiral_risk_mult
         
-        is_viable = (p_win >= dyn_min) and (ev > 0) and (final_fraction > 0) and entry_ok
+        # Ensure minimum allocation for small accounts (at least 2.5% = $5 on $200)
+        # Prevents cold-start paradox where sizing rounds to zero
+        if final_fraction < 0.025 and final_fraction > 0 and p_win >= 0.40 and ev > 0:
+            final_fraction = 0.025
+        
+        # Cold-start override: relax dyn_min for accounts with < 20 trades
+        # Small samples produce unreliable WR; need trades to gather data
+        actual_dyn_min = dyn_min
+        try:
+            import database as _db3
+            ct = _db3.load_trades()
+            if len(ct) < 20:
+                actual_dyn_min = max(0.40, dyn_min * 0.80)  # 0.55→0.44 for cold starts
+        except:
+            pass
+        
+        is_viable = (p_win >= actual_dyn_min) and (ev > 0) and (final_fraction > 0) and entry_ok
         
         return {
             "direction": direction,

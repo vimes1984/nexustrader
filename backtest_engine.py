@@ -31,7 +31,8 @@ class BacktestEngine:
     # ------------------------------------------------------------------
 
     def run(self, candles: list, period_start: str = "",
-            period_end: str = "", ppo_agent=None) -> dict:
+            period_end: str = "", ppo_agent=None,
+            entry_threshold: float = 0.30, exit_threshold: float = 0.10) -> dict:
         """Run all baselines + optional PPO evaluation.
 
         Parameters
@@ -52,7 +53,7 @@ class BacktestEngine:
         results["buy_and_hold"] = self._run_buy_and_hold(candles)
         results["ema_crossover"] = self._run_ema_crossover(candles)
         results["random_same_risk"] = self._run_random_same_risk(candles, seed=42)
-        results["nexus_ensemble"] = self._run_nexus_ensemble(candles)
+        results["nexus_ensemble"] = self._run_nexus_ensemble(candles, entry_threshold=entry_threshold, exit_threshold=exit_threshold)
 
         if ppo_agent is not None:
             ppo_result = self._run_ppo_policy(candles, ppo_agent)
@@ -364,8 +365,13 @@ class BacktestEngine:
 
         return self._metrics_to_dict(equity_curve, trades)
 
-    def _run_nexus_ensemble(self, candles):
-        """Run the StrategyEnsemble signals over candles without any DB mutations."""
+    def _run_nexus_ensemble(self, candles, entry_threshold=0.30, exit_threshold=0.10):
+        """Run the StrategyEnsemble signals over candles without any DB mutations.
+        
+        Parameters:
+            entry_threshold: abs(signal) must exceed this to enter
+            exit_threshold: abs(signal) below this triggers exit
+        """"
         try:
             ensemble = StrategyEnsemble()
         except Exception:

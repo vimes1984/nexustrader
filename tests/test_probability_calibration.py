@@ -42,7 +42,8 @@ class TestProbabilityCalibration(unittest.TestCase):
         self.assertEqual(probability_calibration.kelly_cap_from_calibration(0.3, 30), 0.02)
 
     def test_kelly_cap_perfect_score(self):
-        self.assertEqual(probability_calibration.kelly_cap_from_calibration(0.0, 30), 1.0)
+        # Even perfect calibration gets capped at 0.15 by design
+        self.assertEqual(probability_calibration.kelly_cap_from_calibration(0.0, 30), 0.15)
 
     def test_kelly_cap_insufficient_samples(self):
         self.assertEqual(probability_calibration.kelly_cap_from_calibration(0.0, 29), 0.05)

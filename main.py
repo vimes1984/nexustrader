@@ -78,6 +78,57 @@ async def internal_error_handler(request, exc):
 
 
 @app.middleware("http")
+async def api_auth_middleware(request: Request, call_next):
+    """Simple token-based API auth for protected endpoints, with CORS headers for dashboard."""
+    # CORS headers for same-origin dashboard access
+    origin = request.headers.get("origin", "")
+    
+    # Allow API access from local dashboard (served on same host) or with valid token
+    path = request.url.path
+    is_api = path.startswith("/api/")
+    
+    # Read-only endpoints accessible without auth (dashboard rendering)
+    public_api = (
+        "/api/status", "/api/health", "/api/init",
+        "/api/trades", "/api/trades/all", "/api/history",
+        "/api/portfolio/history", "/api/assets", "/api/positions",
+        "/api/trading/signals", "/api/trading/reasoning",
+        "/api/safety/status", "/api/quant/status", "/api/quant/prompt",
+        "/api/system/shadow_trades", "/api/system/shadow_performance",
+    )
+    # Partial-prefix matches for parameterized routes
+    public_prefixes = ("/api/history?", "/api/portfolio/", "/api/system/shadow_")
+    
+    is_protected = is_api and (path not in public_api)
+    if is_protected:
+        # Also check if path starts with a public prefix (parameterized routes)
+        for prefix in public_prefixes:
+            if path.startswith(prefix.split("?")[0]):
+                is_protected = False
+                break
+    
+    if is_protected:
+        # Check for API token in header or query param
+        api_token = request.headers.get("X-API-Token", request.query_params.get("token", ""))
+        expected_token = database.load_setting("api_token", "")
+        if expected_token and api_token != expected_token:
+            return JSONResponse(
+                status_code=401,
+                content={"status": "error", "detail": "Invalid or missing API token"},
+            )
+    
+    response = await call_next(request)
+    
+    # Add CORS headers for dashboard
+    if origin:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, X-API-Token"
+    
+    return response
+
+
+@app.middleware("http")
 async def add_no_cache_headers(request: Request, call_next):
     response = await call_next(request)
     path = request.url.path
@@ -285,20 +336,28 @@ class NexusTraderOrchestrator:
             asyncio.run_coroutine_threadsafe(coro, self.loop)
 
     def on_trade_closed(self, ticker, entry_state, strategy_signals, direction, pnl_percent):
-        """Callback from ExecutionEngine when a trade is closed."""
+        """Callback from ExecutionEngine when a trade is closed.
+
+        Stores entry_state to avoid None-passthrough from the callback chain.
+        """
+        # Guard against None entry_state
+        if entry_state is None:
+            entry_state = []
         logging.info("[{}] Trade closed with PnL%: {:.2f}%. Training Policy Network...".format(ticker, pnl_percent*100))
         # Feed PnL to KillSwitch and drawdown tracker
-        if self.execution_engine.trading_mode == "live":
-            pnl_abs = pnl_percent * self.execution_engine.balance
-            kill_switch.record_trade(pnl_abs)
-            # Update drawdown from current equity
-            current_prices = {}
-            for t in self.tickers:
-                if t in self.data_ingestions:
-                    di_t = self.data_ingestions.get(t)
-                    current_prices[t] = di_t.live_price or 0.0
-            equity = self.execution_engine.get_equity(current_prices)
-            drawdown_tracker.update(equity)
+        # BUGFIX: Track ALL trades (paper + live), not just live.
+        # Otherwise KillSwitch never activates in paper mode and
+        # paper-mode bugs cascade to live deployment undetected.
+        pnl_abs = pnl_percent * self.execution_engine.balance
+        kill_switch.record_trade(pnl_abs)
+        # Update drawdown from current equity
+        current_prices = {}
+        for t in self.tickers:
+            if t in self.data_ingestions:
+                di_t = self.data_ingestions.get(t)
+                current_prices[t] = di_t.live_price or 0.0
+        equity = self.execution_engine.get_equity(current_prices)
+        drawdown_tracker.update(equity)
         
         learner = self.learning_engines[ticker]
         ensemble = self.strategy_ensembles[ticker]
@@ -488,6 +547,23 @@ class NexusTraderOrchestrator:
         except Exception as e:
             logging.warning(f"[ProtonBridge] Failed to send trade notification: {e}")
 
+        # ── Calibration loop: update Brier score from accumulated trade data ──
+        # This feeds kill_switch.calibration_brier which caps position sizing
+        # when probability predictions are poorly calibrated.
+        try:
+            from probability_calibration import load_calibration_from_trades
+            cal = load_calibration_from_trades()
+            if cal["n_samples"] >= 5:
+                old_brier = getattr(kill_switch, "calibration_brier", None)
+                kill_switch.calibration_brier = cal["brier_score"]
+                if old_brier != cal["brier_score"]:
+                    logging.info(
+                        f"[CALIBRATION] Updated brier_score={cal['brier_score']:.4f} "
+                        f"(n={cal['n_samples']}) kelly_cap={cal['kelly_cap']:.4f}"
+                    )
+        except Exception as e:
+            logging.warning(f"[CALIBRATION] Update failed: {e}")
+
     def process_tick(self, row, ticker):
         """Orchestrates single price tick logic for a specific ticker."""
         # Periodically refresh news sentiment in a background thread to prevent loop blocking
@@ -650,6 +726,18 @@ class NexusTraderOrchestrator:
         pos_open = ticker in self.execution_engine.active_positions
         weighted_signal, strategy_breakdown = ensemble.get_weighted_signal(row, ingestor.data)
         
+        # Populate latest_signals for the dashboard /api/trading/signals endpoint
+        if not hasattr(self, 'latest_signals'):
+            self.latest_signals = {}
+        direction = "BULLISH" if weighted_signal > 0 else ("BEARISH" if weighted_signal < 0 else "NEUTRAL")
+        self.latest_signals[ticker] = {
+            "signal": round(weighted_signal, 6),
+            "direction": direction,
+            "strength": abs(weighted_signal),
+            "timestamp": time.time(),
+            "breakdown": strategy_breakdown
+        }
+        
         # Evaluate and run shadow long-term strategy rules
         try:
             shadow_opened = self.long_term_layer.evaluate_long_term_rules(
@@ -673,8 +761,10 @@ class NexusTraderOrchestrator:
             # Scales inversely with account balance: $200 -> 0.35, $1K -> 0.25, $10K -> 0.20
             # Override via DB setting 'signal_threshold' (set by optimization agents)
             _saved_threshold = database.load_setting("signal_threshold", None)
-            if _saved_threshold is not None:
-                _min_sig = max(0.10, min(0.80, float(_saved_threshold)))
+            if _saved_threshold is not None and str(_saved_threshold).strip():
+                # SAFETY CLAMP [0.10, 0.45]: optimizer once set this to 0.60, gating ALL trades for 6+ hours.
+                # 0.45 ensures at least some trades pass in a $200 account (default ~0.35).
+                _min_sig = max(0.10, min(0.45, float(str(_saved_threshold).strip())))
             else:
                 _min_sig = max(0.20, min(0.45, 1.0 / (1.0 + self.execution_engine.balance / 500.0)))
             if abs(weighted_signal) >= _min_sig:
@@ -1384,6 +1474,10 @@ def get_status():
     
     _uptime = int(time.time() - getattr(get_status, "_start_time", time.time()))
     
+    # Recent trades for dashboard display
+    _recent_trades = _all_trades[-20:] if len(_all_trades) > 20 else _all_trades
+    _recent_trades.reverse()  # newest first
+    
     return {
         "balance": ee.balance,
         "equity": ee.get_equity(current_prices),
@@ -1403,7 +1497,8 @@ def get_status():
         "uptime_seconds": _uptime,
         "fiat_breakdown": fiat_breakdown,
         "positions": ee.active_positions,
-        "tickers": orchestrator.tickers
+        "tickers": orchestrator.tickers,
+        "trades": _recent_trades
     }
 
 def reconstruct_trades_from_exchange(exchange):
@@ -1994,11 +2089,24 @@ def apply_optimization(opt_id: int):
 @app.post("/api/optimizations/apply/all")
 async def apply_all_optimizations(request: Request):
     """Apply all pending optimizations at once."""
-    import database as _db
     import traceback as _tb
     try:
-        # Load all pending optimizations
-        rows = _db._execute("SELECT id, action_type, ticker, params FROM optimizations WHERE status = 'pending' ORDER BY id")
+        # Load all pending optimizations directly via SQL connection
+        conn = database.get_db_connection()
+        cursor = conn.cursor()
+        try:
+            # Check if optimizations table exists first
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='optimizations'")
+            if not cursor.fetchone():
+                conn.close()
+                return {"status": "ok", "count": 0, "msg": "No optimizations table"}
+            cursor.execute("SELECT id, action_type, ticker, params FROM optimizations WHERE status = 'pending' ORDER BY id")
+            rows = cursor.fetchall()
+        except Exception:
+            conn.close()
+            return {"status": "ok", "count": 0, "msg": "No optimizations table"}
+        conn.close()
+        
         if not rows:
             return {"status": "ok", "count": 0, "msg": "No pending optimizations"}
         
@@ -2007,9 +2115,9 @@ async def apply_all_optimizations(request: Request):
             oid = row[0]
             action = row[1]
             ticker = row[2]
-            params_str = row[3]
+            params_str = row[3] if len(row) > 3 else None
             try:
-                params = __import__("json").loads(params_str) if params_str else {}
+                params = json.loads(params_str) if params_str else {}
             except Exception:
                 params = {}
             
@@ -2017,18 +2125,23 @@ async def apply_all_optimizations(request: Request):
                 if action == "tp_sl":
                     for key in ("tp_multiplier", "sl_multiplier"):
                         if key in params:
-                            _db.save_setting(key, str(params[key]))
+                            database.save_setting(key, str(params[key]))
                 elif action == "threshold":
                     if "signal_threshold" in params:
-                        _db.save_setting("signal_threshold", str(params["signal_threshold"]))
+                        database.save_setting("signal_threshold", str(params["signal_threshold"]))
                 elif action == "learning_rate":
                     if "nn_lr" in params:
-                        _db.save_setting("nn_lr", str(params["nn_lr"]))
+                        database.save_setting("nn_lr", str(params["nn_lr"]))
                 elif action == "weights":
                     if ticker and "weights" in params:
-                        _db.save_setting(f"policy_net_weights_{ticker}", __import__("json").dumps(params["weights"]))
+                        database.save_setting(f"policy_net_weights_{ticker}", json.dumps(params["weights"]))
                 
-                _db._execute("UPDATE optimizations SET status = 'applied', applied_at = datetime('now') WHERE id = ?", (oid,))
+                # Update optimization status
+                conn2 = database.get_db_connection()
+                cursor2 = conn2.cursor()
+                cursor2.execute("UPDATE optimizations SET status = 'applied', applied_at = datetime('now') WHERE id = ?", (oid,))
+                conn2.commit()
+                conn2.close()
                 applied.append({"id": oid, "action": action, "ticker": ticker})
             except Exception as e:
                 print(f"Failed to apply optimization {oid}: {e}")
@@ -3850,11 +3963,10 @@ def api_llm_config_get():
     }
 
 @app.post("/api/llm/config")
-def api_llm_config_save(request: Request):
+async def api_llm_config_save(request: Request):
     """Save LLM configuration."""
-    import asyncio as _asyncio
     try:
-        data = _asyncio.run(request.json()) if hasattr(request, 'json') else {}
+        data = await request.json()
     except Exception:
         data = {}
     
@@ -3912,11 +4024,10 @@ def api_nn_architecture_get():
     }
 
 @app.post("/api/nn/architecture")
-def api_nn_architecture_set(request: Request):
+async def api_nn_architecture_set(request: Request):
     """Set NN architecture. Requires bot restart to take effect."""
-    import asyncio as _asyncio
     try:
-        data = _asyncio.run(request.json()) if hasattr(request, 'json') else {}
+        data = await request.json()
     except Exception:
         data = {}
     

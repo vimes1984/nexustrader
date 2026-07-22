@@ -40,7 +40,8 @@ class TestMetrics(unittest.TestCase):
 
     def test_profit_factor_all_profitable(self):
         trades = [{"pnl": 10}, {"pnl": 5}, {"pnl": 3}]
-        self.assertEqual(profit_factor(trades), float('inf'))
+        # Capped at 100 for JSON safety, not inf
+        self.assertEqual(profit_factor(trades), 100.0)
 
     def test_profit_factor_mixed(self):
         trades = [{"pnl": 10}, {"pnl": -5}, {"pnl": 3}, {"pnl": -2}]

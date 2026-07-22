@@ -284,6 +284,16 @@ class PolicyNetwork:
             self.hidden_layers = data.get("hidden_layers", 1)
             self.dropout = data.get("dropout", 0.0)
             self.optimizer = data.get("optimizer", "Adam")
+            # Restore Adam optimizer momentum/velocity states if present
+            if "m_W" in data and "m_b" in data:
+                try:
+                    self.m_W = [np.array(mw) for mw in data["m_W"]]
+                    self.m_b = [np.array(mb) for mb in data["m_b"]]
+                    self.v_W = [np.array(vw) for vw in data["v_W"]]
+                    self.v_b = [np.array(vb) for vb in data["v_b"]]
+                    self.t = data.get("t", 0)
+                except (ValueError, KeyError, IndexError) as e:
+                    logging.warning(f"[Adam State] Could not restore optimizer state (will re-init): {e}")
         else:
             # Backward compatibility
             self.W = [np.array(data["W1"]), np.array(data["W2"])]
@@ -301,20 +311,30 @@ class PolicyNetwork:
             new_b0 = self.b[0]
             self.b[0] = new_b0
 
-        # Migrate old action_dim weights to current expected action_dim (6 strategies)
+        # Migrate old action_dim weights to current expected action_dim
         current_action_dim = self.W[-1].shape[1]
-        expected_dim = self.action_dim  # Use self.action_dim instead of recomputing
+        expected_dim = self.action_dim
         if expected_dim != current_action_dim:
-            logging.info(f"[WEIGHT MIGRATION] Truncating action_dim {current_action_dim}→{expected_dim}")
-            self.W[-1] = self.W[-1][:, :expected_dim]
-            self.b[-1] = self.b[-1][:, :expected_dim]
+            if expected_dim > current_action_dim:
+                # PAD with small random weights for new strategies
+                logging.info(f"[WEIGHT MIGRATION] Padding action_dim {current_action_dim}→{expected_dim}")
+                pad_w = np.random.randn(self.W[-1].shape[0], expected_dim - current_action_dim) * 0.01
+                pad_b = np.random.randn(1, expected_dim - current_action_dim) * 0.01
+                self.W[-1] = np.hstack([self.W[-1], pad_w])
+                self.b[-1] = np.hstack([self.b[-1], pad_b])
+            else:
+                # TRUNCATE: fewer strategies now (unlikely but handle it)
+                logging.info(f"[WEIGHT MIGRATION] Truncating action_dim {current_action_dim}→{expected_dim}")
+                self.W[-1] = self.W[-1][:, :expected_dim]
+                self.b[-1] = self.b[-1][:, :expected_dim]
 
-        # Init optimizer momentum/velocity if missing
-        self.m_W = [np.zeros_like(w) for w in self.W]
-        self.m_b = [np.zeros_like(b) for b in self.b]
-        self.v_W = [np.zeros_like(w) for w in self.W]
-        self.v_b = [np.zeros_like(b) for b in self.b]
-        self.t = 0
+        # Init optimizer momentum/velocity if NOT already restored from saved state
+        if "m_W" not in data or not hasattr(self, 'm_W') or len(self.m_W) != len(self.W):
+            self.m_W = [np.zeros_like(w) for w in self.W]
+            self.m_b = [np.zeros_like(b) for b in self.b]
+            self.v_W = [np.zeros_like(w) for w in self.W]
+            self.v_b = [np.zeros_like(b) for b in self.b]
+            self.t = 0
 
     @property
     def W1(self):

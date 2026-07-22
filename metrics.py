@@ -50,7 +50,7 @@ def calmar_ratio(returns: Sequence[float], max_drawdown: float, periods_per_year
     if years <= 0:
         return 0.0
     total_return = sum(returns)
-    base = max(1.0 + total_return, 0.01)
+    base = max(1.0 + total_return, 1e-10)
     try:
         cagr = base ** (1.0 / years) - 1.0
     except (ValueError, OverflowError, ZeroDivisionError):

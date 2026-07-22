@@ -137,6 +137,21 @@ class ExecutionEngine:
         self.learning_callback = None
         self.pending_limit_orders = {}  # symbol -> pending order dict
 
+    def _get_asset_balance(self, asset):
+        """Get the balance of a specific asset from latest Kraken sync.
+        Assets are normalized (e.g. 'XBT' -> 'BTC').
+        """
+        if not hasattr(self, '_last_raw_balances') or not self._last_raw_balances:
+            return 0.0
+        # Try direct match first
+        if asset in self._last_raw_balances:
+            return float(self._last_raw_balances[asset])
+        # Try common Kraken alternate names
+        alt_names = {'BTC': 'XBT', 'XBT': 'BTC', 'DOGE': 'XDG', 'XDG': 'DOGE'}
+        if asset in alt_names and alt_names[asset] in self._last_raw_balances:
+            return float(self._last_raw_balances[alt_names[asset]])
+        return 0.0
+
     def sync_live_balance(self):
         """Syncs the balance with the live broker if trading_mode is 'live'."""
         if self.trading_mode != "live":
@@ -161,6 +176,7 @@ class ExecutionEngine:
             })
             balance_info = exchange.fetch_balance()
             total_bal = balance_info.get('total', {})
+            self._last_raw_balances = total_bal  # Cache for balance checks
             
             # Load markets to check symbols
             try:
@@ -449,6 +465,19 @@ class ExecutionEngine:
             stop_loss_pct = 0.001  # At least 0.1% stop distance
         position_value = (available_balance * kelly_fraction) / min(stop_loss_pct, 0.5)  # cap stop at 50%
         
+        # For SELL orders, cap position value by actual base asset holdings
+        if direction == "SELL":
+            base_asset = symbol.split('-')[0] if '-' in symbol else symbol
+            try:
+                base_bal = self._get_asset_balance(base_asset)
+                max_sell_qty = base_bal * 0.995  # Reserve 0.5% for fees/slippage
+                max_sell_value = max_sell_qty * entry_price
+                if position_value > max_sell_value:
+                    position_value = max_sell_value
+                    logging.info("[SIZE CAP] SELL %s capped to $%.2f (hold %.6f %s)" % (symbol, max_sell_value, base_bal, base_asset))
+            except Exception as e:
+                logging.warning("[SIZE CAP] Could not cap SELL size: %s" % str(e))
+        
         # Minimum position floor: $5 to allow small-account trading
         if position_value < 5.0:
             logging.warning(f"[MIN SIZE] Position value ${position_value:.2f} below $5 minimum. Skipping {symbol}.")
@@ -471,6 +500,18 @@ class ExecutionEngine:
             adjusted_tp = tp + slippage_cost
             adjusted_sl = sl
 
+        # Balance check for spot trading: SELL requires holding the base asset
+        base_asset = symbol.split('-')[0] if '-' in symbol else symbol
+        if direction == "SELL" and self.trading_mode == "live":
+            try:
+                base_balance = self._get_asset_balance(base_asset)
+                needed = quantity * (1.0 + self.transaction_fee_rate)
+                if base_balance < needed:
+                    logging.warning(f"[BALANCE] Insufficient {base_asset} balance (have {base_balance:.6f}, need {needed:.6f}). Skipping SELL on {symbol}.")
+                    return False
+            except Exception as e:
+                logging.warning(f"[BALANCE] Could not check {base_asset} balance: {e}. Proceeding anyway.")
+        
         # Execute order (live broker or paper simulation)
         if self.trading_mode == "live":
             success, actual_qty = self.execute_order_on_broker(symbol, direction.lower(), quantity, entry_price)
@@ -497,6 +538,10 @@ class ExecutionEngine:
             "strategy_signals": strategy_signals,
             "entry_state": evaluation.get("state", []),
             "sentiment_sources": evaluation.get("sentiment_sources", {}),
+            "predicted_win_probability": evaluation.get("win_probability", None),
+            "expected_value": evaluation.get("expected_value", None),
+            "kelly_fraction": evaluation.get("kelly_fraction", None),
+            "risk_reward_ratio": evaluation.get("risk_reward_ratio", None),
             "fee_paid": fee
         }
         logging.info(f"Opened {exec_label} {direction} position for {symbol}: Qty {actual_qty:.6f} at {effective_entry:.2f} (incl. slippage). Fee: {fee:.2f}")
@@ -639,7 +684,11 @@ class ExecutionEngine:
                 "strategy_signals": pos["strategy_signals"],
                 "sentiment_sources": pos.get("sentiment_sources", {}),
                 "policy_brain": active_brain_name,
-                "trading_mode": self.trading_mode
+                "trading_mode": self.trading_mode,
+                "predicted_win_probability": pos.get("predicted_win_probability"),
+                "expected_value": pos.get("expected_value"),
+                "kelly_fraction": pos.get("kelly_fraction"),
+                "risk_reward_ratio": pos.get("risk_reward_ratio")
             }
 
             # Save trade to DB

@@ -71,7 +71,7 @@ def calmar_ratio(returns: Sequence[float], max_drawdown: float, periods_per_year
     if years <= 0:
         return 0.0
     # Use (1+total_return) for CAGR; clamp to prevent negative base raising to fractional power
-    base = max(1.0 + total_return, 0.01)  # floor at 1% to keep real root for heavy losses
+    base = max(1.0 + total_return, 1e-10)  # floor near zero to keep real root for heavy losses
     try:
         cagr = base ** (1.0 / years) - 1.0
     except (ValueError, OverflowError, ZeroDivisionError):

@@ -408,9 +408,10 @@ def save_trade(trade):
     try:
         signals_str = json.dumps(trade.get('strategy_signals', []))
         sources_str = json.dumps(trade.get('sentiment_sources', {}))
+        # Ensure calibration columns exist (load_calibration_from_trades has ALTER TABLE fallbacks)
         cursor.execute("""
-        INSERT INTO trades (symbol, direction, quantity, entry_price, exit_price, pnl, pnl_percent, exit_reason, entry_time, exit_time, strategy_signals, sentiment_sources, policy_brain, trading_mode)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO trades (symbol, direction, quantity, entry_price, exit_price, pnl, pnl_percent, exit_reason, entry_time, exit_time, strategy_signals, sentiment_sources, policy_brain, trading_mode, predicted_win_probability, expected_value, risk_reward_ratio, kelly_fraction)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             trade['symbol'],
             trade['direction'],
@@ -425,7 +426,11 @@ def save_trade(trade):
             signals_str,
             sources_str,
             trade.get('policy_brain', 'Default Brain'),
-            trade.get('trading_mode', 'paper')
+            trade.get('trading_mode', 'paper'),
+            trade.get('predicted_win_probability'),
+            trade.get('expected_value'),
+            trade.get('risk_reward_ratio'),
+            trade.get('kelly_fraction')
         ))
         
         # Update policy_brain's accumulated efficacy metrics
@@ -863,14 +868,7 @@ def save_active_asset(ticker: str, is_active: bool, tp_multiplier: float, sl_mul
         row = cursor.fetchone()
         if row:
             old_active, old_tp, old_sl, old_kelly = bool(row[0]), float(row[1]), float(row[2]), float(row[3])
-    except Exception:
-        pass
-    finally:
-        conn.close()
-
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    try:
+        
         cursor.execute(
             "INSERT OR REPLACE INTO active_assets (ticker, is_active, tp_multiplier, sl_multiplier, kelly_ceiling) VALUES (?, ?, ?, ?, ?)",
             (ticker, int(is_active), tp_multiplier, sl_multiplier, kelly_ceiling)
@@ -958,6 +956,38 @@ def run_db_maintenance():
             cursor.execute(
                 "DELETE FROM agent_runs WHERE id <= (SELECT id FROM agent_runs ORDER BY id DESC LIMIT 1 OFFSET 5000)"
             )
+
+        # Trim old trades: keep last 1000 closed trades
+        # Trades table is unbounded and grows with every closed position.
+        # 1000 trades at ~10/day ≈ 100 days of history for backtesting/calibration.
+        trade_count = cursor.execute("SELECT COUNT(*) FROM trades").fetchone()[0]
+        if trade_count > 1000:
+            cursor.execute(
+                "DELETE FROM trades WHERE rowid IN ("
+                "SELECT rowid FROM trades ORDER BY exit_time ASC LIMIT ?"
+                ")",
+                (trade_count - 1000,)
+            )
+            logging.info(f"DB maintenance: trimmed {trade_count - 1000} old trades")
+
+        # Trim old weights_history: keep last 5000 per ticker
+        # This table grows with every neural network update (~100/day per ticker)
+        try:
+            tickers = cursor.execute("SELECT DISTINCT ticker FROM weights_history").fetchall()
+            for (ticker_row,) in tickers:
+                wh_count = cursor.execute(
+                    "SELECT COUNT(*) FROM weights_history WHERE ticker = ?", (ticker_row,)
+                ).fetchone()[0]
+                if wh_count > 5000:
+                    cursor.execute(
+                        "DELETE FROM weights_history WHERE ticker = ? AND rowid IN ("
+                        "SELECT rowid FROM weights_history WHERE ticker = ? ORDER BY timestamp ASC LIMIT ?"
+                        ")",
+                        (ticker_row, ticker_row, wh_count - 5000)
+                    )
+                    logging.debug(f"DB maintenance: trimmed {wh_count - 5000} weights_history rows for {ticker_row}")
+        except Exception as e:
+            logging.warning(f"DB maintenance: weights_history trim error: {e}")
 
         conn.commit()
         cursor.execute("PRAGMA integrity_check")
