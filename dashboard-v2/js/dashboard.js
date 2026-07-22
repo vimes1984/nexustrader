@@ -220,7 +220,8 @@ const Dashboard = {
           if (l) l.textContent = pct + '%';
         } else if (c) { c.style.display = 'none'; }
       }
-      if (data.position) this.renderPosition(data.position);
+      if (data.positions) this.renderPositions(data.positions);
+      else if (data.position) this.renderPositions(data.position);
     } catch(e) {
       if (document.body.classList.contains('debug')) console.warn('[NT] Tick render error:', e);
     }
@@ -363,18 +364,29 @@ const Dashboard = {
     }
   },
 
-  renderPosition(pos) {
+  renderPositions(positions) {
     const c = byId('position-details-container'); if (!c) return;
-    if (!pos?.entry_price) { c.innerHTML = '<span style="color:var(--text-muted)">No active position</span>'; return; }
-    const dir = pos.direction || 'long';
-    const dirColor = dir === 'long' ? 'var(--neon-green)' : 'var(--neon-red)';
-    const pnl = Number(pos.unrealized_pnl || 0);
-    c.innerHTML = `<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px">
-      <span style="color:${dirColor};font-weight:700;font-size:13px">${dir.toUpperCase()}</span>
-      <span style="font-family:var(--font-mono)">Entry: <b>$${Number(pos.entry_price).toFixed(2)}</b></span>
-      <span style="font-family:var(--font-mono)">Size: <b>${Number(pos.size||0).toFixed(4)}</b></span>
-      <span style="font-family:var(--font-mono)">PnL: <b style="color:${pnl>=0?'var(--neon-green)':'var(--neon-red)'}">$${pnl.toFixed(4)}</b></span>
-    </div>`;
+    if (!Array.isArray(positions) && typeof positions === 'object' && positions.entry_price) {
+      return this.renderPositions([positions]);
+    }
+    let pa = positions;
+    if (!Array.isArray(positions) && typeof positions === 'object') {
+      pa = Object.entries(positions).map(function(e) { var p = e[1]; p.symbol = p.symbol || e[0]; return p; });
+    }
+    if (!pa || pa.length === 0) { c.innerHTML = '<span style="color:var(--text-muted)">No active positions</span>'; return; }
+    c.innerHTML = pa.map(function(pos) {
+      var dir = pos.direction || 'long';
+      var dc = dir === 'long' ? 'var(--neon-green)' : 'var(--neon-red)';
+      var pnl = Number(pos.unrealized_pnl || 0);
+      var sym = pos.symbol || '\u2014';
+      return '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:4px;padding-bottom:4px;border-bottom:1px solid var(--border-subtle)">' +
+        '<span style="color:var(--text-muted);font-weight:600;font-size:11px;min-width:55px">' + sym + '</span>' +
+        '<span style="color:' + dc + ';font-weight:700;font-size:12px">' + dir.toUpperCase() + '</span>' +
+        '<span style="font-family:var(--font-mono);font-size:11px">Entry: <b>$' + Number(pos.entry_price||0).toFixed(2) + '</b></span>' +
+        '<span style="font-family:var(--font-mono);font-size:11px">Size: <b>' + Number(pos.size||pos.quantity||0).toFixed(4) + '</b></span>' +
+        '<span style="font-family:var(--font-mono);font-size:11px">PnL: <b style="color:' + (pnl>=0?'var(--neon-green)':'var(--neon-red)') + '">$' + pnl.toFixed(4) + '</b></span>' +
+      '</div>';
+    }).join('');
   },
 
   updateFreshness(id, timestamp) {
