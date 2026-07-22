@@ -1,41 +1,87 @@
 /**
- * api.js — API client for NexusTrader Dashboard v3
+ * api.js — API client for NexusTrader Dashboard v3.2
  * All backend communication goes through this module.
+ * Enhanced with retry logic, cache-busting, and structured error recovery.
  */
 const API = {
   base: '',
+  _retryCount: 3,
+  _retryDelay: 1000,
 
   async _fetch(path, opts = {}) {
     const url = this.base + path;
-    let res;
-    try {
-      res = await fetch(url, {
-        headers: { 'Content-Type': 'application/json', ...opts.headers },
-        ...opts,
-        signal: AbortSignal.timeout(15000),
-      });
-    } catch (err) {
-      if (err.name === 'TimeoutError' || err.name === 'AbortError') {
-        throw new Error('NETWORK_TIMEOUT: Request to ' + path + ' timed out');
-      }
-      throw new Error('NETWORK_ERROR: ' + (err.message || 'Connection failed'));
+    let lastErr;
+    let attempts = 0;
+    const maxAttempts = opts._retryCount || this._retryCount;
+
+    // Add cache-bust parameter for GET requests to prevent stale responses
+    let finalPath = path;
+    if (!opts.method || opts.method === 'GET') {
+      const separator = path.includes('?') ? '&' : '?';
+      finalPath = path + separator + '_t=' + Date.now();
     }
-    if (!res.ok) {
-      let text = '';
-      try { text = await res.text(); } catch(e) { text = ''; }
-      const trimmed = text.slice(0, 300);
-      if (res.status === 404) {
-        throw new Error('NOT_FOUND: Endpoint ' + path + ' not available (404)');
-      } else if (res.status === 500) {
-        throw new Error('SERVER_ERROR: ' + path + ' returned 500: ' + trimmed);
-      } else if (res.status === 503) {
-        throw new Error('SERVICE_UNAVAILABLE: Backend is offline (503)');
-      } else if (res.status === 429) {
-        throw new Error('RATE_LIMITED: Too many requests (429). Retry later.');
+
+    for (attempts = 0; attempts < maxAttempts; attempts++) {
+      try {
+        const res = await fetch(this.base + finalPath, {
+          headers: { 'Content-Type': 'application/json', ...opts.headers },
+          ...opts,
+          signal: AbortSignal.timeout(15000),
+        });
+
+        if (!res.ok) {
+          let text = '';
+          try { text = await res.text(); } catch(e) { text = ''; }
+          const trimmed = text.slice(0, 300);
+
+          // Retry on 5xx and 429 errors
+          if ((res.status >= 500 && res.status < 600) || res.status === 429) {
+            if (attempts < maxAttempts - 1) {
+              const delay = this._retryDelay * Math.pow(2, attempts) + Math.random() * 200;
+              await new Promise(r => setTimeout(r, delay));
+              lastErr = new Error('HTTP ' + res.status + ' (retry ' + (attempts + 1) + '/' + maxAttempts + ')');
+              continue;
+            }
+          }
+
+          if (res.status === 404) {
+            throw new Error('NOT_FOUND: Endpoint ' + path + ' not available (404)');
+          } else if (res.status === 500) {
+            throw new Error('SERVER_ERROR: ' + path + ' returned 500: ' + trimmed);
+          } else if (res.status === 503) {
+            throw new Error('SERVICE_UNAVAILABLE: Backend is offline (503)');
+          } else if (res.status === 429) {
+            throw new Error('RATE_LIMITED: Too many requests (429). Retry later.');
+          }
+          throw new Error('HTTP ' + res.status + ': ' + trimmed);
+        }
+
+        return res.json();
+      } catch (err) {
+        lastErr = err;
+        if (err.name === 'TimeoutError' || err.name === 'AbortError') {
+          if (attempts < maxAttempts - 1) {
+            const delay = this._retryDelay * Math.pow(2, attempts) + Math.random() * 200;
+            await new Promise(r => setTimeout(r, delay));
+            continue;
+          }
+          throw new Error('NETWORK_TIMEOUT: Request to ' + path + ' timed out after ' + maxAttempts + ' attempts');
+        }
+        if (err.message && (err.message.includes('NETWORK_ERROR') || err.message.includes('Failed to fetch'))) {
+          if (attempts < maxAttempts - 1) {
+            const delay = this._retryDelay * Math.pow(2, attempts) + Math.random() * 200;
+            await new Promise(r => setTimeout(r, delay));
+            continue;
+          }
+        }
+        if (err.message && (err.message.startsWith('NOT_FOUND') || err.message.startsWith('SERVER_ERROR') ||
+            err.message.startsWith('SERVICE_UNAVAILABLE') || err.message.startsWith('RATE_LIMITED'))) {
+          throw err;
+        }
+        throw new Error('NETWORK_ERROR: ' + (err.message || 'Connection failed'));
       }
-      throw new Error('HTTP ' + res.status + ': ' + trimmed);
     }
-    return res.json();
+    throw lastErr || new Error('NETWORK_ERROR: Request failed after ' + maxAttempts + ' attempts');
   },
 
   get(path) { return this._fetch(path); },

@@ -1,7 +1,12 @@
 /**
- * llm.js v3 — LLM tab: status, test, sentiment, regime, config
+ * llm.js v3.2 — LLM tab: status, test, sentiment, regime, config
  */
 const LLM = {
+  _escape(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  },
+
   init() {
     document.addEventListener('nt:tabChange', (e) => { if (e.detail === 'llm') this.refresh(); });
     byId('btn-llm-test')?.addEventListener('click', () => this.test());
@@ -18,8 +23,9 @@ const LLM = {
       const data = await API.llmStatus();
       const statusEl = byId('llm-status-text');
       if (statusEl) {
-        statusEl.textContent = data?.server_connected ? '✅ CONNECTED' : '❌ DISCONNECTED';
-        statusEl.style.color = data?.server_connected ? 'var(--neon-green)' : 'var(--neon-red)';
+        const connected = data?.server_connected;
+        statusEl.textContent = connected ? '✅ CONNECTED' : '❌ DISCONNECTED';
+        statusEl.style.color = connected ? 'var(--neon-green)' : 'var(--neon-red)';
       }
       const modelEl = byId('llm-status-model');
       if (modelEl) modelEl.textContent = data?.model || 'Llama-3.2-3B (fine-tuned)';
@@ -27,8 +33,10 @@ const LLM = {
       if (speedEl && data?.speed_toks) speedEl.textContent = data.speed_toks + ' tok/s';
       if (data?.last_sentiment) {
         const s = data.last_sentiment;
-        byId('llm-sentiment-dir').textContent = (s.direction || 'neutral').toUpperCase();
-        byId('llm-sentiment-score').textContent = (s.sentiment_score || 0).toFixed(4);
+        const dirEl = byId('llm-sentiment-dir');
+        if (dirEl) dirEl.textContent = (s.direction || 'neutral').toUpperCase();
+        const scoreEl = byId('llm-sentiment-score');
+        if (scoreEl) scoreEl.textContent = (s.sentiment_score || 0).toFixed(4);
       }
     } catch(e) { /* LLM server may not be running */ }
   },
@@ -37,7 +45,11 @@ const LLM = {
     try {
       const data = await API.llmConfig();
       if (data?.llama_server_url) {
-        try { const u = new URL(data.llama_server_url); setInput('llm-host', u.hostname); setInput('llm-port', u.port || '8080'); } catch(e) {}
+        try {
+          const u = new URL(data.llama_server_url);
+          setInput('llm-host', u.hostname);
+          setInput('llm-port', u.port || '8080');
+        } catch(e) {}
       }
       setCheckbox('llm-enabled', data?.enabled || data?.use_local_llama);
       setCheckbox('llm-fallback', data?.llama_fallback_to_openclaw);
@@ -52,38 +64,38 @@ const LLM = {
     try {
       const data = await API.llmTest({ prompt: userInput, role: 'analyst' });
       const text = data?.response || data?.text || data?.reply || JSON.stringify(data, null, 2);
-      if (el) el.innerHTML = '<pre style="white-space:pre-wrap;font-size:12px;background:rgba(0,0,0,0.2);padding:12px;border-radius:8px;max-height:400px;overflow-y:auto;color:var(--text-primary);line-height:1.6">' + text.replace(/</g,'&lt;') + '</pre>';
+      if (el) el.innerHTML = '<pre style="white-space:pre-wrap;font-size:12px;background:rgba(0,0,0,0.2);padding:12px;border-radius:8px;max-height:400px;overflow-y:auto;color:var(--text-primary);line-height:1.6">' + this._escape(text) + '</pre>';
       App.toast('LLM test complete ✅', 'success');
     } catch(e) {
-      if (el) el.innerHTML = '<p style="color:var(--neon-red)">❌ LLM test failed: ' + e.message + '</p>';
+      if (el) el.innerHTML = '<p style="color:var(--neon-red)">❌ LLM test failed: ' + this._escape(e.message) + '</p>';
       App.toast('LLM test failed: ' + e.message, 'error');
     }
   },
 
   async sentiment() {
     const ticker = App.state.activeTicker || 'BTC-USD';
-    const el = byId('llm-result'); if (el) el.innerHTML = '<p style="color:var(--text-muted)">⏳ Analyzing sentiment for ' + ticker + '...</p>';
+    const el = byId('llm-result'); if (el) el.innerHTML = '<p style="color:var(--text-muted)">⏳ Analyzing sentiment for ' + this._escape(ticker) + '...</p>';
     App.toast('Analyzing sentiment for ' + ticker + '...', 'info');
     try {
       const data = await API.llmSentiment(ticker);
-      if (el) el.innerHTML = '<pre style="white-space:pre-wrap;font-size:12px;background:rgba(0,0,0,0.2);padding:12px;border-radius:8px;max-height:400px;overflow-y:auto;color:var(--text-primary)">' + JSON.stringify(data,null,2).replace(/</g,'&lt;') + '</pre>';
+      if (el) el.innerHTML = '<pre style="white-space:pre-wrap;font-size:12px;background:rgba(0,0,0,0.2);padding:12px;border-radius:8px;max-height:400px;overflow-y:auto;color:var(--text-primary)">' + this._escape(JSON.stringify(data,null,2)) + '</pre>';
       App.toast('Sentiment analysis complete', 'success');
     } catch(e) {
-      if (el) el.innerHTML = '<p style="color:var(--neon-red)">❌ Sentiment failed: ' + e.message + '</p>';
+      if (el) el.innerHTML = '<p style="color:var(--neon-red)">❌ Sentiment failed: ' + this._escape(e.message) + '</p>';
       App.toast('Sentiment failed: ' + e.message, 'error');
     }
   },
 
   async regime() {
     const ticker = App.state.activeTicker || 'BTC-USD';
-    const el = byId('llm-result'); if (el) el.innerHTML = '<p style="color:var(--text-muted)">⏳ Detecting regime for ' + ticker + '...</p>';
+    const el = byId('llm-result'); if (el) el.innerHTML = '<p style="color:var(--text-muted)">⏳ Detecting regime for ' + this._escape(ticker) + '...</p>';
     App.toast('Detecting regime for ' + ticker + '...', 'info');
     try {
       const data = await API.llmRegime(ticker);
-      if (el) el.innerHTML = '<pre style="white-space:pre-wrap;font-size:12px;background:rgba(0,0,0,0.2);padding:12px;border-radius:8px;max-height:400px;overflow-y:auto;color:var(--text-primary)">' + JSON.stringify(data,null,2).replace(/</g,'&lt;') + '</pre>';
+      if (el) el.innerHTML = '<pre style="white-space:pre-wrap;font-size:12px;background:rgba(0,0,0,0.2);padding:12px;border-radius:8px;max-height:400px;overflow-y:auto;color:var(--text-primary)">' + this._escape(JSON.stringify(data,null,2)) + '</pre>';
       App.toast('Regime detection complete', 'success');
     } catch(e) {
-      if (el) el.innerHTML = '<p style="color:var(--neon-red)">❌ Regime detection failed: ' + e.message + '</p>';
+      if (el) el.innerHTML = '<p style="color:var(--neon-red)">❌ Regime detection failed: ' + this._escape(e.message) + '</p>';
       App.toast('Regime detection failed: ' + e.message, 'error');
     }
   },
@@ -103,4 +115,4 @@ const LLM = {
   },
 };
 
-document.addEventListener('DOMContentLoaded', () => { LLM.init(); lucide?.createIcons(); });
+document.addEventListener('DOMContentLoaded', () => { LLM.init(); try { if (typeof lucide !== 'undefined' && lucide?.createIcons) lucide.createIcons(); } catch(e) {} });

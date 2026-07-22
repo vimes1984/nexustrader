@@ -1,7 +1,12 @@
 /**
- * assets.js v3 — Asset management tab
+ * assets.js v3.2 — Asset management tab
  */
 const Assets = {
+  _escape(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  },
+
   init() {
     document.addEventListener('nt:tabChange', (e) => { if (e.detail === 'assets') this.load(); });
     byId('btn-add-asset')?.addEventListener('click', () => this.addAsset());
@@ -23,7 +28,7 @@ const Assets = {
       const data = await API.assetList();
       const tickers = Array.isArray(data) ? data : (data?.tickers || data?.assets || []);
       if (!tickers.length) {
-        tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><div class="empty-state-icon">📦</div><div class="empty-state-title">No tracked assets</div><div class="empty-state-desc">Add your first ticker symbol to start tracking assets.</div><button class="btn btn-sm btn-primary" id="btn-add-asset-from-empty" onclick="Assets?.addAsset()">+ Add Asset</button></div></td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><div class="empty-state-icon" aria-hidden="true">📦</div><div class="empty-state-title">No tracked assets</div><div class="empty-state-desc">Add your first ticker symbol to start tracking assets.</div></div></td></tr>';
         return;
       }
       tbody.innerHTML = tickers.map(t => {
@@ -33,18 +38,18 @@ const Assets = {
         const added = t.added_at || t.created || '';
         const addedDate = added ? new Date(added).toLocaleDateString() : '—';
         return `<tr>
-          <td style="font-weight:600">${ticker}</td>
-          <td style="color:var(--text-secondary)">${name}</td>
+          <td style="font-weight:600">${this._escape(ticker)}</td>
+          <td style="color:var(--text-secondary)">${this._escape(name)}</td>
           <td><span style="color:${isActive?'var(--neon-green)':'var(--neon-red)'};font-size:11px">${isActive ? '● Active' : '○ Inactive'}</span></td>
           <td style="color:var(--text-muted);font-size:10px">${addedDate}</td>
           <td>
-            <button class="btn btn-sm" data-action="toggle" data-ticker="${ticker}" data-active="${isActive}">${isActive ? 'Deactivate' : 'Activate'}</button>
-            <button class="btn btn-sm btn-danger" data-action="remove" data-ticker="${ticker}">Remove</button>
+            <button class="btn btn-sm" data-action="toggle" data-ticker="${this._escape(ticker)}" data-active="${isActive}">${isActive ? 'Deactivate' : 'Activate'}</button>
+            <button class="btn btn-sm btn-danger" data-action="remove" data-ticker="${this._escape(ticker)}">Remove</button>
           </td>
         </tr>`;
       }).join('');
     } catch(e) {
-      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--neon-red)">Failed to load assets</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--neon-red)">Failed to load assets: ' + this._escape(e.message) + '</td></tr>';
     }
   },
 

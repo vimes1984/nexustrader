@@ -1,10 +1,11 @@
 /**
- * sw.js — NexusTrader Dashboard Service Worker v2
+ * sw.js — NexusTrader Dashboard Service Worker v3
  * Provides offline caching with offline fallback page + stale-while-revalidate for assets
+ * Updated: proper cache versioning, stale retry, HTML escaping in fallback
  */
-const CACHE = 'nt-cache-v2';
-const CACHE_STATIC = 'nt-static-v2';
-const CACHE_DYNAMIC = 'nt-dynamic-v2';
+const CACHE = 'nt-cache-v3';
+const CACHE_STATIC = 'nt-static-v3';
+const CACHE_DYNAMIC = 'nt-dynamic-v3';
 const CORE_ASSETS = [
   '/dashboard-v2/',
   '/dashboard-v2/index.html',
@@ -29,7 +30,16 @@ const CORE_ASSETS = [
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_STATIC).then((cache) => cache.addAll(CORE_ASSETS))
+    caches.open(CACHE_STATIC).then((cache) => {
+      // Use addAll with error tolerance — skip individual failures
+      return Promise.allSettled(
+        CORE_ASSETS.map(url =>
+          cache.add(url).catch(err => {
+            console.warn('[SW] Failed to cache ' + url + ': ' + err.message);
+          })
+        )
+      );
+    })
   );
   self.skipWaiting();
 });
@@ -39,7 +49,10 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((keys) =>
       Promise.all(
         keys.filter((k) => k !== CACHE_STATIC && k !== CACHE_DYNAMIC && k !== CACHE)
-          .map((k) => caches.delete(k))
+          .map((k) => {
+            console.log('[SW] Purging old cache:', k);
+            return caches.delete(k);
+          })
       )
     )
   );
@@ -85,10 +98,15 @@ async function staleWhileRevalidate(request) {
 
   const fetchPromise = fetch(request).then((response) => {
     if (response && response.status === 200) {
-      cache.put(request, response.clone());
+      // Cache clone for next time
+      const clone = response.clone();
+      cache.put(request, clone).catch(() => {});
     }
     return response;
-  }).catch(() => cached);
+  }).catch((err) => {
+    console.log('[SW] staleWhileRevalidate fetch failed:', err.message);
+    return cached;
+  });
 
   return cached || fetchPromise;
 }
@@ -100,31 +118,27 @@ async function cacheFirstWithNetworkFallback(request) {
     const response = await fetch(request);
     if (response && response.status === 200) {
       const cache = await caches.open(CACHE_STATIC);
-      cache.put(request, response.clone());
+      cache.put(request, response.clone()).catch(() => {});
     }
     return response;
   } catch (err) {
+    console.log('[SW] cacheFirstWithNetworkFallback failed:', err.message);
     return new Response('', { status: 408, statusText: 'Offline' });
   }
-}
-
-async function cacheFirst(request) {
-  const cached = await caches.match(request);
-  return cached || fetch(request);
 }
 
 async function networkFirst(request) {
   try {
     const response = await fetch(request);
-    const cache = await caches.open(CACHE_STATIC);
-    cache.put(request, response.clone());
+    if (response && response.status === 200) {
+      const cache = await caches.open(CACHE_STATIC);
+      cache.put(request, response.clone()).catch(() => {});
+    }
     return response;
   } catch (err) {
+    console.log('[SW] networkFirst failed, serving cached:', err.message);
     const cached = await caches.match(request);
-    return cached || new Response(
-      '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Offline — NexusTrader</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{background:#0a0f1e;color:#f1f5f9;font-family:sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;text-align:center;padding:20px}.card{background:rgba(17,24,39,0.8);border:1px solid rgba(148,163,184,0.1);border-radius:12px;padding:40px;max-width:400px}h1{color:#3b82f6;margin-bottom:10px}p{color:#94a3b8;margin-bottom:20px}.retry-btn{background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#3b82f6;padding:10px 24px;border-radius:6px;cursor:pointer;font-size:14px}</style></head><body><div class="card"><h1>🔌 Offline</h1><p>NexusTrader is unavailable while disconnected. Some cached data may still be viewable.</p><button class="retry-btn" onclick="location.reload()">Retry Connection</button></div></body></html>',
-      { status: 503, headers: { 'Content-Type': 'text/html;charset=UTF-8' } }
-    );
+    return cached || getOfflineResponse();
   }
 }
 
@@ -134,8 +148,10 @@ async function networkFirstWithTimeout(request, timeoutMs) {
       setTimeout(() => reject(new Error('timeout')), timeoutMs)
     );
     const response = await Promise.race([fetch(request), timeoutPromise]);
-    const cache = await caches.open(CACHE_DYNAMIC);
-    cache.put(request, response.clone());
+    if (response && response.status === 200) {
+      const cache = await caches.open(CACHE_DYNAMIC);
+      cache.put(request, response.clone()).catch(() => {});
+    }
     return response;
   } catch (err) {
     const cached = await caches.match(request);
@@ -143,4 +159,11 @@ async function networkFirstWithTimeout(request, timeoutMs) {
       { status: 503, headers: { 'Content-Type': 'application/json' } }
     );
   }
+}
+
+function getOfflineResponse() {
+  return new Response(
+    '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Offline &mdash; NexusTrader</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{background:#0a0f1e;color:#f1f5f9;font-family:sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;text-align:center;padding:20px;margin:0}.card{background:rgba(17,24,39,0.8);border:1px solid rgba(148,163,184,0.1);border-radius:12px;padding:40px;max-width:400px}h1{color:#3b82f6;margin-bottom:10px}p{color:#94a3b8;margin-bottom:20px}.retry-btn{background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#3b82f6;padding:10px 24px;border-radius:6px;border:none;cursor:pointer;font-size:14px;font-family:inherit}.retry-btn:hover{background:rgba(59,130,246,0.25)}</style></head><body><div class="card"><h1>🔌 Offline</h1><p>NexusTrader is unavailable while disconnected. Some cached data may still be viewable.</p><button class="retry-btn" onclick="location.reload()">Retry Connection</button></div></body></html>',
+    { status: 503, headers: { 'Content-Type': 'text/html;charset=UTF-8' } }
+  );
 }

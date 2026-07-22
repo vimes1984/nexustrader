@@ -2,6 +2,11 @@
  * agents.js v3 — Quant Team agents tab
  */
 const Agents = {
+  _escape(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  },
+
   init() {
     document.addEventListener('nt:tabChange', (e) => { if (e.detail === 'agents') this.refresh(); });
     byId('btn-trigger-all')?.addEventListener('click', () => this.triggerAll());
@@ -33,15 +38,21 @@ const Agents = {
       el.innerHTML = agents.map(a => {
         const lastReport = a.last_report ? new Date(Number(a.last_report) * 1000).toLocaleString() : 'Never';
         const color = a.color || 'var(--neon-blue)';
+        const name = this._escape(a.name || a.id || 'Unknown');
+        const role = this._escape(a.role || '—');
+        const desc = this._escape(a.description || a.desc || '');
+        const schedule = this._escape(a.schedule || 'Manual');
+        const agentId = this._escape(a.id || '');
+        const reportFile = a.last_report_file ? ' (' + this._escape(a.last_report_file) + ')' : '';
         return `<div class="glass-panel" style="padding:14px;margin-bottom:8px">
           <div style="display:flex;justify-content:space-between;align-items:flex-start">
             <div style="flex:1">
-              <div style="font-weight:700;font-size:14px;color:${color};margin-bottom:4px">${a.emoji||'🤖'} ${a.name||a.id||'Unknown'}</div>
-              <div style="font-size:11px;color:var(--text-secondary);margin-bottom:2px"><b>Role:</b> ${a.role||'—'}</div>
-              <div style="font-size:11px;color:var(--text-secondary);margin-bottom:2px">${a.description||a.desc||''}</div>
-              <div style="font-size:10px;color:var(--text-muted);margin-top:6px">⏰ ${a.schedule||'Manual'} · 📄 ${lastReport}${a.last_report_file?' ('+a.last_report_file+')':''}</div>
+              <div style="font-weight:700;font-size:14px;color:${color};margin-bottom:4px">${a.emoji||'🤖'} ${name}</div>
+              <div style="font-size:11px;color:var(--text-secondary);margin-bottom:2px"><b>Role:</b> ${role}</div>
+              <div style="font-size:11px;color:var(--text-secondary);margin-bottom:2px">${desc}</div>
+              <div style="font-size:10px;color:var(--text-muted);margin-top:6px">⏰ ${schedule} · 📄 ${lastReport}${reportFile}</div>
             </div>
-            <button class="btn btn-sm agent-trigger-btn" data-agent="${a.id||''}" style="margin-left:12px;flex-shrink:0">⚡ Run</button>
+            <button class="btn btn-sm agent-trigger-btn" data-agent="${agentId}" style="margin-left:12px;flex-shrink:0">⚡ Run</button>
           </div>
         </div>`;
       }).join('');

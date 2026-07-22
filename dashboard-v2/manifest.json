@@ -13,10 +13,12 @@
   "dir": "ltr",
   "prefer_related_applications": false,
   "icons": [
-    { "src": "/dashboard/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "/dashboard/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    { "src": "/dashboard-v2/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/dashboard-v2/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/dashboard-v2/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/dashboard-v2/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
   "screenshots": [],
   "related_applications": [],
-  "display_override": ["window-controls-overlay", "standalone"]
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"]
 }

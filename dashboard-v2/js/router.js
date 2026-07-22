@@ -1,5 +1,5 @@
 /**
- * router.js v3 — SPA router, global state, WebSocket, event bus
+ * router.js v3.2 — SPA router, global state, WebSocket, event bus
  */
 const byId = (id) => document.getElementById(id);
 
@@ -9,7 +9,7 @@ const App = {
     tickers: [], tickerPrices: {},
     tradingMode: 'live', isPaused: false,
     speed: 0.2, riskMode: 'aggressive',
-    ws: null, reconnectTimer: null,
+    ws: null, reconnectTimer: null, reconnectAttempts: 0,
     notifications: JSON.parse(localStorage.getItem('nt_notif_v2') || '[]'),
     unreadNotifications: 0,
   },
@@ -17,6 +17,9 @@ const App = {
 
   // ── BOOT ──
   async init() {
+    // Calculate unread on boot
+    this.state.unreadNotifications = this.state.notifications.filter(n => !n.read).length;
+
     this.cacheDOM();
     this.bindEvents();
     this.initNav();
@@ -24,7 +27,9 @@ const App = {
     this.connectWS();
     this.startPolling();
     this.renderNotifications();
-    lucide?.createIcons();
+    if (typeof lucide !== 'undefined' && lucide?.createIcons) {
+      try { lucide.createIcons(); } catch(e) {}
+    }
     this.emit('ready');
 
     // Restore tab from URL hash
@@ -33,6 +38,12 @@ const App = {
       const tabId = 'tab-' + hash;
       if (byId(tabId)) this.switchTab(tabId);
     }
+
+    // Track keyboard user for enhanced focus styles
+    let isKeyboard = false;
+    document.addEventListener('keydown', () => { if (!isKeyboard) { isKeyboard = true; document.body.classList.add('keyboard-nav'); } });
+    document.addEventListener('mousedown', () => { if (isKeyboard) { isKeyboard = false; document.body.classList.remove('keyboard-nav'); } });
+    document.addEventListener('touchstart', () => { if (isKeyboard) { isKeyboard = false; document.body.classList.remove('keyboard-nav'); } });
   },
 
   cacheDOM() {
@@ -76,8 +87,17 @@ const App = {
     byId('risk-mode-select')?.addEventListener('change', (e) => this.setRiskMode(e.target.value));
     byId('open-drawer-btn')?.addEventListener('click', () => this.openDrawer());
     byId('close-drawer-btn')?.addEventListener('click', () => this.closeDrawer());
+
+    // Close drawer on Escape key within drawer
+    this.el.navDrawer?.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') this.closeDrawer();
+    });
+
     this.el.navOverlay?.addEventListener('click', () => this.closeDrawer());
-    this.el.notificationBell?.addEventListener('click', () => this.toggleNotifications());
+    this.el.notificationBell?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.toggleNotifications();
+    });
     byId('clear-notifications-btn')?.addEventListener('click', () => this.clearNotifications());
     byId('btn-dev-toggle')?.addEventListener('click', () => {
       document.body.classList.toggle('debug');
@@ -106,14 +126,13 @@ const App = {
     // Keyboard navigation
     this.initKeyboardNav();
 
-    // Close dropdown on outside click
+    // Close dropdown on outside click (use capture phase to handle properly)
     document.addEventListener('click', (e) => {
       if (this.el.notificationDropdown?.style.display === 'flex' &&
           !e.target.closest('.notification-dropdown-container')) {
-        this.el.notificationDropdown.style.display = 'none';
-        this.el.notificationBell?.setAttribute('aria-expanded', 'false');
+        this.closeNotifications();
       }
-    });
+    }, { capture: true });
 
     // Handle orientation changes: recalculate layout
     window.addEventListener('orientationchange', () => {
@@ -151,7 +170,8 @@ const App = {
       this.state.activeTab = tabId.replace('tab-', '');
       history.replaceState(null, '', '#' + this.state.activeTab);
       this.emit('tabChange', this.state.activeTab);
-      setTimeout(() => lucide?.createIcons(), 50);
+      // Reinitialize icons in the newly visible tab
+      try { if (typeof lucide !== 'undefined' && lucide?.createIcons) lucide.createIcons(); } catch(e) {}
     }
   },
 
@@ -161,7 +181,7 @@ const App = {
     const text = byId('play-pause-text');
     if (icon) icon.setAttribute('data-lucide', this.state.isPaused ? 'play' : 'pause');
     if (text) text.textContent = this.state.isPaused ? 'Play' : 'Pause';
-    lucide?.createIcons();
+    try { if (typeof lucide !== 'undefined' && lucide?.createIcons) lucide.createIcons(); } catch(e) {}
     try { await API.control(this.state.isPaused ? 'pause' : 'resume'); } catch(e) {}
   },
 
@@ -188,7 +208,10 @@ const App = {
     }
     if (this.el.navOverlay) this.el.navOverlay.style.display = 'block';
     byId('open-drawer-btn')?.setAttribute('aria-expanded', 'true');
+    // Prevent body scroll when drawer open
+    document.body.style.overflow = 'hidden';
   },
+
   closeDrawer() {
     if (this.el.navDrawer) {
       this.el.navDrawer.style.left = '-280px';
@@ -198,6 +221,13 @@ const App = {
     }
     if (this.el.navOverlay) this.el.navOverlay.style.display = 'none';
     byId('open-drawer-btn')?.setAttribute('aria-expanded', 'false');
+    // Restore body scroll
+    document.body.style.overflow = '';
+  },
+
+  closeNotifications() {
+    if (this.el.notificationDropdown) this.el.notificationDropdown.style.display = 'none';
+    if (this.el.notificationBell) this.el.notificationBell.setAttribute('aria-expanded', 'false');
   },
 
   // ── Touch Gestures ──
@@ -256,16 +286,22 @@ const App = {
     };
 
     document.addEventListener('keydown', (e) => {
-      // Escape: close drawer
+      // Escape: close drawer or notifications
       if (e.key === 'Escape') {
         if (this.el.navDrawer?.style.left === '0px' || this.el.navDrawer?.style.left === '0') {
           this.closeDrawer();
           e.preventDefault();
+          return;
+        }
+        if (this.el.notificationDropdown?.style.display === 'flex') {
+          this.closeNotifications();
+          e.preventDefault();
+          return;
         }
         return;
       }
 
-      // Ctrl+[1-9,0] to switch tabs
+      // Ctrl+[1-9,0] to switch tabs (also Meta for Mac)
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
         const tabId = tabKeys[e.key];
         if (tabId && byId(tabId)) {
@@ -312,6 +348,13 @@ const App = {
     } catch(e) {
       console.error('Init failed:', e);
       this.toast('Failed to load initial state', 'error');
+      // Show connection error in status bar
+      if (this.el.statusText) this.el.statusText.textContent = 'Connection Error';
+      if (this.el.botStatus) {
+        this.el.botStatus.style.borderColor = 'var(--neon-red)';
+        const dot = this.el.botStatus.querySelector('.dot');
+        if (dot) dot.style.background = 'var(--neon-red)';
+      }
     }
   },
 
@@ -372,25 +415,45 @@ const App = {
   // ── WebSocket ──
   connectWS() {
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    const ws = new WebSocket(`${proto}://${location.host}/ws`);
-    this.state.ws = ws;
+    try {
+      const ws = new WebSocket(`${proto}://${location.host}/ws`);
+      this.state.ws = ws;
 
-    ws.onopen = () => {
-      this.el.botStatus?.classList.remove('stopped');
-      this.el.statusText.textContent = this.state.tradingMode === 'live' ? 'LIVE' : 'Connected';
-    };
-    ws.onmessage = (event) => {
-      try { this.emit('wsMessage', JSON.parse(event.data)); } catch(e) {}
-    };
-    ws.onclose = () => {
-      this.el.statusText.textContent = 'Disconnected';
+      ws.onopen = () => {
+        this.el.botStatus?.classList.remove('stopped');
+        this.el.statusText.textContent = this.state.tradingMode === 'live' ? 'LIVE' : 'Connected';
+        this.state.reconnectAttempts = 0; // Reset on successful connection
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          this.emit('wsMessage', msg);
+        } catch(e) {
+          // Silently ignore malformed messages
+          this.debug('WS parse error:', e);
+        }
+      };
+
+      ws.onclose = () => {
+        this.el.statusText.textContent = 'Disconnected';
+        this.el.botStatus?.classList.add('stopped');
+        // Exponential backoff with jitter for reconnection
+        this.state.reconnectAttempts++;
+        const delay = Math.min(30000, Math.pow(2, this.state.reconnectAttempts) * 1000) + Math.random() * 1000;
+        this.debug('WS closed, reconnecting in ' + Math.round(delay) + 'ms (attempt ' + this.state.reconnectAttempts + ')');
+        this.state.reconnectTimer = setTimeout(() => this.connectWS(), delay);
+      };
+
+      ws.onerror = () => {
+        this.el.statusText.textContent = 'Error';
+        this.el.botStatus?.classList.add('stopped');
+      };
+    } catch(e) {
+      this.debug('WS creation failed:', e);
+      this.el.statusText.textContent = 'WS Error';
       this.el.botStatus?.classList.add('stopped');
-      this.state.reconnectTimer = setTimeout(() => this.connectWS(), 5000);
-    };
-    ws.onerror = () => {
-      this.el.statusText.textContent = 'Error';
-      this.el.botStatus?.classList.add('stopped');
-    };
+    }
   },
 
   startPolling() {
@@ -402,10 +465,16 @@ const App = {
     try {
       const data = await API.safetyStatus();
       if (data?.kill_switch?.tripped === true) {
-        if (this.el.safetyBadge) this.el.safetyBadge.style.display = 'flex';
+        if (this.el.safetyBadge) {
+          this.el.safetyBadge.style.display = 'flex';
+          this.el.safetyBadge.setAttribute('role', 'alert');
+        }
         if (this.el.safetyText) this.el.safetyText.textContent = 'KillSwitch Active';
       } else {
-        if (this.el.safetyBadge) this.el.safetyBadge.style.display = 'none';
+        if (this.el.safetyBadge) {
+          this.el.safetyBadge.style.display = 'none';
+          this.el.safetyBadge.removeAttribute('role');
+        }
       }
     } catch(e) {}
   },
@@ -427,7 +496,8 @@ const App = {
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
     toast.style.animation = 'slideIn 0.3s ease';
-    toast.innerHTML = `<span>${emojis[type] || '⚡'}</span><span>${message}</span>`;
+    toast.setAttribute('role', 'status');
+    toast.innerHTML = `<span aria-hidden="true">${emojis[type] || '⚡'}</span><span>${message}</span>`;
     container.appendChild(toast);
 
     setTimeout(() => {
@@ -451,11 +521,15 @@ const App = {
     dd.style.display = isOpen ? 'none' : 'flex';
     if (bell) bell.setAttribute('aria-expanded', String(!isOpen));
     if (!isOpen) {
-      this.state.unreadNotifications = 0;
-      this.state.notifications.forEach(n => n.read = true);
-      localStorage.setItem('nt_notif_v2', JSON.stringify(this.state.notifications));
-      this.renderNotifications();
+      this.markNotificationsRead();
     }
+  },
+
+  markNotificationsRead() {
+    this.state.unreadNotifications = 0;
+    this.state.notifications.forEach(n => n.read = true);
+    localStorage.setItem('nt_notif_v2', JSON.stringify(this.state.notifications));
+    this.renderNotifications();
   },
 
   clearNotifications() {
@@ -480,10 +554,12 @@ const App = {
       if (!this.state.notifications.length) {
         list.innerHTML = '<div style="color:var(--text-secondary);text-align:center;padding:20px;font-size:12px">No notifications yet</div>';
       } else {
-        list.innerHTML = this.state.notifications.slice(0, 20).map(n => `
-          <div style="padding:6px 8px;border-left:2px solid var(--neon-${n.type==='error'?'red':n.type==='success'?'green':'blue'});font-size:11px;margin-bottom:4px;background:rgba(255,255,255,0.02);border-radius:0 4px 4px 0">
+        list.innerHTML = this.state.notifications.slice(0, 20).map(n => {
+          const borderColor = n.type === 'error' ? 'var(--neon-red)' : n.type === 'success' ? 'var(--neon-green)' : n.type === 'warn' ? 'var(--neon-yellow)' : 'var(--neon-blue)';
+          return `<div style="padding:6px 8px;border-left:2px solid ${borderColor};font-size:11px;margin-bottom:4px;background:rgba(255,255,255,0.02);border-radius:0 4px 4px 0">
             <span style="color:var(--text-muted);font-size:10px">${n.time}</span> ${n.message}
-          </div>`).join('');
+          </div>`;
+        }).join('');
       }
     }
   },
@@ -539,8 +615,8 @@ function validateInput(id, validator) {
 
 function showEmptyState(container, { icon, title, desc, action } = {}) {
   if (!container) return;
-  container.innerHTML = '<div class="empty-state">' +
-    (icon ? '<div class="empty-state-icon">' + icon + '</div>' : '') +
+  container.innerHTML = '<div class="empty-state" role="status">' +
+    (icon ? '<div class="empty-state-icon" aria-hidden="true">' + icon + '</div>' : '') +
     (title ? '<div class="empty-state-title">' + title + '</div>' : '') +
     (desc ? '<div class="empty-state-desc">' + desc + '</div>' : '') +
     (action || '') +
@@ -554,6 +630,7 @@ function showSkeleton(container, count = 3) {
     const s = document.createElement('div');
     s.className = 'skeleton skeleton-text';
     s.style.width = (60 + Math.random() * 35) + '%';
+    s.setAttribute('aria-hidden', 'true');
     container.appendChild(s);
   }
 }

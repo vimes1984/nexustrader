@@ -1,10 +1,12 @@
 /**
- * dashboard.js v3 — Main dashboard tab: charts, KPIs, trade log, weights
+ * dashboard.js v3.2 — Main dashboard tab: charts, KPIs, trade log, weights
  */
 const Dashboard = {
   chart: null, weightsChart: null, chartSeries: {}, chartType: 'candles', chartData: [],
+  _resizeTimer: null, _chartEl: null,
 
   init() {
+    this._chartEl = byId('main-chart');
     this.initFreshness();
     try { this.initCharts(); } catch(e) { console.error('Chart init failed:', e); }
     document.addEventListener('nt:initState', (e) => this.onInitState(e.detail));
@@ -33,12 +35,7 @@ const Dashboard = {
       }
     });
 
-    // Improve crosshair — enable magnet mode for better precision
-    if (this.chart) {
-      this.chart.applyOptions({ crosshair: { mode: 0, vertLine: { labelBackgroundColor: '#1e293b' }, horzLine: { labelBackgroundColor: '#1e293b' } } });
-    }
-
-    lucide?.createIcons();
+    try { if (typeof lucide !== 'undefined' && lucide?.createIcons) lucide.createIcons(); } catch(e) {}
   },
 
   initFreshness() {
@@ -46,20 +43,48 @@ const Dashboard = {
   },
 
   initCharts() {
-    const chartEl = byId('main-chart');
-    if (!chartEl || typeof LightweightCharts === 'undefined') return;
+    if (!this._chartEl || typeof LightweightCharts === 'undefined') return;
 
-    // Listen for resize events (orientation change etc)
-    document.addEventListener('nt:resize', () => this._resizeHandler?.());
+    // Debounced resize handler to prevent layout thrashing
+    const doResize = () => {
+      if (this.chart && this._chartEl?.clientWidth) {
+        const w = this._chartEl.clientWidth;
+        const h = this._chartEl.clientHeight || 420;
+        if (w > 0 && h > 0) {
+          this.chart.applyOptions({ width: w, height: h });
+        }
+      }
+    };
+    const debouncedResize = this._debounce(doResize, 200);
+    window.addEventListener('resize', debouncedResize);
 
-    this.chart = LightweightCharts.createChart(chartEl, {
-      width: chartEl.clientWidth || 800,
-      height: chartEl.clientHeight || 420,
+    document.addEventListener('nt:resize', () => {
+      if (this._resizeTimer) clearTimeout(this._resizeTimer);
+      this._resizeTimer = setTimeout(doResize, 200);
+    });
+
+    // Use ResizeObserver for reliable size tracking (if available)
+    if (typeof ResizeObserver !== 'undefined') {
+      this._chartResizeObserver = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          const { width, height } = entry.contentRect;
+          if (this.chart && width > 0 && height > 0) {
+            this.chart.applyOptions({ width: Math.round(width), height: Math.round(height) });
+          }
+        }
+      });
+      this._chartResizeObserver.observe(this._chartEl);
+    }
+
+    this.chart = LightweightCharts.createChart(this._chartEl, {
+      width: this._chartEl.clientWidth || 800,
+      height: this._chartEl.clientHeight || 420,
       layout: { background: { type: 'solid', color: 'transparent' }, textColor: '#94a3b8' },
       grid: { vertLines: { color: 'rgba(255,255,255,0.04)' }, horzLines: { color: 'rgba(255,255,255,0.04)' } },
       crosshair: { mode: 0 },
       rightPriceScale: { borderColor: 'rgba(255,255,255,0.1)' },
       timeScale: { borderColor: 'rgba(255,255,255,0.1)', timeVisible: true },
+      handleScroll: { vertTouchDrag: false }, // Prevent vertical scroll on touch
     });
 
     this.chartSeries.candles = this.chart.addCandlestickSeries({
@@ -73,36 +98,25 @@ const Dashboard = {
     this.chartSeries.volume = this.chart.addHistogramSeries({
       color: 'rgba(59,130,246,0.25)', priceFormat: { type: 'volume' }, priceScaleId: '',
     });
-    // Enable animation for real-time updates
-    this.chartSeries.candles.applyOptions({ priceFormat: { type: 'price', precision: 2, minMove: 0.01 } });
     this.chart.priceScale('').applyOptions({ scaleMargins: { top: 0.75, bottom: 0 } });
 
     // Doughnut chart for weights
     const wEl = byId('weights-chart');
     if (wEl && typeof Chart !== 'undefined') {
       const ctx = wEl.getContext('2d');
-      this.weightsChart = new Chart(ctx, {
-        type: 'doughnut',
-        data: { labels: [], datasets: [{ data: [], backgroundColor: ['#3b82f6','#10b981','#f59e0b','#8b5cf6','#ec4899','#06b6d4','#f43f5e','#84cc16'] }] },
-        options: {
-          responsive: true, maintainAspectRatio: false, cutout: '65%',
-          plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8', font: { size: 10 }, padding: 12 } } },
-        },
-      });
-    }
-
-    // Debounced resize handler to prevent layout thrashing
-    if (window.__ntChartResize) {
-      window.removeEventListener('resize', window.__ntChartResize);
-    }
-    this._resizeHandler = () => {
-      if (this.chart && chartEl.clientWidth) {
-        this.chart.applyOptions({ width: chartEl.clientWidth, height: chartEl.clientHeight || 420 });
+      try {
+        this.weightsChart = new Chart(ctx, {
+          type: 'doughnut',
+          data: { labels: [], datasets: [{ data: [], backgroundColor: ['#3b82f6','#10b981','#f59e0b','#8b5cf6','#ec4899','#06b6d4','#f43f5e','#84cc16'] }] },
+          options: {
+            responsive: true, maintainAspectRatio: false, cutout: '65%',
+            plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8', font: { size: 10 }, padding: 12 } } },
+          },
+        });
+      } catch(e) {
+        console.error('Weights chart init failed:', e);
       }
-    };
-    this._debouncedResize = this._debounce ? this._debounce(this._resizeHandler, 150) : this._resizeHandler;
-    window.__ntChartResize = this._debouncedResize;
-    window.addEventListener('resize', this._debouncedResize);
+    }
   },
 
   _debounce(fn, ms) {
@@ -139,11 +153,19 @@ const Dashboard = {
   },
 
   async fetchWeights() {
-    const c = byId('weights-container'); if (c) c.innerHTML = '<div class="skeleton skeleton-text" style="width:100%"></div><div class="skeleton skeleton-text" style="width:80%"></div><div class="skeleton skeleton-text" style="width:90%"></div>';
+    const c = byId('weights-container');
+    if (c) {
+      showSkeleton(c, 4);
+    }
     try {
       const d = await API.weights();
       if (d?.weights) this.renderWeights(d.weights);
-    } catch(e) {}
+      else if (c) this.renderWeights(null);
+    } catch(e) {
+      if (c) {
+        c.innerHTML = '<div class="retry-indicator"><span>⚠️ Weights unavailable</span><button class="retry-btn" onclick="Dashboard?.fetchWeights()">Retry</button></div>';
+      }
+    }
   },
 
   onWSMessage(msg) {
@@ -155,11 +177,14 @@ const Dashboard = {
     try {
       const data = msg.data || msg; if (!data) return;
       if (data.price != null) {
-        byId('ticker-price').textContent = '$' + Number(data.price).toFixed(2);
+        const pe = byId('ticker-price');
+        if (pe) pe.textContent = '$' + Number(data.price).toFixed(2);
         if (data.change_pct != null) {
           const cel = byId('ticker-change');
-          cel.textContent = (data.change_pct >= 0 ? '+' : '') + Number(data.change_pct).toFixed(2) + '%';
-          cel.style.color = data.change_pct >= 0 ? 'var(--neon-green)' : 'var(--neon-red)';
+          if (cel) {
+            cel.textContent = (data.change_pct >= 0 ? '+' : '') + Number(data.change_pct).toFixed(2) + '%';
+            cel.style.color = data.change_pct >= 0 ? 'var(--neon-green)' : 'var(--neon-red)';
+          }
         }
       }
       if (data.ticker && data.price != null) {
@@ -176,14 +201,18 @@ const Dashboard = {
             low: data.low || data.price,
             close: data.price
           });
-        } catch(e) {}
+        } catch(e) {
+          this.chart?.timeScale()?.fitContent();
+        }
       }
       // Update data freshness indicator
       this.updateFreshness('chart', data.timestamp);
       this.updateFreshness('portfolio', data.timestamp);
       this.updateKPIs(data);
       if (data.sim_progress != null) {
-        const c = byId('sim-progress-container'); const b = byId('sim-progress-bar'); const l = byId('sim-progress-label');
+        const c = byId('sim-progress-container');
+        const b = byId('sim-progress-bar');
+        const l = byId('sim-progress-label');
         const pct = Math.round(data.sim_progress);
         if (data.sim_progress > 0 && data.sim_progress < 100) {
           if (c) { c.style.display = 'flex'; c.setAttribute('aria-valuenow', String(pct)); }
@@ -192,7 +221,9 @@ const Dashboard = {
         } else if (c) { c.style.display = 'none'; }
       }
       if (data.position) this.renderPosition(data.position);
-    } catch(e) {}
+    } catch(e) {
+      if (document.body.classList.contains('debug')) console.warn('[NT] Tick render error:', e);
+    }
   },
 
   updateKPIs(data) {
@@ -217,11 +248,21 @@ const Dashboard = {
 
   async loadHistory(ticker) {
     if (ticker === 'portfolio' || !this.chartSeries?.candles) return;
+
+    // Show loading state in chart data info
+    const infoEl = byId('chart-data-info');
+    if (infoEl) {
+      infoEl.textContent = '⏳ Loading ' + ticker + '...';
+      infoEl.style.display = 'inline';
+    }
+
     try {
-      const infoEl = byId('chart-data-info'); if (infoEl) infoEl.textContent = '⏳ Loading ' + ticker + '...';
       const data = await API.history(ticker);
       const rows = Array.isArray(data) ? data : (data?.candles || data?.data || []);
-      if (!rows?.length) { if (infoEl) infoEl.textContent = '⚠️ No data for ' + ticker; return; }
+      if (!rows?.length) {
+        if (infoEl) infoEl.textContent = '⚠️ No data for ' + ticker;
+        return;
+      }
 
       const toTime = ts => {
         if (typeof ts === 'number') return ts < 1e12 ? ts : ts / 1000;
@@ -239,32 +280,45 @@ const Dashboard = {
         if (isNaN(o) || isNaN(cl)) continue;
         cd.push({ time: t, open: o, high: h, low: l, close: cl });
       }
-      if (!cd.length) { if (infoEl) infoEl.textContent = '⚠️ No valid candles'; return; }
+      if (!cd.length) {
+        if (infoEl) infoEl.textContent = '⚠️ No valid candles for ' + ticker;
+        return;
+      }
       cd.sort((a,b) => a.time - b.time);
 
       this.chartData = cd;
       if (infoEl) infoEl.textContent = '📊 ' + cd.length + ' candles loaded';
       this.redrawChart();
+      // Fit content after loading new data
+      if (this.chart) this.chart.timeScale().fitContent();
     } catch(e) {
       console.error('History load failed:', e);
-      byId('chart-data-info').textContent = '❌ Chart error';
+      if (infoEl) infoEl.textContent = '❌ Chart error';
+      // Show retry option
+      const c = byId('main-chart');
+      if (c) {
+        c.innerHTML = '<div class="retry-indicator"><span>⚠️ Chart data unavailable</span><button class="retry-btn" onclick="Dashboard?.loadHistory(App.state.activeTicker)">Retry</button></div>';
+      }
     }
   },
 
-  onTickerChange(ticker) { if (ticker !== 'portfolio') this.loadHistory(ticker); },
+  onTickerChange(ticker) {
+    if (ticker !== 'portfolio') this.loadHistory(ticker);
+  },
 
   async onStatusUpdate(data) {
     this.updateKPIs(data);
     if (data.trades) this.renderTrades(data.trades);
     if (data.weights) this.renderWeights(data.weights);
     if (data.probability) this.renderProbability(data.probability);
-    this.fetchWeights();
+    // Only fetch weights if not already present in data
+    if (!data.weights) this.fetchWeights();
   },
 
   renderTrades(trades) {
     const tbody = byId('recent-trades-list'); if (!tbody) return;
     if (!trades?.length) {
-      tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state" style="padding:30px 20px"><div class="empty-state-icon" style="font-size:36px">📊</div><div class="empty-state-title">No trades yet</div><div class="empty-state-desc">The bot is collecting data and analyzing market conditions. Trades will appear here once executed.</div></div></td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state" style="padding:30px 20px"><div class="empty-state-icon" style="font-size:36px" aria-hidden="true">📊</div><div class="empty-state-title">No trades yet</div><div class="empty-state-desc">The bot is collecting data and analyzing market conditions. Trades will appear here once executed.</div></div></td></tr>';
       return;
     }
     tbody.innerHTML = trades.slice(0, 20).map(t => {
@@ -280,7 +334,7 @@ const Dashboard = {
         <td style="color:${dirColor};font-weight:600">${dir.toUpperCase()}</td>
         <td style="font-family:var(--font-mono)">$${Number(t.entry_price||0).toFixed(2)}</td>
         <td style="font-family:var(--font-mono)">$${Number(t.exit_price||0).toFixed(2)}</td>
-        <td style="color:${pnl>=0?'var(--neon-green)':'var(--neon-red)'};font-weight:600;font-family:var(--font-mono)">${pnlStr}</td>
+        <td class="${pnl>=0?'pnl-up':'pnl-down'}" style="font-weight:600;font-family:var(--font-mono)">${pnlStr}</td>
       </tr>`;
     }).join('');
   },
@@ -288,20 +342,24 @@ const Dashboard = {
   renderWeights(weights) {
     const c = byId('weights-container'); if (!c) return;
     if (!weights || !Object.keys(weights).length) {
-      c.innerHTML = '<div class="empty-state" style="padding:20px 10px"><div class="empty-state-icon" style="font-size:24px">⚖️</div><div class="empty-state-title">No weights</div><div class="empty-state-desc" style="font-size:10px">Strategy weights appear once trading begins.</div></div>';
+      c.innerHTML = '<div class="empty-state" style="padding:20px 10px" role="status"><div class="empty-state-icon" style="font-size:24px" aria-hidden="true">⚖️</div><div class="empty-state-title">No weights</div><div class="empty-state-desc" style="font-size:10px">Strategy weights appear once trading begins.</div></div>';
     } else {
+      const entries = Object.entries(weights);
       const maxW = Math.max(...Object.values(weights), 0.01);
-      c.innerHTML = Object.entries(weights).map(([n,w]) => `
-        <div class="weight-bar">
+      c.innerHTML = entries.map(([n,w]) => {
+        const pct = (w / maxW * 100).toFixed(0);
+        const opacity = (0.4 + (w / maxW * 0.6)).toFixed(1);
+        return `<div class="weight-bar">
           <span class="weight-label">${n}</span>
-          <div class="weight-fill" style="width:${(w/maxW*100).toFixed(0)}%;opacity:${0.4+(w/maxW*0.6).toFixed(1)}"></div>
+          <div class="weight-fill" style="width:${pct}%;opacity:${opacity}"></div>
           <span class="weight-val">${(w*100).toFixed(1)}%</span>
-        </div>`).join('');
+        </div>`;
+      }).join('');
     }
     if (this.weightsChart) {
       this.weightsChart.data.labels = Object.keys(weights||{});
       this.weightsChart.data.datasets[0].data = Object.values(weights||{});
-      this.weightsChart.update();
+      this.weightsChart.update('none'); // 'none' avoids animation for rapid updates
     }
   },
 
@@ -363,4 +421,4 @@ const Dashboard = {
   },
 };
 
-document.addEventListener('DOMContentLoaded', () => { Dashboard.init(); lucide?.createIcons(); });
+document.addEventListener('DOMContentLoaded', () => { Dashboard.init(); try { if (typeof lucide !== 'undefined' && lucide?.createIcons) lucide.createIcons(); } catch(e) {} });

@@ -10,20 +10,18 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <!-- DNS Preconnect / Preload / Font Optimization -->
-  <link rel="preconnect" href="https:" crossorigin>
-  <link rel="dns-prefetch" href="//">
+  <!-- Critical resource preloads: CSS + JS (system fonts = zero network dependency) -->
   <link rel="preload" href="/dashboard-v2/css/main.css?v=1784673479" as="style">
   <link rel="preload" href="/dashboard-v2/vendor/lucide.min.js" as="script">
   <link rel="preload" href="/dashboard-v2/vendor/lightweight-charts.standalone.production.js" as="script">
-  <!-- Font fallback: system fonts load instantly, no FOIT -->
   <link rel="stylesheet" href="/dashboard-v2/css/main.css?v=1784673479">
   <link rel="manifest" href="/dashboard-v2/manifest.json">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="NexusTrader">
-  <link rel="apple-touch-icon" href="/dashboard/icon-192.png">
-  <link rel="icon" type="image/png" sizes="32x32" href="/dashboard/icon-192.png">
+  <link rel="apple-touch-icon" href="/dashboard-v2/icon-192.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/dashboard-v2/icon-192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="/dashboard-v2/icon-512.png">
 
   <!-- Vendor Libraries (self-hosted) -->
   <script src="/dashboard-v2/vendor/lightweight-charts.standalone.production.js"></script>
@@ -35,11 +33,46 @@
 <body>
 
 <!-- Skip to main content link for keyboard/screen reader users -->
-<a href="#main-content" class="sr-only" style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden" onfocus="this.style.position='fixed';this.style.left='16px';this.style.top='16px';this.style.width='auto';this.style.height='auto';this.style.background='#111827';this.style.color='#3b82f6';this.style.padding='12px 20px';this.style.zIndex='99999';this.style.borderRadius='8px';this.style.fontSize='16px';this.style.fontWeight='700';this.style.outline='2px solid #3b82f6';this.style.clip='auto';this.style.overflow='visible'">Skip to main content</a>
+<a href="#main-content" class="sr-only" id="skip-link" style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)" tabindex="1">Skip to main content</a>
+<script>
+// Skip link: make visible on focus without inline onfocus handler (content_security_policy friendly)
+document.getElementById('skip-link')?.addEventListener('focus', function() {
+  this.style.position = 'fixed';
+  this.style.left = '16px';
+  this.style.top = '16px';
+  this.style.width = 'auto';
+  this.style.height = 'auto';
+  this.style.background = '#111827';
+  this.style.color = '#3b82f6';
+  this.style.padding = '12px 20px';
+  this.style.zIndex = '99999';
+  this.style.borderRadius = '8px';
+  this.style.fontSize = '16px';
+  this.style.fontWeight = '700';
+  this.style.outline = '2px solid #3b82f6';
+  this.style.clip = 'auto';
+  this.style.overflow = 'visible';
+  this.style.textDecoration = 'none';
+});
+document.getElementById('skip-link')?.addEventListener('blur', function() {
+  this.style.position = 'absolute';
+  this.style.left = '-9999px';
+  this.style.clip = 'rect(0,0,0,0)';
+  this.style.overflow = 'hidden';
+});
+</script>
 
 <!-- JS Alive Indicator -->
-<div id="js-indicator" role="status" aria-live="polite" style="background:rgba(244,63,94,0.2);color:var(--neon-red);text-align:center;padding:6px;font-weight:700;font-size:13px">⚡ Booting NexusTrader...</div>
-<script>document.getElementById('js-indicator').textContent='✅ NEXUSTRADER LIVE — Build '+Date.now();document.getElementById('js-indicator').style.cssText='background:rgba(16,185,129,0.2);color:var(--neon-green);text-align:center;padding:6px;font-weight:700;font-size:13px'</script>
+<div id="js-indicator" role="status" aria-live="polite" aria-atomic="true" style="background:rgba(244,63,94,0.2);color:var(--neon-red);text-align:center;padding:6px;font-weight:700;font-size:13px">⚡ Booting NexusTrader...</div>
+<script>
+(function() {
+  var el = document.getElementById('js-indicator');
+  if (el) {
+    el.textContent = '✅ NEXUSTRADER LIVE — Build ' + Date.now();
+    el.style.cssText = 'background:rgba(16,185,129,0.2);color:var(--neon-green);text-align:center;padding:6px;font-weight:700;font-size:13px';
+  }
+})();
+</script>
 
 <div class="dashboard-container">
 <main id="main-content" role="main">
@@ -47,11 +80,11 @@
   <!-- ═════════ HEADER ═════════ -->
   <header class="glass-panel dashboard-header">
     <div class="brand">
-      <button id="open-drawer-btn" class="btn" style="background:transparent;border:none;padding:6px 8px;font-size:22px;line-height:1;cursor:pointer;color:var(--text-primary)" title="Menu" aria-label="Open navigation menu" aria-expanded="false" aria-controls="nav-drawer">
-        <i data-lucide="menu" style="width:22px;height:22px"></i>
-        <span class="lucide-fallback">☰</span>
+      <button id="open-drawer-btn" class="btn" style="background:transparent;border:none;padding:6px 8px;font-size:22px;line-height:1;cursor:pointer;color:var(--text-primary);min-height:44px;min-width:44px" title="Menu" aria-label="Open navigation menu" aria-expanded="false" aria-controls="nav-drawer">
+        <i data-lucide="menu" style="width:22px;height:22px" aria-hidden="true"></i>
+        <span class="lucide-fallback" aria-hidden="true">☰</span>
       </button>
-      <i data-lucide="cpu" style="color:var(--neon-blue);width:28px;height:28px"></i>
+      <i data-lucide="cpu" style="color:var(--neon-blue);width:28px;height:28px" aria-hidden="true"></i>
       <div><h1>NexusTrader</h1><p>AI Neuro-Quantitative Suite</p></div>
     </div>
     <div class="controls-bar">
@@ -390,7 +423,7 @@
 <div id="toast-container" role="status" aria-live="polite" aria-relevant="additions" aria-label="Notifications"></div>
 
 <!-- Fatal Error Display -->
-<div id="fatal-error-display" style="display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(244,63,94,0.95);color:white;padding:12px;z-index:99999;font-family:monospace;font-size:12px;max-height:200px;overflow-y:auto" role="alert" aria-live="assertive"></div>
+<div id="fatal-error-display" style="display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(244,63,94,0.95);color:white;padding:12px;z-index:99999;font-family:monospace;font-size:12px;max-height:200px;overflow-y:auto" role="alert" aria-live="assertive" aria-label="Fatal error"></div>
 
 <script>
 // Global error trap

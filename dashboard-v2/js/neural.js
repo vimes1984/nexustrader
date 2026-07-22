@@ -1,5 +1,5 @@
 /**
- * neural.js v3 — Training tab: brains list, historical pipeline, architecture
+ * neural.js v3.2 — Training tab: brains list, historical pipeline, architecture
  */
 const Neural = {
   init() {
@@ -28,27 +28,27 @@ const Neural = {
 
   async loadBrains() {
     const el = byId('neural-brains-list'); if (!el) return;
-    el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted)">Loading brains...</div>';
+    showSkeleton(el, 3);
     try {
       const data = await API.brains();
       if (!data?.brains?.length) {
-        el.innerHTML = '<div class="empty-state"><div class="empty-state-icon" style="font-size:36px">🧠</div><div class="empty-state-title">No trained brains</div><div class="empty-state-desc">Run the historical training pipeline to create policy networks for your tickers.</div></div>';
+        showEmptyState(el, { icon: '🧠', title: 'No trained brains', desc: 'Run the historical training pipeline to create policy networks for your tickers.' });
         return;
       }
       el.innerHTML = data.brains.map(b => `
         <div class="glass-panel" style="padding:10px 12px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">
           <div>
-            <span style="font-weight:600;font-size:13px">${b.ticker || b.name || 'Unknown'}</span>
+            <span style="font-weight:600;font-size:13px">${this._escape(b.ticker || b.name || 'Unknown')}</span>
             <span style="font-size:10px;color:var(--text-muted);margin-left:8px">${b.action_dim || b.dim || '?'} actions</span>
             ${b.active ? '<span style="font-size:10px;color:var(--neon-green);margin-left:6px">● Active</span>' : ''}
           </div>
           <div style="display:flex;gap:6px">
-            <button class="btn btn-sm" data-action="train" data-ticker="${b.ticker || ''}">🔄 Train</button>
-            ${!b.active ? `<button class="btn btn-sm btn-primary" data-action="activate" data-ticker="${b.ticker || ''}">Activate</button>` : ''}
+            <button class="btn btn-sm" data-action="train" data-ticker="${this._escape(b.ticker || '')}">🔄 Train</button>
+            ${!b.active ? `<button class="btn btn-sm btn-primary" data-action="activate" data-ticker="${this._escape(b.ticker || '')}">Activate</button>` : ''}
           </div>
         </div>`).join('');
     } catch(e) {
-      el.innerHTML = '<div class="empty-state"><div class="empty-state-icon" style="font-size:36px">❌</div><div class="empty-state-title">Connection error</div><div class="empty-state-desc">Could not load brain data from the server.</div></div>';
+      showEmptyState(el, { icon: '❌', title: 'Connection error', desc: 'Could not load brain data from the server.' });
     }
   },
 
@@ -80,30 +80,27 @@ const Neural = {
   },
 
   loadArch() {
-    try {
-      // Architecture settings are loaded from DB; populate defaults from status
-      API.brainSpecs().then(data => {
-        if (data) {
-          setInput('arch-hidden-dim', data.hidden_dim ?? data.hidden ?? '12');
-          setInput('arch-hidden-layers', data.hidden_layers ?? data.layers ?? '1');
-          setInput('arch-lr', data.learning_rate ?? data.lr ?? '0.01');
-          setInput('arch-dropout', data.dropout ?? '0.0');
-          byId('arch-type').value = data.type || 'simple';
-          byId('arch-optimizer').value = data.optimizer || 'Adam';
-        }
-      }).catch(() => {});
-    } catch(e) {}
+    API.brainSpecs().then(data => {
+      if (data) {
+        setInput('arch-hidden-dim', data.hidden_dim ?? data.hidden ?? '12');
+        setInput('arch-hidden-layers', data.hidden_layers ?? data.layers ?? '1');
+        setInput('arch-lr', data.learning_rate ?? data.lr ?? '0.01');
+        setInput('arch-dropout', data.dropout ?? '0.0');
+        const typeEl = byId('arch-type'); if (typeEl) typeEl.value = data.type || 'simple';
+        const optEl = byId('arch-optimizer'); if (optEl) optEl.value = data.optimizer || 'Adam';
+      }
+    }).catch(() => {});
   },
 
   async saveArch() {
     try {
       const data = {
         type: getInput('arch-type'),
-        hidden_dim: parseInt(getInput('arch-hidden-dim')),
-        hidden_layers: parseInt(getInput('arch-hidden-layers')),
-        learning_rate: parseFloat(getInput('arch-lr')),
-        dropout: parseFloat(getInput('arch-dropout')),
-        optimizer: getInput('arch-optimizer'),
+        hidden_dim: parseInt(getInput('arch-hidden-dim')) || 12,
+        hidden_layers: parseInt(getInput('arch-hidden-layers')) || 1,
+        learning_rate: parseFloat(getInput('arch-lr')) || 0.01,
+        dropout: parseFloat(getInput('arch-dropout')) || 0,
+        optimizer: getInput('arch-optimizer') || 'Adam',
       };
       await API.saveArch(data);
       App.toast('Architecture saved', 'success');
@@ -117,6 +114,11 @@ const Neural = {
       App.toast('Tests: ' + (data.passed || 0) + '/' + (data.total || 0) + ' passed', data.failures ? 'warn' : 'success');
     } catch(e) { App.toast('Tests failed: ' + e.message, 'error'); }
   },
+
+  _escape(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  },
 };
 
-document.addEventListener('DOMContentLoaded', () => { Neural.init(); lucide?.createIcons(); });
+document.addEventListener('DOMContentLoaded', () => { Neural.init(); try { if (typeof lucide !== 'undefined' && lucide?.createIcons) lucide.createIcons(); } catch(e) {} });
