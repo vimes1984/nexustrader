@@ -866,10 +866,20 @@ class ExecutionEngine:
             return float(total_value)
             
         equity = self.balance
+        last_prices = getattr(self, "last_known_prices", {})
         for symbol, pos in self.active_positions.items():
             qty = pos["quantity"]
             entry = pos["entry_price"]
-            price = current_prices.get(symbol, entry)
+            # Cascade: caller prices > position current_price > last_known > entry
+            if symbol in current_prices and current_prices[symbol] is not None and current_prices[symbol] > 0:
+                price = float(current_prices[symbol])
+            elif pos.get("current_price") and pos["current_price"] > 0:
+                price = float(pos["current_price"])
+            else:
+                # Try matching asset symbol in last_known_prices
+                base = symbol.split('-')[0] if '-' in symbol else symbol.split('/')[0] if '/' in symbol else symbol
+                fallback = last_prices.get(base, last_prices.get(symbol, entry))
+                price = float(fallback) if fallback and float(fallback) > 0 else entry
             
             if pos["direction"] == "BUY":
                 unrealized = (price - entry) * qty
