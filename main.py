@@ -1449,7 +1449,8 @@ def get_status():
     _today_ts = _today_start.timestamp()
     _today_trades = [t for t in _all_trades if t.get("exit_time", 0) >= _today_ts]
     _today_pnl = sum(float(t.get("pnl", 0.0) or 0.0) for t in _today_trades)
-    _today_pnl_pct = (_today_pnl / ee.balance * 100) if ee.balance > 0 else 0.0
+    _today_pnl_denom = ee.initial_balance if ee.initial_balance > 0 else (ee.balance if ee.balance > 0 else 1.0)
+    _today_pnl_pct = (_today_pnl / _today_pnl_denom * 100) if _today_pnl_denom > 0 else 0.0
     
     _win_count = sum(1 for t in _all_trades if float(t.get("pnl", 0) or 0) > 0)
     _loss_count = sum(1 for t in _all_trades if float(t.get("pnl", 0) or 0) < 0)
