@@ -791,6 +791,7 @@ class ExecutionEngine:
         if trailing_stop_enabled:
             # Default trail offset widened from 0.5% to 1.5% for crypto noise tolerance
             trail_offset_pct = float(database.load_setting("trailing_stop_offset_pct", "0.015"))
+            _trail_updated = False
             if direction == "BUY":
                 if "original_sl" not in pos:
                     pos["original_sl"] = sl
@@ -799,6 +800,7 @@ class ExecutionEngine:
                 if trailed_sl > sl:
                     sl = trailed_sl
                     pos["stop_loss"] = trailed_sl
+                    _trail_updated = True
                     logging.debug(f"[TRAILING SL] {symbol} BUY: trailed SL to {trailed_sl:.4f}")
             else: # SELL
                 if "original_sl" not in pos:
@@ -808,7 +810,11 @@ class ExecutionEngine:
                 if trailed_sl < sl:
                     sl = trailed_sl
                     pos["stop_loss"] = trailed_sl
+                    _trail_updated = True
                     logging.debug(f"[TRAILING SL] {symbol} SELL: trailed SL to {trailed_sl:.4f}")
+            # Persist trailing stop update to DB so it survives restarts
+            if _trail_updated:
+                database.save_active_position(symbol, pos)
 
         # Check for time-based stop (max position age) — configurable from DB
         max_position_hours = float(database.load_setting("max_position_hours", "48"))
