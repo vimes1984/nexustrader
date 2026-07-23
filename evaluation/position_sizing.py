@@ -64,20 +64,46 @@ def estimate_metrics_from_trades(trades: List[dict]) -> dict:
 
 def compute_kelly_fraction(win_rate: float, avg_win: float, avg_loss: float) -> float:
     """
-    Computes the Kelly fraction: f* = p - (1-p) / (W/L)
-    where p = win_rate, W = avg_win, L = avg_loss.
+    Computes the Kelly fraction of portfolio to RISK (not allocate) per trade.
+
+    Standard Kelly formula for trading outcomes (Thorp 1969):
+        f* = (p * W - q * L) / (W * L)
+    where:
+        p = win_rate
+        q = 1 - win_rate (loss rate)
+        W = avg_win  (average winning PnL fraction, positive)
+        L = avg_loss (average losing PnL fraction, positive)
+
+    NOTE: The simple formula f* = p - (1-p) / (W/L) is INCORRECT for trading
+    where outcomes are continuous rather than binary fixed-odds bets.
 
     Returns 0 if win_rate or avg_loss is invalid.
     """
-    if win_rate <= 0 or win_rate >= 1 or avg_loss <= 0:
-        return 0.0
-    if avg_win <= 0:
-        return 0.0  # No winning trades means no edge
+    if win_rate <= 0 or avg_win <= 0:
+        return 0.0  # No edge
+    if avg_loss <= 0 and win_rate < 1.0:
+        return 0.0  # No losing trades to calibrate risk
 
-    win_loss_ratio = avg_win / avg_loss if avg_loss > 0 else 1.0
-    # Standard Kelly: f* = p - q/b where b = W/L
-    kelly = win_rate - (1.0 - win_rate) / win_loss_ratio
-    return max(0.0, min(kelly, 1.0))
+    # Handle edge cases at win_rate boundaries
+    if win_rate <= 0:
+        return 0.0  # Never bet on a guaranteed loss
+    elif win_rate >= 1:
+        # 100% win rate: Kelly is undefined since we have no loss examples.
+        # Cap conservatively based on avg_win magnitude.
+        return min(0.15, avg_win / (avg_win + 0.05))
+
+    q = 1.0 - win_rate
+    # Correct formula: f* = (p*W - q*L) / (W*L)
+    edge = (win_rate * avg_win) - (q * avg_loss)
+    if edge <= 0:
+        return 0.0  # No positive edge
+
+    odds = avg_win * avg_loss
+    if odds <= 0:
+        return 0.0
+
+    kelly = edge / odds
+    return max(0.0, min(kelly, 0.5))  # Cap raw Kelly at 0.5
 
 
 def compute_safe_fraction(

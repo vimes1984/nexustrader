@@ -125,5 +125,116 @@ class TestLearningEngine(unittest.TestCase):
         nonzero = sum(1 for w in weights if w > 0.001)
         self.assertEqual(nonzero, 12, msg=f"Only {nonzero}/12 strategies have weight > 0.001")
 
+    def test_adam_momentum_round_trip(self):
+        """Adam momentum/velocity states (m_W, v_W) should survive serialization
+        and round-trip. This verifies that loading saved weights doesn't zero
+        the Adam state."""
+        net = PolicyNetwork(state_dim=8, hidden_dim=12, action_dim=6, learning_rate=0.05)
+        
+        # Do several gradient updates to build up Adam momentum states
+        for i in range(5):
+            state = np.random.randn(8)
+            signals = [0.5, 0.3, 0.1, 0.05, 0.03, 0.02]
+            net.backward(state, signals, "BUY", reward=0.02 * (i + 1))
+        
+        # Verify Adam states are non-zero before serialization
+        for i, mw in enumerate(net.m_W):
+            self.assertFalse(np.allclose(mw, 0),
+                             msg=f"m_W[{i}] is all zeros — Adam momentum was not accumulated")
+        for i, vw in enumerate(net.v_W):
+            self.assertFalse(np.allclose(vw, 0),
+                             msg=f"v_W[{i}] is all zeros — Adam velocity was not accumulated")
+        self.assertGreater(net.t, 0, msg="Adam step counter t was not incremented")
+        
+        # Serialize and restore
+        json_str = net.to_json()
+        
+        restored = PolicyNetwork(state_dim=8, hidden_dim=12, action_dim=6, learning_rate=0.05)
+        restored.from_json(json_str)
+        
+        # Verify Adam states survived round-trip (not zeroed)
+        for i, mw in enumerate(restored.m_W):
+            self.assertFalse(np.allclose(mw, 0),
+                             msg=f"Restored m_W[{i}] is all zeros — Adam momentum lost")
+        for i, vw in enumerate(restored.v_W):
+            self.assertFalse(np.allclose(vw, 0),
+                             msg=f"Restored v_W[{i}] is all zeros — Adam velocity lost")
+        self.assertEqual(restored.t, net.t,
+                         msg=f"Adam step counter not preserved: {restored.t} != {net.t}")
+        
+        # Verify weights also match
+        for i, w in enumerate(net.W):
+            np.testing.assert_array_almost_equal(w, restored.W[i], decimal=10)
+
+    def test_adam_momentum_zeroed_on_restore_weights_changed(self):
+        """If weights change between save and restore (e.g., architecture migration),
+        Adam state should be re-initialized (zeroed) with correct shapes."""
+        net = PolicyNetwork(state_dim=8, hidden_dim=12, action_dim=6, learning_rate=0.05)
+        
+        # Build up Adam state
+        for i in range(3):
+            state = np.random.randn(8)
+            net.backward(state, [0.5, 0.3, 0.1, 0.05, 0.03, 0.02], "BUY", 0.02)
+        
+        json_str = net.to_json()
+        data = json.loads(json_str)
+        
+        # Modify weight dimension to simulate architecture change
+        data["W"][-1] = [[0.01] * 6 for _ in range(12)]  # output weights 12x6
+        # Trim to 5 actions (simulate migration)
+        data["W"][-1] = [row[:5] for row in data["W"][-1]]
+        data["b"][-1] = [[0.01] * 5]
+        
+        modified_json = json.dumps(data)
+        
+        restored = PolicyNetwork(state_dim=8, hidden_dim=12, action_dim=6, learning_rate=0.05)
+        restored.from_json(modified_json)
+        
+        # Adam state should be re-initialized (zero) with correct shapes
+        self.assertEqual(restored.m_W[-1].shape, (12, 5))
+        self.assertEqual(restored.v_W[-1].shape, (12, 5))
+        # All zeros
+        self.assertTrue(np.allclose(restored.m_W[-1], 0))
+        self.assertTrue(np.allclose(restored.v_W[-1], 0))
+        # Step counter reset
+        self.assertEqual(restored.t, 0)
+
+    def test_lr_scheduling_decay(self):
+        """Learning rate should decay from initial_lr toward min_lr over steps."""
+        net = PolicyNetwork(state_dim=8, hidden_dim=12, action_dim=6, learning_rate=0.1)
+        self.assertEqual(net.lr, 0.1)
+        
+        initial_lr = net.lr
+        
+        # Run many gradient updates to trigger LR decay
+        for i in range(120):
+            state = np.random.randn(8)
+            net.backward(state, [0.5, 0.3, 0.1, 0.05, 0.03, 0.02], "BUY", 0.02)
+        
+        # LR should have decayed below initial
+        self.assertLess(net.lr, initial_lr)
+        self.assertGreaterEqual(net.lr, net.min_lr)
+
+    def test_lr_scheduling_serialization_preserves_state(self):
+        """LR scheduling state (total_learning_steps, min_lr, lr_decay_steps)
+        should survive serialization round-trip."""
+        net = PolicyNetwork(state_dim=8, hidden_dim=12, action_dim=6, learning_rate=0.1)
+        
+        # Run some updates
+        for i in range(50):
+            state = np.random.randn(8)
+            net.backward(state, [0.5, 0.3, 0.1, 0.05, 0.03, 0.02], "BUY", 0.02)
+        
+        lr_before = net.lr
+        steps_before = net.total_learning_steps
+        
+        json_str = net.to_json()
+        restored = PolicyNetwork(state_dim=8, hidden_dim=12, action_dim=6, learning_rate=0.1)
+        restored.from_json(json_str)
+        
+        # LR should match (same decay state)
+        self.assertAlmostEqual(restored.lr, lr_before, places=5)
+        self.assertEqual(restored.total_learning_steps, steps_before)
+
 if __name__ == "__main__":
     unittest.main()

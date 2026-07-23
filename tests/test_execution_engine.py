@@ -225,8 +225,8 @@ class TestExecutionEngine(unittest.TestCase):
         result = self.engine.update_positions(symbol, 100.0)
         self.assertIsNone(result)  # Not closed
         
-        # Price goes above entry for close
-        result = self.engine.update_positions(symbol, 150.0)
+        # Price hits take profit (adjusted for slippage, TP ~199.9)
+        result = self.engine.update_positions(symbol, 210.0)
         self.assertIsNotNone(result)
         self.assertEqual(result["event"], "closed")
         
