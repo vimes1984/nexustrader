@@ -890,7 +890,10 @@ class ExecutionEngine:
                         if norm == fiat_code and rate > 0:
                             fiat_map[asset_key] = rate
 
-            for asset, qty in holdings.items():
+            for asset, qty_raw in holdings.items():
+                qty = float(qty_raw)
+                if qty <= 0.000001:
+                    continue
                 if asset in fiat_map:
                     total_value += qty * fiat_map[asset]
                 else:

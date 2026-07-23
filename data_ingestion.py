@@ -69,17 +69,21 @@ class DataIngestion:
             raise e
 
     def compute_technical_indicators(self):
-        """Computes technical indicators on the historical dataset."""
+        """Computes technical indicators on the historical dataset.
+        
+        Locks are held for the full read-compute-write cycle to prevent
+        TOCTOU data corruption: another thread may append/update rows between
+        the copy and the write-back.
+        """
         self._require_lock()
         with self._data_lock:
             if self.data.empty:
                 return
             df = self.data.copy()
-        
-        # Guard against short DataFrames — RSI/ATR seeding requires 14+ rows
-        if len(df) < 14:
-            # df is a copy; no need to assign it back since no changes were made
-            return
+            
+            # Guard against short DataFrames — RSI/ATR seeding requires 14+ rows
+            if len(df) < 14:
+                return
 
         # Simple Moving Averages (SMA)
         df['sma_20'] = df['close'].rolling(window=20).mean()
