@@ -1851,8 +1851,11 @@ def get_portfolio_history(timeframe: str = "1W"):
                     "pnl": float(r_pnl)
                 })
         else:
-            cursor.execute("SELECT exit_time, pnl FROM trades ORDER BY exit_time ASC")
-            trades = cursor.fetchall()
+            try:
+                cursor.execute("SELECT exit_time, pnl FROM trades ORDER BY exit_time ASC")
+                trades = cursor.fetchall()
+            except sqlite3.OperationalError:
+                trades = []
             
             current_equity = init_bal
             event_points = [{"timestamp": 0.0, "equity": init_bal, "pnl": 0.0}]
