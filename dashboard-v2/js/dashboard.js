@@ -131,6 +131,10 @@ const Dashboard = {
     };
   },
 
+  debug(...args) {
+    if (document.body.classList.contains('debug')) console.log('[Dashboard]', ...args);
+  },
+
   redrawChart() {
     if (!this.chart || !this.chartSeries?.candles || !this.chartData?.length) return;
     if (this.chartType === 'line') {
