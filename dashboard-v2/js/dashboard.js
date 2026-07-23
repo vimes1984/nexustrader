@@ -450,10 +450,14 @@ const Dashboard = {
         </div>`;
       }).join('');
     }
-    if (this.weightsChart) {
-      this.weightsChart.data.labels = Object.keys(weights||{});
-      this.weightsChart.data.datasets[0].data = Object.values(weights||{});
+    if (this.weightsChart && weights && Object.keys(weights).length) {
+      this.weightsChart.data.labels = Object.keys(weights);
+      this.weightsChart.data.datasets[0].data = Object.values(weights);
       this.weightsChart.update('none'); // 'none' avoids animation for rapid updates
+    } else if (this.weightsChart) {
+      this.weightsChart.data.labels = [];
+      this.weightsChart.data.datasets[0].data = [];
+      this.weightsChart.update('none');
     }
   },
 

@@ -367,6 +367,10 @@ class ExecutionEngine:
             
             # Round quantity to exchange precision
             amount = float(exchange.amount_to_precision(ccxt_symbol, adjusted_qty))
+            # BUGFIX: Recheck min amount after precision rounding (can round below min)
+            if amount < min_amount:
+                logging.warning(f"[LIVE TRADING MIN] Amount {amount} below min {min_amount} after precision rounding — using min amount")
+                amount = float(exchange.amount_to_precision(ccxt_symbol, min_amount))
             if amount <= 0:
                 logging.error(f"[LIVE TRADING ERROR] Calculated execution quantity {amount} rounded to 0. Order aborted.")
                 return False, qty
