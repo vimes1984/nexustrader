@@ -127,5 +127,57 @@ class TestProbabilityEngine(unittest.TestCase):
         self.assertLess(res["stop_loss"], 100.0)
         self.assertTrue("is_viable" in res)
 
+    @patch('database.get_db_connection')
+    @patch('database.load_setting')
+    def test_kelly_fraction_in_evaluate(self, mock_load, mock_get_conn):
+        """Kelly fraction from evaluate_trade should be within [0, 0.15]."""
+        mock_load.side_effect = lambda k, default: default
+        mock_get_conn.side_effect = Exception("DB mock error")
+        
+        # Strong BUY signal with good RSI → high win prob → positive Kelly
+        res = self.engine.evaluate_trade(
+            price=100.0,
+            atr=5.0,
+            direction="BUY",
+            weighted_signal=0.8,
+            row={'rsi': 40}
+        )
+        self.assertGreaterEqual(res["kelly_fraction"], 0.0,
+                                msg=f"Kelly fraction {res['kelly_fraction']} should be >= 0")
+        self.assertLessEqual(res["kelly_fraction"], 0.15,
+                             msg=f"Kelly fraction {res['kelly_fraction']} should be <= 0.15 hard cap")
+        self.assertGreater(res["win_probability"], 0.5)
+        
+        # Very weak signal → low win prob → Kelly ≈ 0
+        res_weak = self.engine.evaluate_trade(
+            price=100.0,
+            atr=5.0,
+            direction="BUY",
+            weighted_signal=0.1,
+            row={'rsi': 50}
+        )
+        self.assertLessEqual(res_weak["kelly_fraction"], res["kelly_fraction"],
+                             msg="Weak signal should produce smaller Kelly fraction")
+        
+    @patch('database.get_db_connection')
+    @patch('database.load_setting')
+    def test_exposure_limits_prevent_overbetting(self, mock_load, mock_get_conn):
+        """Even with max aggressive mode, kelly_fraction should respect hard cap."""
+        mock_load.side_effect = lambda k, default: default
+        mock_get_conn.side_effect = Exception("DB mock error")
+        
+        self.engine.set_risk_mode("hyper_growth")  # max_cap = 0.50
+        
+        res = self.engine.evaluate_trade(
+            price=100.0,
+            atr=5.0,
+            direction="BUY",
+            weighted_signal=0.9,
+            row={'rsi': 45}
+        )
+        # Even with hyper_growth mode, absolute_max_risk_fraction = 0.15 binds
+        self.assertLessEqual(res["kelly_fraction"], 0.15,
+                             msg=f"Hyper-growth mode still capped at 0.15, got {res['kelly_fraction']}")
+
 if __name__ == "__main__":
     unittest.main()

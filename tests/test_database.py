@@ -4,9 +4,15 @@ import sys
 import sqlite3
 import time
 import json
+import importlib
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Force-reload the real database module in case other test files replaced
+# sys.modules['database'] with a MagicMock
+if 'database' in sys.modules:
+    del sys.modules['database']
+    importlib.invalidate_caches()
 import database
 
 class TestDatabase(unittest.TestCase):
