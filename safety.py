@@ -3,6 +3,7 @@ Safety infrastructure: kill switch, drawdown tracker, mutation freeze.
 
 Designed to be integrated into live trading without changing existing behavior.
 """
+import math
 import time
 import logging
 from typing import Optional, Tuple
@@ -164,7 +165,15 @@ class KillSwitch:
 
     def record_trade(self, pnl: float):
         """Record a completed trade PnL against the daily limit."""
-        self.daily_pnl += pnl
+        if pnl is None:
+            return
+        try:
+            pnl_float = float(pnl)
+        except (ValueError, TypeError):
+            return
+        if math.isnan(pnl_float) or math.isinf(pnl_float):
+            return
+        self.daily_pnl += pnl_float
 
     def reset(self):
         """Manual reset after investigation."""
