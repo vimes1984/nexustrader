@@ -465,6 +465,9 @@ class PolicyNetwork:
         self.min_lr = data.get("min_lr", self.initial_lr * 0.1)
         self.lr_decay_steps = data.get("lr_decay_steps", 100)
         self.total_learning_steps = data.get("total_learning_steps", 0)
+        
+        # Update action_dim to match actual loaded weights after migration
+        self.action_dim = self.W[-1].shape[1]
 
         # Init optimizer momentum/velocity if NOT already restored from saved state,
         # OR if individual optimizer tensor shapes don't match weights (dimension migration)
