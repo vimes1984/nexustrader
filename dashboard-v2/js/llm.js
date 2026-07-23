@@ -38,6 +38,23 @@ const LLM = {
         const scoreEl = byId('llm-sentiment-score');
         if (scoreEl) scoreEl.textContent = (s.sentiment_score || 0).toFixed(4);
       }
+      // Show LLM server URL in status
+      if (data?.llama_server_url || data?.server_url) {
+        const url = this._escape(data.llama_server_url || data.server_url || '');
+        var serverUrlEl = byId('llm-server-url');
+        if (!serverUrlEl) {
+          var statusContainer = byId('llm-status-text')?.parentElement;
+          if (statusContainer) {
+            var urlDiv = document.createElement('div');
+            urlDiv.id = 'llm-server-url';
+            urlDiv.style.cssText = 'font-size:10px;margin-top:4px;color:var(--text-muted);word-break:break-all';
+            urlDiv.textContent = 'Server: ' + url;
+            statusContainer.appendChild(urlDiv);
+          }
+        } else {
+          serverUrlEl.textContent = 'Server: ' + url;
+        }
+      }
     } catch(e) { /* LLM server may not be running */ }
   },
 

@@ -729,7 +729,12 @@ class ExecutionEngine:
                 "strategy_signals": pos["strategy_signals"],
                 "sentiment_sources": pos.get("sentiment_sources", {}),
                 "policy_brain": active_brain_name,
-                "trading_mode": self.trading_mode
+                "trading_mode": self.trading_mode,
+                # Include evaluation metadata stored on entry for calibration/tracking
+                "predicted_win_probability": pos.get("predicted_win_probability"),
+                "expected_value": pos.get("expected_value"),
+                "risk_reward_ratio": pos.get("risk_reward_ratio"),
+                "kelly_fraction": pos.get("kelly_fraction"),
             }
 
             # Save trade to DB
