@@ -522,9 +522,10 @@ const App = {
     try {
       const data = await API.positions();
       if (data && (Array.isArray(data) ? data.length : Object.keys(data).length)) {
-        this.emit('statusUpdate', { positions: data });
+        return data;
       }
     } catch(e) { /* positions may not be available yet */ }
+    return null;
   },
 
   // ── Toast ──

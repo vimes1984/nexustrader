@@ -773,7 +773,10 @@ class NexusTraderOrchestrator:
             if _saved_threshold is not None and str(_saved_threshold).strip():
                 # SAFETY CLAMP [0.10, 0.45]: optimizer once set this to 0.60, gating ALL trades for 6+ hours.
                 # 0.45 ensures at least some trades pass in a $200 account (default ~0.35).
-                _min_sig = max(0.10, min(0.45, float(str(_saved_threshold).strip())))
+                try:
+                    _min_sig = max(0.10, min(0.45, float(str(_saved_threshold).strip())))
+                except (ValueError, TypeError):
+                    _min_sig = 0.30
             else:
                 # BUGFIX: Use total EQUITY (balance + unrealized PnL) instead of cash balance.
                 # When a position is open, balance drops by position cost (e.g. $990→$792)
