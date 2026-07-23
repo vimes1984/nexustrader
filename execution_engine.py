@@ -3,6 +3,7 @@ import logging
 import json
 import os
 import threading
+import math
 import database
 
 # Global lock protecting shared execution state (active_positions, balance)
