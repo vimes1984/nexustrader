@@ -813,6 +813,25 @@ class NexusTraderOrchestrator:
                 # the starvation issue where most ensemble signals (0.10-0.25) are
                 # blocked despite being valid trading opportunities.
                 _min_sig = max(0.15, min(0.45, 1.0 / (1.0 + _ref_val / 350.0)))
+            
+            # STARVATION RELAXATION: If the bot has zero trades in >1 hour and no open positions,
+            # progressively lower the signal threshold on each subsequent tick to let trades through.
+            # This prevents the death spiral where high thresholds + tight risk = 0 trades forever.
+            # Only relax when there are no open positions (stuck state), not during normal cooldowns.
+            if not self.execution_engine.active_positions:
+                _last_trade_time = getattr(self.execution_engine, '_last_trade_time', 0.0)
+                _minutes_without_trade = (time.time() - _last_trade_time) / 60.0 if _last_trade_time > 0 else 999.0
+                if _minutes_without_trade >= 60.0 and _minutes_without_trade < 999.0:
+                    # Linear relaxation: every 15 minutes past 1h, lower threshold by 0.01
+                    # Floor at 0.10 (minimum viable signal)
+                    _extra_relax = min(0.35, (_minutes_without_trade - 60.0) / 15.0 * 0.01)
+                    if _extra_relax > 0.01:
+                        old_threshold = _min_sig
+                        _min_sig = max(0.10, _min_sig - _extra_relax)
+                        logging.info(
+                            f"[STARVATION RELAX] {ticker}: {_minutes_without_trade:.0f}m no trades. "
+                            f"Relaxing threshold from {old_threshold:.3f} to {_min_sig:.3f}"
+                        )
             if abs(weighted_signal) >= _min_sig:
                 direction = "BUY" if weighted_signal > 0 else "SELL"
                 
@@ -830,96 +849,6 @@ class NexusTraderOrchestrator:
                 
                 # Store last evaluation on probability_engine for API queries
                 self.probability_engine.last_evaluation = evaluation
-                
-                # If viable, open position
-                if evaluation["is_viable"]:
-                    # KillSwitch check before opening — use current market value not entry price
-                    # BUGFIX: entry_price underestimates exposure when price moves up.
-                    # Use current_price from latest_ticks for accurate real-time exposure.
-                    # Fall back to entry_price if tick data hasn't arrived yet (warm-up).
-                    _exposure_prices = self.latest_ticks
-                    _current_exposure_prices = current_prices if current_prices else _exposure_prices
-                    exposure = sum(
-                        abs(v.get("quantity", 0)) * _current_exposure_prices.get(k, {}).get("close", v.get("entry_price", 0))
-                        for k, v in self.execution_engine.active_positions.items()
-                    )
-                    safe, reason = kill_switch.check(
-                        current_drawdown=drawdown_tracker.current_drawdown,
-                        # BUGFIX: Pass dollar exposure per symbol, not raw coin quantity.
-                        # max_per_pos is a dollar value ($50 baseline, scaled by account) but
-                        # raw quantity (e.g. 396 ADA) vs dollars ($247) is apples-to-oranges.
-                        open_positions={k: abs(v.get("quantity", 0)) * v.get("entry_price", 0) for k, v in self.execution_engine.active_positions.items()},
-                        total_exposure=exposure,
-                        current_equity=current_equity,
-                    )
-                    if not safe:
-                        logging.warning("[KillSwitch] Blocking trade: {}".format(reason))
-                    else:
-                        evaluation["sentiment_sources"] = row.get("sentiment_sources", {})
-                        # Gather the active signals at entry
-                        signals_at_entry = [
-                            strat.generate_signal(row)
-                            for strat in ensemble.strategies
-                        ]
-                        opened = self.execution_engine.open_position(
-                            ticker,
-                            evaluation,
-                            signals_at_entry
-                        )
-                        if opened:
-                            trade_opened = True
-                            # Generate LLaMA trade explanation (async, non-blocking)
-                            llm_explanation = ""
-                            if self.llm_enabled and self.llm_client:
-                                async def explain_trade():
-                                    try:
-                                        loop = asyncio.get_running_loop()
-                                        explanation = await loop.run_in_executor(None,
-                                            self.llm_client.explain_trade, {
-                                                "symbol": ticker,
-                                                "direction": "LONG" if direction == "BUY" else "SHORT",
-                                                "entry_price": float(current_price),
-                                                "signal_strength": float(weighted_signal),
-                                                "top_strategies": [
-                                                    ensemble.strategies[i].name
-                                                    for i in sorted(range(len(strategy_breakdown)),
-                                                                    key=lambda i: abs(strategy_breakdown[i]),
-                                                                    reverse=True)[:3]
-                                                ],
-                                                "regime": self.llm_last_sentiment.get("direction", "unknown"),
-                                                "attention_focus": "Live ensemble signal: {:.3f}".format(weighted_signal),
-                                                "market_overview": "Balance \${:.2f}, {} open positions".format(
-                                                    self.execution_engine.balance,
-                                                    len(self.execution_engine.active_positions)),
-                                            })
-                                        self._run_async(self.broadcast_message({
-                                            "type": "llm_explanation",
-                                            "ticker": ticker,
-                                            "explanation": explanation
-                                        }))
-                                    except Exception as ex:
-                                        logging.warning(f"LLaMA trade explanation failed: {ex}")
-                                self._run_async(explain_trade())
-                            if self.execution_engine.trading_mode == "live":
-                                self._run_async(self.broadcast_message({
-                                    "type": "trade_opened",
-                                    "ticker": ticker,
-                                    "position": self.execution_engine.active_positions[ticker],
-                                    "balance": self.execution_engine.balance,
-                                    "equity": current_equity,
-                                    "llm_explanation": llm_explanation or "LLaMA analysis pending..."
-                                }))
-                            else:
-                                # BUGFIX: pending_limit_orders dict is never populated by open_position.
-                                # Use the active position instead to avoid KeyError crash.
-                                _limit_order = self.execution_engine.pending_limit_orders.get(ticker, self.execution_engine.active_positions.get(ticker, {}))
-                                self._run_async(self.broadcast_message({
-                                    "type": "limit_order_placed",
-                                    "ticker": ticker,
-                                    "order": _limit_order,
-                                    "balance": self.execution_engine.balance,
-                                    "equity": current_equity
-                                }))
 
         # Check Loss Cooldown status
         try:
@@ -1039,6 +968,173 @@ class NexusTraderOrchestrator:
                 self.data_ingestions[ticker].stop_stream()
                 self.data_ingestions[ticker].subscribers = []
         logging.info("All ticker streams stopped.")
+
+    # ────────────────────────────────────────────────────────────────
+    # Signal batching: collect all ticker signals, pick the BEST one
+    # ────────────────────────────────────────────────────────────────
+    def _flush_signal_batch(self):
+        """Evaluate all buffered signals and execute the best viable one.
+        
+        Prevents multi-signal starvation: instead of first-come-first-blocked
+        (where ticker A gets the green light then blocked by exposure, ticker B
+        also blocked but for different reasons), we pick the single best signal
+        (highest expected_value) and execute only that one.
+        """
+        buf = getattr(self, '_pending_signal_buffer', {})
+        if not buf:
+            return
+        
+        # Log all buffered signals (even blocked ones) for pipeline visibility
+        total_signals = len(buf)
+        viable_signals = {t: ev for t, ev in buf.items() if ev.get("is_viable", False)}
+        
+        _all_evs = [(t, ev.get("expected_value", 0), ev.get("kelly_fraction", 0)) for t, ev in buf.items()]
+        _all_evs.sort(key=lambda x: x[1], reverse=True)
+        
+        # Build detailed log for all buffered signals
+        _log_lines = []
+        _log_lines.append(f"[SIGNAL BATCH] Buffer has {total_signals} signals, {len(viable_signals)} viable")
+        for t, ev_val, kf in _all_evs:
+            ev_info = buf[t]
+            _viable = "V" if ev_info.get("is_viable") else "X"
+            _dir = ev_info.get("direction", "?")
+            _wp = ev_info.get("win_probability", 0)
+            _rr = ev_info.get("risk_reward_ratio", 0)
+            _log_lines.append(f"  [{_viable}] {t} {_dir}: EV={ev_val:.4f} P_win={_wp:.2%} R:R={_rr:.2f} kelly={kf:.4f}")
+        logging.info("\n".join(_log_lines))
+        
+        if not viable_signals:
+            # All signals blocked — circuit breaker check happens below
+            if not hasattr(self, '_flush_blocked_count'):
+                self._flush_blocked_count = 0
+            self._flush_blocked_count += 1
+        else:
+            self._flush_blocked_count = 0
+            
+            # Pick the best signal (highest expected_value)
+            best_ticker = max(viable_signals, key=lambda t: viable_signals[t].get("expected_value", 0))
+            best_eval = viable_signals[best_ticker]
+            
+            # Check cooldown before executing
+            try:
+                _cd_raw = database.load_setting(f"cooldown_end_{best_ticker}", "0.0")
+                _cd_end = float(_cd_raw) if _cd_raw else 0.0
+            except (ValueError, TypeError):
+                _cd_end = 0.0
+            if time.time() < _cd_end:
+                logging.warning(f"[SIGNAL BATCH] Best signal {best_ticker} is in loss cooldown. Skipping.")
+                # Fallback: try next-best
+                sorted_viable = sorted(viable_signals.items(), key=lambda x: x[1].get("expected_value", 0), reverse=True)
+                for _t, _ev in sorted_viable[1:]:
+                    try:
+                        _cd_raw2 = database.load_setting(f"cooldown_end_{_t}", "0.0")
+                        _cd_end2 = float(_cd_raw2) if _cd_raw2 else 0.0
+                    except (ValueError, TypeError):
+                        _cd_end2 = 0.0
+                    if time.time() >= _cd_end2:
+                        best_ticker = _t
+                        best_eval = _ev
+                        logging.info(f"[SIGNAL BATCH] Fallback to next-best: {best_ticker}")
+                        break
+                else:
+                    logging.warning(f"[SIGNAL BATCH] All viable signals in cooldown. No trade this cycle.")
+                    self._pending_signal_buffer = {}
+                    return
+            
+            # Execute the best signal (reuse process_tick logic but only for one ticker)
+            _price = best_eval.get("_current_price", best_eval.get("entry_price", 0))
+            _weighted_signal = best_eval.get("_weighted_signal", 0)
+            _direction = "BUY" if _weighted_signal > 0 else "SELL"
+            _state = best_eval.get("state", [])
+            _breakdown = best_eval.get("_strategy_breakdown", {})
+            _current_equity = self.execution_engine.get_equity(
+                {t: float(r['close']) for t, r in self.latest_ticks.items()}
+            )
+            
+            # KillSwitch check
+            _exposure_prices = {t: float(r['close']) for t, r in self.latest_ticks.items()}
+            exposure = sum(
+                abs(v.get("quantity", 0)) * _exposure_prices.get(k, {}).get("close", v.get("entry_price", 0))
+                for k, v in self.execution_engine.active_positions.items()
+            )
+            safe, reason = kill_switch.check(
+                current_drawdown=drawdown_tracker.current_drawdown,
+                open_positions={k: abs(v.get("quantity", 0)) * v.get("entry_price", 0) for k, v in self.execution_engine.active_positions.items()},
+                total_exposure=exposure,
+                current_equity=_current_equity,
+            )
+            if not safe:
+                logging.warning(f"[KillSwitch] Blocking batch trade for {best_ticker}: {reason}")
+                self._pending_signal_buffer = {}
+                return
+            
+            # Inject sentiment sources
+            best_eval["sentiment_sources"] = self.latest_ticks.get(best_ticker, {}).get("sentiment_sources", {})
+            
+            # Gather signals at entry
+            _ensemble = self.strategy_ensembles.get(best_ticker)
+            _signals_at_entry = [
+                strat.generate_signal(self.latest_ticks.get(best_ticker, {}))
+                for strat in (_ensemble.strategies if _ensemble else [])
+            ] if _ensemble else []
+            
+            opened = self.execution_engine.open_position(
+                best_ticker,
+                best_eval,
+                _signals_at_entry
+            )
+            if opened:
+                logging.info(f"[SIGNAL BATCH] Executed best signal: {best_ticker} EV={best_eval.get('expected_value',0):.4f}")
+                # Broadcast
+                if self.execution_engine.trading_mode == "live":
+                    self._run_async(self.broadcast_message({
+                        "type": "trade_opened",
+                        "ticker": best_ticker,
+                        "position": self.execution_engine.active_positions.get(best_ticker, {}),
+                        "balance": self.execution_engine.balance,
+                        "equity": _current_equity,
+                    }))
+                else:
+                    _limit_order = self.execution_engine.pending_limit_orders.get(
+                        best_ticker, self.execution_engine.active_positions.get(best_ticker, {})
+                    )
+                    self._run_async(self.broadcast_message({
+                        "type": "limit_order_placed",
+                        "ticker": best_ticker,
+                        "order": _limit_order,
+                        "balance": self.execution_engine.balance,
+                        "equity": _current_equity
+                    }))
+                
+                # Generate LLaMA explanation (async)
+                if self.llm_enabled and self.llm_client:
+                    async def _explain_trade():
+                        try:
+                            loop = asyncio.get_running_loop()
+                            explanation = await loop.run_in_executor(None,
+                                self.llm_client.explain_trade, {
+                                    "symbol": best_ticker,
+                                    "direction": "LONG" if _weighted_signal > 0 else "SHORT",
+                                    "entry_price": float(_price),
+                                    "signal_strength": float(_weighted_signal),
+                                    "top_strategies": [],
+                                    "regime": self.llm_last_sentiment.get("direction", "unknown"),
+                                    "attention_focus": "Best batch signal: {:.3f} EV={:.4f}".format(_weighted_signal, best_eval.get('expected_value', 0)),
+                                    "market_overview": "Balance \${:.2f}, {} open positions".format(
+                                        self.execution_engine.balance,
+                                        len(self.execution_engine.active_positions)),
+                                })
+                            self._run_async(self.broadcast_message({
+                                "type": "llm_explanation",
+                                "ticker": best_ticker,
+                                "explanation": explanation
+                            }))
+                        except Exception as ex:
+                            logging.warning(f"LLaMA batch trade explanation failed: {ex}")
+                    self._run_async(_explain_trade())
+        
+        # Clear buffer
+        self._pending_signal_buffer = {}
 
 # Instantiate Orchestrator
 orchestrator = NexusTraderOrchestrator()
@@ -1391,19 +1487,24 @@ async def api_positions():
 
 @app.get("/api/health")
 async def api_health():
-    """Lightweight health check - no heavy DB access."""
+    """Lightweight health check - no heavy DB access.
+    Returns sensible defaults even if orchestrator is not fully initialized."""
     import sys, os
     try:
         import psutil
         mem = round(psutil.Process().memory_info().rss / 1024 / 1024, 1)
     except Exception:
         mem = 0
+    start_time = getattr(orchestrator, "start_time", 0) or 0
+    uptime = int(time.time() - start_time) if start_time > 0 else 0
     return {
         "status": "ok",
-        "uptime_seconds": getattr(orchestrator, "start_time", 0),
+        "uptime_seconds": uptime,
         "pid": os.getpid(),
         "python": sys.version.split()[0],
         "memory_mb": mem,
+        "balance": getattr(getattr(orchestrator, "execution_engine", None), "balance", 0.0),
+        "open_positions": len(getattr(getattr(orchestrator, "execution_engine", None), "active_positions", {})),
     }
 
 @app.post("/api/quant/prompt/save")
