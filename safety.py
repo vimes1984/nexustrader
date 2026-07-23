@@ -179,6 +179,8 @@ class KillSwitch:
             "trigger_reason": self.trigger_reason,
             "daily_pnl": self.daily_pnl,
             "daily_reset_time": self.daily_reset_time,
+            "base_equity": self._base_equity,
+            "drawdown_hysteresis_active": self._drawdown_hysteresis_active,
         }
 
     @classmethod
@@ -188,6 +190,8 @@ class KillSwitch:
         ks.trigger_reason = data.get("trigger_reason")
         ks.daily_pnl = data.get("daily_pnl", 0.0)
         ks.daily_reset_time = data.get("daily_reset_time", time.time())
+        ks._base_equity = data.get("base_equity", 0.0)
+        ks._drawdown_hysteresis_active = data.get("drawdown_hysteresis_active", False)
         return ks
 
 
