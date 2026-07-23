@@ -154,9 +154,9 @@ class BacktestEngine:
             except Exception:
                 continue
 
-            # Run on test set
+            # Run on test set using same position-based simulation as _run_nexus_ensemble
             fold_nav = 1.0
-            fold_trades = []
+            fold_position = None
             for i, row in enumerate(test_candles):
                 history = candles[max(0, test_start + i - 100):test_start + i]
                 try:
@@ -165,13 +165,30 @@ class BacktestEngine:
                     signal = 0.0
                 close = row.get("close", 0)
 
-                # Simpler entry logic for walk-forward
-                if close > 0 and signal > entry_threshold:
-                    entry_p = close * 1.0026
-                    fold_nav *= (close / entry_p)
-                elif close > 0 and signal < -entry_threshold:
-                    entry_p = close * 0.9974
-                    fold_nav *= (entry_p / close)
+                # Use same entry/exit logic as main ensemble
+                if fold_position is None and signal > entry_threshold and close > 0:
+                    entry = apply_entry_cost(close, "BUY", self.cost_model)
+                    fold_position = {"entry": entry, "side": "BUY"}
+                elif fold_position is None and signal < -entry_threshold and close > 0:
+                    entry = apply_entry_cost(close, "SELL", self.cost_model)
+                    fold_position = {"entry": entry, "side": "SELL"}
+                elif fold_position is not None and abs(signal) < exit_threshold:
+                    exit_p = apply_exit_cost(close, fold_position["side"], self.cost_model)
+                    pnl = (exit_p - fold_position["entry"]) if fold_position["side"] == "BUY" else (fold_position["entry"] - exit_p)
+                    ret = pnl / abs(fold_position["entry"]) if fold_position["entry"] != 0 else 0.0
+                    fold_nav *= (1 + ret)
+                    fold_trades.append({"pnl": pnl})
+                    fold_position = None
+
+            # Close open position at end of test window
+            if fold_position is not None and test_candles:
+                last_close = float(test_candles[-1].get("close", 0))
+                exit_p = apply_exit_cost(last_close, fold_position["side"], self.cost_model)
+                pnl = (exit_p - fold_position["entry"]) if fold_position["side"] == "BUY" else (fold_position["entry"] - exit_p)
+                ret = pnl / abs(fold_position["entry"]) if fold_position["entry"] != 0 else 0.0
+                fold_nav *= (1 + ret)
+                fold_trades.append({"pnl": pnl})
+                fold_position = None
 
             fold_ret = fold_nav - 1.0
             fold_results.append({
