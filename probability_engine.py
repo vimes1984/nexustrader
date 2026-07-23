@@ -69,8 +69,8 @@ class ProbabilityEngine:
         Uses signal strength and current market regime indicators (like RSI and ATR).
         If history_df is provided, performs a localized statistical check.
         """
-        # Guard against NaN/None signals
-        if weighted_signal is None or (isinstance(weighted_signal, float) and (weighted_signal != weighted_signal)):
+        # Guard against NaN/None signals — works for all numeric types (float, np.float32, np.float64)
+        if weighted_signal is None or (isinstance(weighted_signal, (float, int)) and weighted_signal != weighted_signal):
             weighted_signal = 0.0
         
         # Guard against None row
@@ -147,8 +147,8 @@ class ProbabilityEngine:
         if row is None:
             row = {}
         
-        # Guard against NaN/None price or direction
-        if price is None or (isinstance(price, float) and price != price):
+        # Guard against NaN/None price or direction — handles all numeric types
+        if price is None or (isinstance(price, (float, int)) and price != price):
             price = 0.0
         if direction is None:
             direction = "BUY"
@@ -169,9 +169,9 @@ class ProbabilityEngine:
             
         risk = max(risk, 1e-9)
         # Guard against NaN/Inf reward or risk (should not happen, but be defensive)
-        if reward is None or (isinstance(reward, float) and (reward != reward)):
+        if reward is None or (isinstance(reward, (float, int)) and reward != reward):
             reward = risk  # fallback: 1:1
-        if risk is None or (isinstance(risk, float) and (risk != risk)):
+        if risk is None or (isinstance(risk, (float, int)) and risk != risk):
             risk = reward if reward > 0 else 1e-9
         
         # Cap reward:risk ratio to prevent numerical issues with extreme values
