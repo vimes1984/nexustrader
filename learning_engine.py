@@ -159,9 +159,18 @@ class PolicyNetwork:
         self.t += 1
         self.total_learning_steps += 1
         
-        # Cosine-like LR scheduling: gentle decay, accelerates as steps accumulate
-        fraction = min(1.0, self.total_learning_steps / self.lr_decay_steps)
-        self.lr = self.initial_lr * (1.0 - fraction * 0.9)  # Decay to 10% of initial over lr_decay_steps
+        # Warmup phase: linearly increase LR from min_lr to initial_lr over first 20 steps
+        # This prevents early gradient explosion from random-weight initial updates.
+        warmup_steps = min(20, self.lr_decay_steps // 2)
+        if self.total_learning_steps <= warmup_steps:
+            warmup_fraction = self.total_learning_steps / warmup_steps
+            self.lr = self.min_lr + (self.initial_lr - self.min_lr) * warmup_fraction
+        else:
+            # Cosine-like LR scheduling: gentle decay, accelerates as steps accumulate
+            steps_after_warmup = self.total_learning_steps - warmup_steps
+            decay_range = max(1, self.lr_decay_steps - warmup_steps)
+            fraction = min(1.0, steps_after_warmup / decay_range)
+            self.lr = self.initial_lr * (1.0 - fraction * 0.9)  # Decay to 10% of initial
         self.lr = max(self.lr, self.min_lr)
         
         # Weight change magnitude tracking (every 10th step, log gradient norm)
