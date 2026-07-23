@@ -546,6 +546,15 @@ class NexusTraderOrchestrator:
             # Push experience with TD-error = |PnL| as initial priority
             replay.add(state, action_idx, pnl_percent, next_state, done=True, error=abs(pnl_percent))
             
+            # Log buffer capacity periodically (every 50 pushes)
+            if steps % 50 == 0 and replay.size > 0:
+                _pct = (replay.size / replay.capacity) * 100
+                if _pct >= 80:
+                    logging.info(
+                        f"[REPLAY CAPACITY] {ticker}: {replay.size}/{replay.capacity} "
+                        f"({_pct:.0f}% full)"
+                    )
+            
             # Periodically sample and perform PPO update
             if len(replay) >= self.ppo_batch_size and (
                 steps % self.ppo_update_interval == 0

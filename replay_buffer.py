@@ -54,7 +54,17 @@ class PrioritizedExperienceReplay:
         error : float
             Initial TD-error estimate.  Defaults to 1.0 so new samples
             are replayed at least once before being discarded.
+
+        Returns
+        -------
+        bool
+            True if insertion succeeded, False if buffer was full and
+            oldest experience was overwritten (capacity overflow).
         """
+        overflow = False
+        if self.size >= self.capacity:
+            overflow = True
+        
         priority = (abs(error) + self.epsilon) ** self.alpha
         self.buffer[self.pos] = (np.asarray(state, dtype=np.float32),
                                  float(action),
@@ -64,6 +74,19 @@ class PrioritizedExperienceReplay:
         self.priorities[self.pos] = priority
         self.pos = (self.pos + 1) % self.capacity
         self.size = min(self.size + 1, self.capacity)
+        
+        # Log capacity warning at most once per 10 overflows to avoid spam
+        if overflow:
+            if not hasattr(self, '_overflow_count'):
+                self._overflow_count = 0
+            self._overflow_count += 1
+            if self._overflow_count % 10 == 1:
+                logger.warning(
+                    f"[REPLAY OVERFLOW] Buffer at capacity ({self.capacity}). "
+                    f"Oldest experience evicted. Total overflows: {self._overflow_count}"
+                )
+        
+        return not overflow
 
     def sample(self, batch_size):
         """Return a minibatch sampled according to stored priorities.
