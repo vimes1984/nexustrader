@@ -237,11 +237,15 @@ class ExecutionEngine:
                     held_assets.append(symbol)
                     
             held_assets = list(set(held_assets))
-            
-            prices = {}
+
+            # Build a base-asset→price lookup (e.g. {'BTC': 67000.0, 'EUR': 1.09})
+            prices: dict[str, float] = {}
             try:
-                tickers = exchange.fetch_tickers(held_assets)
-                prices = {sym.split('/')[0]: float(tick['last']) for sym, tick in tickers.items() if tick.get('last') is not None}
+                if held_assets:
+                    tickers = exchange.fetch_tickers(held_assets)
+                    for sym, tick in tickers.items():
+                        if tick.get('last') is not None:
+                            prices[sym.split('/')[0]] = float(tick['last'])
             except Exception as pe:
                 logging.error(f"[LIVE VALUE SYNC] Failed to fetch specific conversion tickers: {pe}")
                 # Fallback to fetching one by one
@@ -252,58 +256,49 @@ class ExecutionEngine:
                             prices[sym.split('/')[0]] = float(tick['last'])
                     except Exception:
                         pass
-            
-            # Calculate Cash balance (in USD)
+
+            # Pre-compute FX rates for known fiat currencies
+            fiat_fallbacks = {"EUR": 1.09, "GBP": 1.30, "CAD": 0.73,
+                              "JPY": 0.0064, "AUD": 0.66, "CHF": 1.15}
+            fx_rates: dict[str, float] = {}
+            for fiat_name in set(fiat_symbols.values()):
+                if fiat_name == "USD":
+                    fx_rates["USD"] = 1.0
+                else:
+                    fx_rates[fiat_name] = prices.get(fiat_name, fiat_fallbacks.get(fiat_name, 1.0))
+
+            # Single-pass portfolio valuation: compute cash + holdings in USD together
             total_cash_usd = 0.0
-            for asset, qty in total_bal.items():
-                qty = float(qty)
+            total_holdings_usd = 0.0
+            for asset, qty_raw in total_bal.items():
+                qty = float(qty_raw)
                 if qty <= 0.000001:
                     continue
                 norm = normalize_kraken_asset(asset)
+                
                 if norm in fiat_symbols:
+                    # Fiat: convert to USD using FX rate or direct price
                     fiat_name = fiat_symbols[norm]
                     if fiat_name == "USD":
                         total_cash_usd += qty
                     else:
-                        rate = 1.0
-                        if fiat_name in prices:
-                            rate = prices[fiat_name]
-                        elif norm in prices:
-                            rate = prices[norm]
-                        elif f"{fiat_name}/USD" in prices:
-                            rate = prices[f"{fiat_name}/USD"]
-                        else:
-                            fallbacks = {"EUR": 1.09, "GBP": 1.30, "CAD": 0.73, "JPY": 0.0064, "AUD": 0.66, "CHF": 1.15}
-                            rate = fallbacks.get(fiat_name, 1.0)
+                        rate = prices.get(fiat_name, fiat_fallbacks.get(fiat_name, 1.0))
                         total_cash_usd += qty * rate
-            
-            self.balance = total_cash_usd
-            
-            # Calculate Holdings balance (in USD)
-            total_value_usd = total_cash_usd
-            for asset, qty in total_bal.items():
-                qty = float(qty)
-                if qty <= 0.000001:
-                    continue
-                norm = normalize_kraken_asset(asset)
-                if norm in fiat_symbols:
-                    continue
-                    
-                price_rate = 0.0
-                if norm in prices:
-                    price_rate = prices[norm]
-                elif asset in prices:
-                    price_rate = prices[asset]
                 else:
-                    db_last_prices = database.load_setting("portfolio_last_known_prices")
-                    if db_last_prices:
-                        try:
-                            cached_prices = json.loads(db_last_prices)
-                            price_rate = float(cached_prices.get(norm, cached_prices.get(asset, 0.0)))
-                        except Exception:
-                            pass
-                            
-                total_value_usd += qty * price_rate
+                    # Crypto: use price quote in USD
+                    price_rate = prices.get(norm, prices.get(asset, 0.0))
+                    if price_rate <= 0:
+                        db_last_prices = database.load_setting("portfolio_last_known_prices")
+                        if db_last_prices:
+                            try:
+                                cached_prices = json.loads(db_last_prices)
+                                price_rate = float(cached_prices.get(norm, cached_prices.get(asset, 0.0)))
+                            except Exception:
+                                pass
+                    total_holdings_usd += qty * price_rate
+
+            self.balance = total_cash_usd
+            total_value_usd = total_cash_usd + total_holdings_usd
                 
             self.live_equity = total_value_usd
             self.live_holdings = {k: float(v) for k, v in total_bal.items() if float(v) > 0.000001}
