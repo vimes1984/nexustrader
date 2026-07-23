@@ -78,6 +78,12 @@ def estimate_ou_process(prices, dt=1.0):
     x = np.array(prices[:-1])
     y = np.array(prices[1:])
 
+    # Check that prices have meaningful variance — flat/constant prices
+    # always appear to be "mean-reverting" (a≈1 with tiny noise)
+    x_var = np.var(x)
+    if x_var < 1e-10:
+        return 0.0, float(np.mean(prices)), False
+
     # Perform OLS regression: y = a * x + b
     A = np.vstack([x, np.ones(len(x))]).T
     a, b = np.linalg.lstsq(A, y, rcond=None)[0]
@@ -87,8 +93,20 @@ def estimate_ou_process(prices, dt=1.0):
         # Not mean-reverting (either trending or unstable)
         return 0.0, float(np.mean(prices)), False
 
+    # Guard against near-unit-root producing absurdly large mu
+    # If 1-a < 1e-6, the mean reversion is too weak to trust the mu estimate
+    one_minus_a = max(1.0 - a, 1e-8)
+    mu = b / one_minus_a
+
     theta = -np.log(a) / dt
-    mu = b / (1.0 - a)
+
+    # Sanity-check mu: it should be within reasonable bounds of observed prices
+    price_min, price_max = float(np.min(prices)), float(np.max(prices))
+    price_range = price_max - price_min
+    if price_range > 0:
+        # mu should be within 3x the observed range (guard against blowup)
+        if mu < price_min - 3 * price_range or mu > price_max + 3 * price_range:
+            return 0.0, float(np.mean(prices)), False
 
     return float(theta), float(mu), True
 
