@@ -205,7 +205,7 @@ def _empty_result(initial_capital: float) -> dict:
     }
 
 
-def _returns_from_equity(equity: Sequence[float]) -> list[float]:
+def _returns_from_equity(equity: Sequence[float]):
     """Convert equity curve to per-step returns."""
     returns = []
     for i in range(1, len(equity)):
