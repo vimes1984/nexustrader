@@ -1345,8 +1345,8 @@ async def api_positions():
                     "unrealized_pnl_pct": round(unrealized_pnl_pct, 2),
                     "age_seconds": int(_time.time()) - entry_time,
                 })
-    except Exception:
-        pass
+    except Exception as e:
+        logging.error(f"/api/positions error building position list: {e}")
     fiat_breakdown = {}
     crypto_count = 0
     try:

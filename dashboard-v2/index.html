@@ -10,11 +10,13 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <!-- Critical resource preloads: CSS + JS (system fonts = zero network dependency) -->
-  <link rel="preload" href="/dashboard-v2/css/main.css?v=1784673479" as="style">
+  <!-- Static CSS (cache-bust via build timestamp) -->
+  <link rel="preload" href="/dashboard-v2/css/main.css?v=BUILD_TS" as="style">
+  <link rel="stylesheet" href="/dashboard-v2/css/main.css?v=BUILD_TS">
+  <!-- Vendor libraries preloaded for fast script injection -->
   <link rel="preload" href="/dashboard-v2/vendor/lucide.min.js" as="script">
   <link rel="preload" href="/dashboard-v2/vendor/lightweight-charts.standalone.production.js" as="script">
-  <link rel="stylesheet" href="/dashboard-v2/css/main.css?v=1784673479">
+  <link rel="preload" href="/dashboard-v2/vendor/chart.umd.min.js" as="script">
   <link rel="manifest" href="/dashboard-v2/manifest.json">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
