@@ -27,8 +27,9 @@ class ProbabilityEngine:
     def calculate_atr_bounds(self, price, atr, direction, symbol=None):
         """Calculates Volatility-Adjusted Take-Profit (TP) and Stop-Loss (SL) using ATR."""
         import database
-        tp_multiplier = 5.0
-        sl_multiplier = 3.0
+        # Start with global settings defaults — consistent whether symbol-specific lookup fails or not
+        tp_multiplier = float(database.load_setting("opt_tp_multiplier", "2.5"))
+        sl_multiplier = float(database.load_setting("opt_sl_multiplier", "1.5"))
         
         if symbol:
             try:
@@ -41,11 +42,7 @@ class ProbabilityEngine:
                     tp_multiplier = float(db_row[0])
                     sl_multiplier = float(db_row[1])
             except Exception:
-                tp_multiplier = float(database.load_setting("opt_tp_multiplier", "2.5"))
-                sl_multiplier = float(database.load_setting("opt_sl_multiplier", "1.5"))
-        else:
-            tp_multiplier = float(database.load_setting("opt_tp_multiplier", "2.5"))
-            sl_multiplier = float(database.load_setting("opt_sl_multiplier", "1.5"))
+                pass  # Fallback to global defaults already loaded above
 
         if atr is None or np.isnan(atr) or atr == 0:
             # Fallback to percentage-based bounds (1.5% TP, 1.0% SL)

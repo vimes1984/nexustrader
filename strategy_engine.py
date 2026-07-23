@@ -109,6 +109,10 @@ class KalmanTrendStrategy(TradingStrategy):
         self.regime = "trend"
         from quant_utils import KalmanFilterPrice
         self.kf = KalmanFilterPrice(process_variance=1e-5, measurement_variance=1e-2)
+        self._cached_threshold = None
+
+    def _refresh_cache(self):
+        self._cached_threshold = float(database.load_setting("opt_kalman_threshold", "0.001"))
 
     def generate_signal(self, row, history=None):
         close = row.get('close', 0)
@@ -116,8 +120,9 @@ class KalmanTrendStrategy(TradingStrategy):
             close = 0
         kf_price = self.kf.update(close)
         
-        # Load optimized threshold parameter (default to 0.001 / 0.1%)
-        threshold = float(database.load_setting("opt_kalman_threshold", "0.001"))
+        if self._cached_threshold is None:
+            self._refresh_cache()
+        threshold = self._cached_threshold
         
         # Kalman crossover signal with trend confirmation filter
         if close > kf_price * (1.0 + threshold):
