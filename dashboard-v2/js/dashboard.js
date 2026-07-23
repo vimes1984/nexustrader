@@ -380,7 +380,12 @@ const Dashboard = {
       c.innerHTML = '<div class="empty-state" style="padding:20px 10px" role="status"><div class="empty-state-icon" style="font-size:24px" aria-hidden="true">⚖️</div><div class="empty-state-title">No weights</div><div class="empty-state-desc" style="font-size:10px">Strategy weights appear once trading begins.</div></div>';
     } else {
       const entries = Object.entries(weights);
-      const maxW = Math.max(...Object.values(weights), 0.01);
+      const wValues = Object.values(weights).filter(function(v) { return typeof v === 'number' && isFinite(v); });
+      if (!wValues.length) {
+        c.innerHTML = '<div class="empty-state" style="padding:20px 10px" role="status"><div class="empty-state-icon" style="font-size:24px" aria-hidden="true">⚖️</div><div class="empty-state-title">No valid weight values</div></div>';
+        return;
+      }
+      const maxW = Math.max.apply(null, wValues.concat([0.01]));
       c.innerHTML = entries.map(([n,w]) => {
         const pct = (w / maxW * 100).toFixed(0);
         const opacity = (0.4 + (w / maxW * 0.6)).toFixed(1);

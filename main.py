@@ -789,10 +789,13 @@ class NexusTraderOrchestrator:
                 
                 # If viable, open position
                 if evaluation["is_viable"]:
-                    # KillSwitch check before opening
+                    # KillSwitch check before opening — use current market value not entry price
+                    # BUGFIX: entry_price underestimates exposure when price moves up.
+                    # Use current_price from latest_ticks for accurate real-time exposure.
+                    _exposure_prices = self.latest_ticks
                     exposure = sum(
-                        abs(v.get("quantity", 0)) * v.get("entry_price", 0)
-                        for v in self.execution_engine.active_positions.values()
+                        abs(v.get("quantity", 0)) * _exposure_prices.get(k, {}).get("close", v.get("entry_price", 0))
+                        for k, v in self.execution_engine.active_positions.items()
                     )
                     safe, reason = kill_switch.check(
                         current_drawdown=drawdown_tracker.current_drawdown,
