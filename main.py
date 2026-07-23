@@ -4728,8 +4728,31 @@ def api_v2_gateway_reasoning():
 
 if __name__ == "__main__":
     import sys
+    import signal as _signal
     is_headless = "--headless" in sys.argv
     has_display = ("DISPLAY" in os.environ or "WAYLAND_DISPLAY" in os.environ) and not is_headless
+    
+    # ── Signal handlers ──
+    _shutdown_initiated = False
+    def _handle_sigterm(signum, frame):
+        global _shutdown_initiated
+        if _shutdown_initiated:
+            logging.warning("Forced exit on second signal.")
+            sys.exit(1)
+        _shutdown_initiated = True
+        logging.info(f"Received signal {signum}. Initiating graceful shutdown...")
+        try:
+            import asyncio
+            loop = asyncio.new_event_loop()
+            loop.run_until_complete(shutdown_event())
+            loop.close()
+        except Exception as e:
+            logging.error(f"Shutdown handler error: {e}")
+        logging.info("Graceful shutdown complete. Exiting.")
+        sys.exit(0)
+    
+    _signal.signal(_signal.SIGTERM, _handle_sigterm)
+    _signal.signal(_signal.SIGINT, _handle_sigterm)
     
     if has_display:
         import threading
