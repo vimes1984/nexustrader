@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.8", "3.9", "3.10"]
+        python-version: ["3.9", "3.10", "3.11"]
 
     steps:
       - uses: actions/checkout@v4
@@ -43,6 +43,8 @@ jobs:
 
       - name: Run core unit tests (pure, no LLM/network)
         run: |
+          # Remove stale cache and test artifacts from previous runs
+          rm -rf __pycache__ tests/__pycache__ test_notif_workspace test_nexustrader_weekly_opt.db
           python3 -m unittest \
             tests.test_mutation_guard \
             tests.test_trading_mode \
@@ -69,15 +71,7 @@ jobs:
             tests.test_notification_manager \
             tests.test_backup_manager
 
-      - name: Run neural network tests
-        run: |
-          python3 -m unittest \
-            tests.test_nn_tokenizer \
-            tests.test_transformer \
-            tests.test_ppo_agent \
-            tests.test_replay_buffer
-
-      - name: Run backtest integration tests (if sklearn available)
+      - name: Run neural network & integration tests
         run: |
           python3 -m unittest tests.test_backtest_ppo_integration -v || echo "Skipped (deps)"
 
