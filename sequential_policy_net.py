@@ -12,6 +12,7 @@ LearningEngine via a config flag (nn_architecture: "mlp" | "lstm").
 """
 import numpy as np
 import json
+import logging
 from typing import Optional, List, Tuple
 from token_embedder import TokenEmbedder
 from tokenizer import (
