@@ -3,7 +3,7 @@ import logging
 from evaluation.position_sizing import compute_safe_fraction, estimate_metrics_from_trades
 
 class ProbabilityEngine:
-    def __init__(self, kelly_fraction=0.1, min_win_rate=0.55):
+    def __init__(self, kelly_fraction=0.1, min_win_rate=0.45):
         self.min_win_rate = min_win_rate
         self.signal_history = {}
         self.set_risk_mode("conservative")
@@ -242,7 +242,7 @@ class ProbabilityEngine:
             if history_df is not None and 'volume' in history_df.columns and len(history_df) >= 20:
                 avg_volume = history_df['volume'].tail(20).mean()
         # Threshold relaxed from 0.5 to 0.3: avoid false rejection in low-vol periods
-        if avg_volume is not None and avg_volume > 0 and volume > 0 and volume / avg_volume < 0.3:
+        if avg_volume is not None and avg_volume > 0 and volume > 0 and volume / avg_volume < 0.08:
             entry_ok = False
         
         # Dynamic sizing based on recent performance (not min_win_rate gating)
@@ -284,7 +284,7 @@ class ProbabilityEngine:
             import database as _db3
             ct = _db3.load_trades()
             if len(ct) < 20:
-                actual_dyn_min = max(0.40, dyn_min * 0.80)  # 0.55→0.44 for cold starts
+                actual_dyn_min = max(0.35, dyn_min * 0.70)  # relaxed for trading
         except:
             pass
         

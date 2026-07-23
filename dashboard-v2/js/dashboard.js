@@ -220,8 +220,20 @@ const Dashboard = {
           if (l) l.textContent = pct + '%';
         } else if (c) { c.style.display = 'none'; }
       }
-      if (data.positions) this.renderPositions(data.positions);
-      else if (data.position) this.renderPositions(data.position);
+      // Accumulate positions from individual tick updates (WS sends one per tick)
+      if (data.positions) {
+        this._wsPositions = data.positions;
+        this.renderPositions(data.positions);
+      } else if (data.position && data.ticker) {
+        if (!this._wsPositions) this._wsPositions = {};
+        if (data.position) {
+          data.position.symbol = data.position.symbol || data.ticker;
+          this._wsPositions[data.ticker] = data.position;
+        } else {
+          delete this._wsPositions[data.ticker];
+        }
+        this.renderPositions(this._wsPositions);
+      }
     } catch(e) {
       if (document.body.classList.contains('debug')) console.warn('[NT] Tick render error:', e);
     }
@@ -240,8 +252,16 @@ const Dashboard = {
       if (tc != null) { const e = byId('val-trade-count'); if (e) e.textContent = tc + ' trades completed'; }
       if (data.total_pnl != null) {
         const p = Number(data.total_pnl); const e = byId('val-total-pnl'); if (e) { e.textContent = '$' + p.toFixed(2); e.style.color = p >= 0 ? 'var(--neon-green)' : 'var(--neon-red)'; }
-        const pct = data.total_pnl_pct; const e2 = byId('val-total-pnl-percent');
+        let pct = data.total_pnl_pct;
+        // Compute total_pnl_pct from balance/equity if not provided
+        if (pct == null && data.balance != null && Number(data.balance) > 0) {
+          pct = p / Number(data.balance);
+        } else if (pct == null && data.equity != null && Number(data.equity) > 0) {
+          pct = p / Number(data.equity);
+        }
+        const e2 = byId('val-total-pnl-percent');
         if (e2 && pct != null) { e2.textContent = (pct>=0?'+':'') + Number(pct).toFixed(2)+'%'; e2.style.color = pct>=0?'var(--neon-green)':'var(--neon-red)'; }
+        else if (e2 && pct == null) { e2.textContent = ''; }
       }
       const pe = byId('tab-portfolio-equity'); if (pe && data.equity != null) pe.textContent = '$' + Number(data.equity).toFixed(2);
     } catch(e) {}
@@ -310,6 +330,7 @@ const Dashboard = {
   async onStatusUpdate(data) {
     this.updateKPIs(data);
     if (data.trades) this.renderTrades(data.trades);
+    if (data.positions) this.renderPositions(data.positions);
     if (data.weights) this.renderWeights(data.weights);
     if (data.probability) this.renderProbability(data.probability);
     // Only fetch weights if not already present in data

@@ -472,12 +472,22 @@ class ExecutionEngine:
                 base_bal = self._get_asset_balance(base_asset)
                 max_sell_qty = base_bal * 0.995  # Reserve 0.5% for fees/slippage
                 max_sell_value = max_sell_qty * entry_price
+                if max_sell_value < 5.0:
+                    return None  # skip — cannot meet $5 minimum
                 if position_value > max_sell_value:
                     position_value = max_sell_value
                     logging.info("[SIZE CAP] SELL %s capped to $%.2f (hold %.6f %s)" % (symbol, max_sell_value, base_bal, base_asset))
             except Exception as e:
                 logging.warning("[SIZE CAP] Could not cap SELL size: %s" % str(e))
         
+        # Hard cap position value to max_position_pct% of total equity
+        max_pos_pct = float(database.load_setting("max_position_pct", "15")) / 100.0
+        max_allowed_position = total_equity * max_pos_pct
+        if position_value > max_allowed_position:
+            logging.info("[SIZE CAP] Position ${:.2f} exceeds {:.0f}% of equity (${:.2f}). Capped to ${:.2f}.".format(
+                position_value, max_pos_pct*100, total_equity, max_allowed_position))
+            position_value = max_allowed_position
+
         # Minimum position floor: $5 to allow small-account trading
         if position_value < 5.0:
             logging.warning(f"[MIN SIZE] Position value ${position_value:.2f} below $5 minimum. Skipping {symbol}.")
@@ -524,7 +534,11 @@ class ExecutionEngine:
             actual_qty = quantity
             exec_label = "paper"
             
-        self.balance -= fee
+        position_cost = actual_qty * effective_entry
+        if direction == "BUY":
+            self.balance -= (position_cost + fee)
+        else:
+            self.balance -= fee  # SELL: only fee (position margin covered by holdings)
         database.save_setting("portfolio_balance", self.balance)
         
         self.active_positions[symbol] = {
@@ -538,10 +552,6 @@ class ExecutionEngine:
             "strategy_signals": strategy_signals,
             "entry_state": evaluation.get("state", []),
             "sentiment_sources": evaluation.get("sentiment_sources", {}),
-            "predicted_win_probability": evaluation.get("win_probability", None),
-            "expected_value": evaluation.get("expected_value", None),
-            "kelly_fraction": evaluation.get("kelly_fraction", None),
-            "risk_reward_ratio": evaluation.get("risk_reward_ratio", None),
             "fee_paid": fee
         }
         logging.info(f"Opened {exec_label} {direction} position for {symbol}: Qty {actual_qty:.6f} at {effective_entry:.2f} (incl. slippage). Fee: {fee:.2f}")
@@ -684,11 +694,7 @@ class ExecutionEngine:
                 "strategy_signals": pos["strategy_signals"],
                 "sentiment_sources": pos.get("sentiment_sources", {}),
                 "policy_brain": active_brain_name,
-                "trading_mode": self.trading_mode,
-                "predicted_win_probability": pos.get("predicted_win_probability"),
-                "expected_value": pos.get("expected_value"),
-                "kelly_fraction": pos.get("kelly_fraction"),
-                "risk_reward_ratio": pos.get("risk_reward_ratio")
+                "trading_mode": self.trading_mode
             }
 
             # Save trade to DB
