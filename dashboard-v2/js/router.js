@@ -10,7 +10,7 @@ const App = {
     tradingMode: 'live', isPaused: false,
     speed: 0.2, riskMode: 'aggressive',
     ws: null, reconnectTimer: null, reconnectAttempts: 0,
-    notifications: JSON.parse(localStorage.getItem('nt_notif_v2') || '[]'),
+    notifications: (function() { try { return JSON.parse(localStorage.getItem('nt_notif_v2') || '[]'); } catch(e) { return []; } })(),
     unreadNotifications: 0,
   },
   el: {},
