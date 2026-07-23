@@ -391,6 +391,10 @@ const Dashboard = {
 
   renderPositions(positions) {
     const c = byId('position-details-container'); if (!c) return;
+    // Handle null, undefined, empty array, empty object
+    if (positions == null || (Array.isArray(positions) && positions.length === 0) || (typeof positions === 'object' && !Array.isArray(positions) && Object.keys(positions).length === 0)) {
+      c.innerHTML = '<span style="color:var(--text-muted)">No active positions</span>'; return;
+    }
     if (!Array.isArray(positions) && typeof positions === 'object' && positions.entry_price) {
       return this.renderPositions([positions]);
     }

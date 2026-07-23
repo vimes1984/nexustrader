@@ -419,9 +419,11 @@ class ExecutionEngine:
         for pos in self.active_positions.values():
             existing_exposure += pos.get('quantity', 0) * pos.get('entry_price', 0)
         
-        # Available balance = remaining free capital (not locked in positions)
+        # Available balance = cash balance (position costs already deducted from balance on entry)
+        # BUGFIX: Do NOT subtract committed_capital again — balance already reflects position deductions.
+        # Double-counting would underestimate free capital and prevent new positions.
         committed_capital = existing_exposure
-        available_balance = max(0.0, self.balance - committed_capital)
+        available_balance = max(0.0, self.balance)
         
         # Multi-asset Kelly: fraction of REMAINING capital, not total balance
         # This prevents over-betting when multiple concurrent positions exist
