@@ -679,9 +679,10 @@ class ExecutionEngine:
                 logging.error(f"Could not execute exit order for {symbol} on live broker. Keeping position open.")
                 return None
                 
-            # Handle trade closure
+            # Handle trade closure — include both exit fee and entry fee in net PnL
             exit_fee = (exit_price * quantity) * self.transaction_fee_rate
-            pnl_after_fee = pnl - exit_fee
+            entry_fee = pos.get("fee_paid", 0.0)
+            pnl_after_fee = pnl - exit_fee - entry_fee
             
             # Trigger Loss Cooldown if PnL is negative — and clear on win
             if pnl_after_fee < 0:

@@ -4245,10 +4245,12 @@ async def _get_json(request: Request):
 @app.get("/api/system/broker_config")
 def api_v2_broker_config_get():
     '''Dashboard v2 broker config GET.'''
+    api_key = database.load_setting("kraken_api_key", "")
+    api_secret = database.load_setting("kraken_api_secret", "")
     return {
         "broker": database.load_setting("broker", "kraken"),
-        "api_key": database.load_setting("kraken_api_key", ""),
-        "api_secret": database.load_setting("kraken_api_secret", ""),
+        "api_key": (api_key[:4] + "..." + api_key[-4:]) if len(api_key) > 8 else ("****") if api_key else "",
+        "api_secret": ("****") if api_secret else "",
         "trading_mode": getattr(orchestrator.execution_engine, 'trading_mode', 'paper'),
         "connected": database.load_setting("kraken_connected", "false").lower() == "true",
         "test_result": database.load_setting("last_broker_test", ""),
