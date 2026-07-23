@@ -100,7 +100,17 @@ const Settings = {
       setInput('daily-goal-amount', data.daily_income_goal ?? data.goal ?? data.amount ?? '');
       setCheckbox('daily-goal-enabled', data.enabled ?? true);
       const s = byId('daily-goal-status');
-      if (s) s.textContent = (data.current_progress ? `Progress: $${data.current_progress} / $${data.daily_income_goal || data.goal || '?'}` : 'No active goal');
+      if (s) {
+        const progress = data.current_progress != null ? Number(data.current_progress) : null;
+        const goal = data.daily_income_goal ?? data.goal ?? data.amount ?? null;
+        if (progress != null && goal != null && goal !== '?') {
+          s.textContent = 'Progress: $' + progress.toFixed(2) + ' / $' + Number(goal).toFixed(2);
+        } else if (goal != null && goal !== '?') {
+          s.textContent = 'Goal set: $' + Number(goal).toFixed(2);
+        } else {
+          s.textContent = 'No active goal';
+        }
+      }
     } catch(e) {}
   },
 
