@@ -3799,13 +3799,26 @@ async def websocket_endpoint(websocket: WebSocket):
         for t in orchestrator.tickers:
             active_brains[t] = database.load_setting(f"active_policy_brain_{t}", "Default Brain")
 
+        # Compute aggregate KPI fields for dashboard init
+        _total_pnl_ws = sum(float(t.get("pnl", 0.0) or 0.0) for t in trades_to_send)
+        _win_count_ws = sum(1 for t in trades_to_send if float(t.get("pnl", 0) or 0) > 0)
+        _loss_count_ws = sum(1 for t in trades_to_send if float(t.get("pnl", 0) or 0) < 0)
+        _winrate_ws = (_win_count_ws / (_win_count_ws + _loss_count_ws)) if (_win_count_ws + _loss_count_ws) > 0 else 0.0
+        _init_bal_ws = orchestrator.execution_engine.initial_balance
+        _total_pnl_pct_ws = (_total_pnl_ws / _init_bal_ws * 100) if _init_bal_ws > 0 else 0.0
         init_state = {
             "type": "init",
             "tickers": orchestrator.tickers,
             "ticker": first_ticker,
             "balance": orchestrator.execution_engine.balance,
             "equity": orchestrator.execution_engine.live_equity,
-            "initial_balance": orchestrator.execution_engine.initial_balance,
+            "initial_balance": _init_bal_ws,
+            "total_pnl": round(_total_pnl_ws, 2),
+            "total_pnl_pct": round(_total_pnl_pct_ws, 2),
+            "winrate": round(_winrate_ws, 4),
+            "win_count": _win_count_ws,
+            "loss_count": _loss_count_ws,
+            "closed_trades": len(trades_to_send),
             "trading_mode": orchestrator.execution_engine.trading_mode,
             "broker": orchestrator.execution_engine.config.get("broker", "kraken"),
             "weights": {

@@ -344,10 +344,12 @@ const App = {
         this.el.tickerPrice.textContent = '$' + Number(this.state.tickerPrices[this.state.activeTicker]).toFixed(2);
       }
       this.renderTickerSwitcher();
-      // Emit initState then also fetch supplemental position data
+      // Fetch supplemental position data first, then emit initState with positions
+      const posData = await this.fetchPositions();
+      if (posData) {
+        data.positions = posData;
+      }
       this.emit('initState', data);
-      // Secondary fetch for positions if not included in status
-      this.fetchPositions();
     } catch(e) {
       console.error('Init failed:', e);
       this.toast('Failed to load initial state', 'error');
