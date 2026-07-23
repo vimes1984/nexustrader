@@ -41,8 +41,10 @@ def estimate_metrics_from_trades(trades: List[dict]) -> dict:
     win_rate = len(wins) / n if n > 0 else 0.5
     avg_win = np.mean(wins) if wins else 0.0
     avg_loss = np.mean(losses) if losses else 0.0
-    # Avoid division by zero
-    avg_loss = abs(avg_loss) if avg_loss != 0 else 0.01
+    # Avoid division by zero and extreme values
+    avg_loss = abs(avg_loss)
+    if avg_loss < 0.001:
+        avg_loss = 0.01  # Floor: at least 1% average loss for Kelly computation
 
     return {
         "win_rate": win_rate,
