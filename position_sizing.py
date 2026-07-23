@@ -142,8 +142,20 @@ def compute_safe_fraction(
 
     # If insufficient data, use conservative default
     if n_trades < MIN_TRADES_FOR_KELLY:
-        # Cold-start: use 5% default, but ensure it meets exchange minimum
-        safe_fraction = max(0.05, exchange_min_order_pct)
+        # Cold-start: risk 5% of capital per trade maximum.
+        # If 5% is below exchange minimum order, signal so caller can skip
+        # rather than over-risk capital.
+        if exchange_min_order_pct > 0.05:
+            return {
+                "kelly_raw": 0.0,
+                "half_kelly": 0.025,
+                "drawdown_penalty": 1.0,
+                "calibration_cap": calibration_cap,
+                "safe_fraction": 0.05,
+                "signal": "below_exchange_min",
+                "cold_start": True
+            }
+        safe_fraction = 0.05
         return {
             "kelly_raw": 0.0,
             "half_kelly": safe_fraction / 2.0,
