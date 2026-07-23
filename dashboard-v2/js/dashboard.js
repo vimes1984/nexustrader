@@ -261,7 +261,7 @@ const Dashboard = {
         const e = byId('val-winrate'); 
         if (e) e.textContent = (wr > 1 ? wr : wr * 100).toFixed(1) + '%'; 
       }
-      const tc = data.today_trade_count ?? data.trade_count ?? (typeof data.closed_trades === 'number' ? data.closed_trades : Array.isArray(data.trades) ? data.trades.length : undefined);
+      const tc = data.today_trade_count ?? data.trade_count ?? (data.closed_trades != null ? Number(data.closed_trades) : Array.isArray(data.trades) ? data.trades.length : undefined);
       if (tc != null) { const e = byId('val-trade-count'); if (e) e.textContent = tc + ' trades completed'; }
       if (data.total_pnl != null) {
         const p = Number(data.total_pnl); const e = byId('val-total-pnl'); if (e) { e.textContent = '$' + p.toFixed(2); e.style.color = p >= 0 ? 'var(--neon-green)' : 'var(--neon-red)'; }
