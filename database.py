@@ -300,6 +300,29 @@ def init_db():
     )
     """)
     
+    # Create active positions table (for crash recovery — persist open positions)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS active_positions (
+        symbol TEXT PRIMARY KEY,
+        direction TEXT,
+        entry_price REAL,
+        entry_price_raw REAL,
+        quantity REAL,
+        take_profit REAL,
+        stop_loss REAL,
+        entry_time REAL,
+        cost_basis REAL,
+        fee_paid REAL,
+        trading_mode TEXT DEFAULT 'paper',
+        strategy_signals TEXT,
+        sentiment_sources TEXT,
+        predicted_win_probability REAL,
+        expected_value REAL,
+        risk_reward_ratio REAL,
+        kelly_fraction REAL
+    )
+    """)
+
     # Create shadow trades table (for testing long-term strategy in shadow mode)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS shadow_trades (
