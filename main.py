@@ -3021,6 +3021,7 @@ def update_system_risk_mode(risk_mode: str):
             "type": "risk_mode_updated",
             "risk_mode": risk_mode
         }))
+        return {"status": "success", "risk_mode": risk_mode}
     return {"error": "Invalid risk mode"}
 
 @app.get("/api/system/test_broker")

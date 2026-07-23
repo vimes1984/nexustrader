@@ -699,13 +699,16 @@ class ExecutionEngine:
                     database.save_setting(f"cooldown_end_{symbol}", "0")
                     logging.info(f"[WIN COOLDOWN CLEAR] Cleared cooldown for {symbol} after winning trade.")
             
-            # Update balance
+            # Update balance — net effect must equal pnl_after_fee (including both fees)
             original_value = quantity * entry_price
             if direction == "SELL":
-                # SELL: original_value was never deducted from balance on open (only fee was)
-                self.balance += pnl - exit_fee
+                # SELL: original_value was never deducted on open (spot sell), only fee was
+                # Net: -entry_fee (open) + pnl - exit_fee (close) = pnl_after_fee
+                self.balance += pnl - exit_fee  # entry_fee already subtracted on open
             else:
-                # BUY: original_value was deducted on open, add it back plus profit
+                # BUY: original_value deducted on open, add back plus profit minus exit fee
+                # Net: -(position_cost + entry_fee) + (original_value + pnl - exit_fee)
+                # position_cost ≈ original_value (paper), so net ≈ pnl - exit_fee - entry_fee = pnl_after_fee
                 self.balance += (original_value + pnl) - exit_fee
             
             # Save updated balance to DB (batch if possible)

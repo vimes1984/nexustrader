@@ -295,7 +295,10 @@ const Dashboard = {
   },
 
   async loadHistory(ticker) {
-    if (ticker === 'portfolio' || !this.chartSeries?.candles) return;
+    if (ticker === 'portfolio' || !this.chart || !this.chartSeries?.candles) {
+      this.debug('Chart not ready, deferring history load for ' + ticker);
+      return;
+    }
 
     // Show loading state in chart data info
     const infoEl = byId('chart-data-info');
