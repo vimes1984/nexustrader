@@ -441,7 +441,7 @@ class TransformerPolicyNetwork:
 
     def _backward_pass(self, d_out):
         """Low-level backward through the transformer (called by reinforce_backward)."""
-        self.__class__._backward_impl(self, d_out)
+        return self.__class__._backward_impl(self, d_out)
 
     @staticmethod
     def _backward_impl(instance, d_out):

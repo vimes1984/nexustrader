@@ -64,33 +64,30 @@ def calculate_metrics(equity_curve: List[float], trades: List[dict], periods_per
     m = PerformanceMetrics()
     # Sanitize inputs: filter NaN, None, negative values from equity curve
     cleaned_curve = [float(v) for v in equity_curve if v is not None and isinstance(v, (int, float)) and not (isinstance(v, float) and math.isnan(v))]
-    if not cleaned_curve:
-        return m
 
-    # Process equity curve FIRST (before early return for empty trades)
-    if len(cleaned_curve) > 1:
-        peak = cleaned_curve[0]
-        max_dd = 0.0
-        for val in cleaned_curve:
-            if val > peak:
-                peak = val
-            dd = (peak - val) / peak if peak > 0 else 0.0
-            if dd > max_dd:
-                max_dd = dd
-        m.max_drawdown = max_dd
-        # Calmar ratio: total return / max drawdown (capped at 100 for JSON safety)
-        m.calmar_ratio = m.total_return / max_dd if max_dd > 0 else 0.0
-        if m.calmar_ratio > 100.0:
-            m.calmar_ratio = 100.0
-        start_equity = cleaned_curve[0]
-        end_equity = cleaned_curve[-1]
-        if start_equity > 0:
-            m.total_return = (end_equity - start_equity) / start_equity
-        elif end_equity > 0:
-            # Started from zero (deposit mid-track): use end as baseline
-            m.total_return = 0.0
-        else:
-            m.total_return = 0.0
+    # Process equity curve if available (otherwise skip to trade processing)
+    if cleaned_curve:
+        if len(cleaned_curve) > 1:
+            peak = cleaned_curve[0]
+            max_dd = 0.0
+            for val in cleaned_curve:
+                if val > peak:
+                    peak = val
+                dd = (peak - val) / peak if peak > 0 else 0.0
+                if dd > max_dd:
+                    max_dd = dd
+            m.max_drawdown = max_dd
+            m.calmar_ratio = m.total_return / max_dd if max_dd > 0 else 0.0
+            if m.calmar_ratio > 100.0:
+                m.calmar_ratio = 100.0
+            start_equity = cleaned_curve[0]
+            end_equity = cleaned_curve[-1]
+            if start_equity > 0:
+                m.total_return = (end_equity - start_equity) / start_equity
+            elif end_equity > 0:
+                m.total_return = 0.0
+            else:
+                m.total_return = 0.0
 
     if len(cleaned_curve) > 2:
         returns = []
