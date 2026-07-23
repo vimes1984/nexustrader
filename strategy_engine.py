@@ -37,6 +37,9 @@ class EMACrossoverStrategy(TradingStrategy):
         # Fallback: MACD line is EMA(12) - EMA(26), so MACD crossing zero
         # is equivalent to EMA fast crossing EMA slow
         macd = row.get('macd', 0)
+        # Guard against None / non-numeric MACD
+        if macd is None:
+            macd = 0
         # Use MACD crossing zero = EMA crossover
         if macd > 0:
             return 1.0
@@ -55,6 +58,12 @@ class RSIStrategy(TradingStrategy):
         oversold = float(database.load_setting("opt_rsi_oversold", str(self.default_oversold)))
         overbought = float(database.load_setting("opt_rsi_overbought", str(self.default_overbought)))
         rsi = row.get('rsi', 50)
+        if rsi is None:
+            rsi = 50
+        try:
+            rsi = float(rsi)
+        except (ValueError, TypeError):
+            rsi = 50
         if rsi < oversold:
             return 1.0  # Oversold -> Buy
         elif rsi > overbought:
@@ -220,7 +229,13 @@ class NewsSentimentStrategy(TradingStrategy):
         self.regime = "predictive"
 
     def generate_signal(self, row, history_df=None):
-        sentiment = float(row.get("sentiment", 0.0))
+        sent_val = row.get("sentiment", 0.0)
+        if sent_val is None:
+            sent_val = 0.0
+        try:
+            sentiment = float(sent_val)
+        except (ValueError, TypeError):
+            sentiment = 0.0
         if sentiment >= 0.15:
             return 1.0
         elif sentiment <= -0.15:
@@ -234,6 +249,8 @@ class MACDHistogramCrossoverStrategy(TradingStrategy):
 
     def generate_signal(self, row, history=None):
         macd_hist = row.get('macd_hist', 0)
+        if macd_hist is None:
+            macd_hist = 0
         if macd_hist > 0:
             return 1.0
         elif macd_hist < 0:
@@ -290,8 +307,14 @@ class ATRBreakoutStrategy(TradingStrategy):
 
     def generate_signal(self, row, history=None):
         close = row.get('close', 0)
+        if close is None:
+            close = 0
         sma = row.get('sma_20', close)
+        if sma is None:
+            sma = close
         atr = row.get('atr', 0)
+        if atr is None:
+            atr = 0
         if atr <= 0:
             return 0.0
         upper_band = sma + self.multiplier * atr
