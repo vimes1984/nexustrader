@@ -17,7 +17,7 @@ const Optimizations = {
     // Delegated apply-per-item
     byId('optimizations-list')?.addEventListener('click', (e) => {
       const btn = e.target.closest('[data-opt-id]');
-      if (btn) this.applyOne(btn.dataset.optId);
+      if (btn && btn.dataset.optId) this.applyOne(btn.dataset.optId);
     });
   },
 

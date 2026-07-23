@@ -678,7 +678,12 @@ class ExecutionEngine:
             
             # Update balance
             original_value = quantity * entry_price
-            self.balance += (original_value + pnl) - exit_fee
+            if direction == "SELL":
+                # SELL: original_value was never deducted from balance on open (only fee was)
+                self.balance += pnl - exit_fee
+            else:
+                # BUY: original_value was deducted on open, add it back plus profit
+                self.balance += (original_value + pnl) - exit_fee
             
             # Save updated balance to DB (batch if possible)
             database.save_setting("portfolio_balance", self.balance)
