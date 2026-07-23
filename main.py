@@ -1107,6 +1107,15 @@ class NexusTraderOrchestrator:
                         end_date=end_date
                     )
         
+        # ── Restart recovery: log open positions after restart ──
+        _recovered_positions = getattr(self.execution_engine, 'active_positions', {})
+        if _recovered_positions:
+            logging.info(
+                f"[RESTART RECOVERY] Restored {len(_recovered_positions)} active positions: "
+                + ", ".join(f"{s} {p.get('direction','?')} {p.get('quantity',0):.4f} @ {p.get('entry_price',0):.2f}"
+                            for s, p in _recovered_positions.items())
+            )
+        
         # ── Trade replay on restart: reload closed trades and run a learning pass ──
         # This ensures the model catches up on offline trading history and learns from
         # past outcomes even after a restart. Only runs once per startup.
