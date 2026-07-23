@@ -141,17 +141,30 @@ class ExecutionEngine:
         self.closed_trades = database.load_trades()
         logging.info(f"Loaded {len(self.closed_trades)} closed trades from DB.")
         
-        # Restart recovery: if balance is much lower than initial_balance + closed_trades_pnl
-        # and there are no active positions (lost on restart), the balance was saved with
-        # position costs deducted. Recalculate to recover orphaned position capital.
+        # Restart recovery: reconcile balance after restart
+        # Balance was saved with position costs deducted (e.g. $100 -> $80 after $20 position).
+        # After DB rebuild, we have open positions with cost_basis.
+        # Expected balance WITHOUT positions = initial_balance + sum(closed PnL).
+        # With positions, expected = expected_no_positions - sum(open position cost_basis).
         _closed_pnl = sum(float(t.get('pnl', 0.0) or 0.0) for t in self.closed_trades)
-        _expected_balance = self.initial_balance + _closed_pnl
-        if len(self.active_positions) == 0 and abs(self.balance - _expected_balance) > 1.0 and self.balance < _expected_balance:
-            diff = _expected_balance - self.balance
-            if diff > 1.0:
-                self.balance = _expected_balance
+        _expected_no_positions = self.initial_balance + _closed_pnl
+        _open_capital = sum(float(p.get('cost_basis', p.get('entry_price', 0) * p.get('quantity', 0))) for p in self.active_positions.values())
+        _expected_with_positions = _expected_no_positions - _open_capital
+        if len(self.active_positions) == 0:
+            # No positions recovered — check if balance has orphaned capital deduction
+            if abs(self.balance - _expected_no_positions) > 1.0 and self.balance < _expected_no_positions:
+                diff = _expected_no_positions - self.balance
+                if diff > 1.0:
+                    self.balance = _expected_no_positions
+                    database.save_setting("portfolio_balance", self.balance)
+                    logging.info(f"[RESTART RECOVERY] Restored balance from ${self.balance - diff:.2f} to ${self.balance:.2f} (orphaned position costs recovered)")
+        elif len(self.active_positions) > 0:
+            # Positions recovered — balance should equal expected_with_positions
+            if abs(self.balance - _expected_with_positions) > 1.0:
+                old_bal = self.balance
+                self.balance = _expected_with_positions
                 database.save_setting("portfolio_balance", self.balance)
-                logging.info(f"[RESTART RECOVERY] Restored balance from ${self.balance - diff:.2f} to ${self.balance:.2f} (orphaned position costs recovered)")
+                logging.info(f"[RESTART RECOVERY] Reconciled balance from ${old_bal:.2f} to ${self.balance:.2f} after restoring {len(self.active_positions)} positions (open capital: ${_open_capital:.2f})")
         
         self.learning_callback = None
 
