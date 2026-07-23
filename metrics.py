@@ -148,9 +148,16 @@ def expected_value(p_win: float, win_amount: float, loss_amount: float) -> float
 
 
 def kelly_fraction(p_win: float, win_loss_ratio: float) -> float:
-    """Kelly criterion fraction. Caps at 0.25 for safety. Returns 0 if no edge."""
-    if win_loss_ratio <= 0 or p_win <= 0 or p_win >= 1:
+    """Kelly criterion fraction. Caps at 0.25 for safety. Returns 0 if no edge.
+    
+    Handles edge cases: p_win=1.0 gives full Kelly (capped at 0.25), 
+    p_win=0 or win_loss_ratio=0 gives 0.
+    """
+    if win_loss_ratio <= 0 or p_win <= 0:
         return 0.0
+    # Handle p_win >= 1: certain win, bet full Kelly (capped at 0.25)
+    if p_win >= 1.0:
+        return 0.25
     b = win_loss_ratio
     q = 1 - p_win
     f = (p_win * b - q) / b

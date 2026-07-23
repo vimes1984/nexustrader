@@ -589,14 +589,16 @@ class ExecutionEngine:
             "symbol": symbol,
             "direction": direction,
             "entry_price": effective_entry,  # Slippage-adjusted entry
+            "entry_price_raw": entry_price,  # Original price before slippage
             "quantity": actual_qty,
             "take_profit": adjusted_tp,
             "stop_loss": adjusted_sl,
             "entry_time": time.time(),
+            "cost_basis": position_cost,  # Principal amount deducted (qty * effective_entry)
+            "fee_paid": fee,
             "strategy_signals": strategy_signals,
             "entry_state": evaluation.get("state", []),
             "sentiment_sources": evaluation.get("sentiment_sources", {}),
-            "fee_paid": fee,
             # Store evaluation metadata for trade recording on close
             "predicted_win_probability": evaluation.get("win_probability"),
             "expected_value": evaluation.get("expected_value"),
@@ -734,16 +736,20 @@ class ExecutionEngine:
                     logging.info(f"[WIN COOLDOWN CLEAR] Cleared cooldown for {symbol} after winning trade.")
             
             # Update balance — net effect must equal pnl_after_fee (including both fees)
-            original_value = quantity * entry_price
+            # Use cost_basis (which includes entry slippage) to precisely reverse the
+            # principal deduction, then add PnL and deduct exit fee.
+            # This avoids the micro-drift caused by effective_entry ≈ entry_price approximation.
+            cost_basis = pos.get("cost_basis", quantity * entry_price)
             if direction == "SELL":
-                # SELL: original_value was never deducted on open (spot sell), only fee was
-                # Net: -entry_fee (open) + pnl - exit_fee (close) = pnl_after_fee
-                self.balance += pnl - exit_fee  # entry_fee already subtracted on open
+                # SELL: cost basis was never deducted (only fee was).
+                # Balance effect: -entry_fee (open) + pnl - exit_fee (close) = pnl_after_fee
+                self.balance += pnl - exit_fee
             else:
-                # BUY: original_value deducted on open, add back plus profit minus exit fee
-                # Net: -(position_cost + entry_fee) + (original_value + pnl - exit_fee)
-                # position_cost ≈ original_value (paper), so net ≈ pnl - exit_fee - entry_fee = pnl_after_fee
-                self.balance += (original_value + pnl) - exit_fee
+                # BUY: cost_basis + entry_fee was deducted on open.
+                # Reverse: +cost_basis (return principal) + pnl - exit_fee
+                # Net effect: -(cost_basis + entry_fee) + (cost_basis + pnl - exit_fee)
+                #           = pnl - entry_fee - exit_fee = pnl_after_fee
+                self.balance += cost_basis + pnl - exit_fee
             
             # Save updated balance to DB (batch if possible)
             database.save_setting("portfolio_balance", self.balance)
