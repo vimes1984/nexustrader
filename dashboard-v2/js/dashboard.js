@@ -410,7 +410,7 @@ const Dashboard = {
       const dir = t.direction || '—';
       const dirColor = dir === 'long' ? 'var(--neon-green)' : dir === 'short' ? 'var(--neon-red)' : 'var(--text-secondary)';
       const pnl = Number(t.pnl || 0);
-      const pnlPct = t.pnl_pct != null ? Number(t.pnl_pct) : null;
+      const pnlPct = t.pnl_percent != null ? Number(t.pnl_percent) : (t.pnl_pct != null ? Number(t.pnl_pct) : null);
       let pnlStr;
       if (pnlPct != null) {
         pnlStr = (pnl>=0?'+':'') + '$' + pnl.toFixed(2) + ' (' + (pnlPct>=0?'+':'') + pnlPct.toFixed(2) + '%)';
