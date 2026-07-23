@@ -174,6 +174,8 @@ class SimulatedTrader:
         
         # Indicators buffer
         self.price_history = []
+        self._avg_gain = None  # Wilder's RMA running average of gains
+        self._avg_loss = None  # Wilder's RMA running average of losses
         self.indicator_buffer = []
         
     def add_indicator(self, row: Dict):
@@ -185,22 +187,28 @@ class SimulatedTrader:
         if len(self.price_history) > 50:
             self.price_history.pop(0)
         
-        # RSI (14-period) — EMA-like Wilder's smoothing
-        # Uses exponential weighted average (alpha=1/14) not simple mean
+        # RSI (14-period) — Match data_ingestion.py's Wilder's RMA computation
+        # Use maintained running averages for consistency between training/inference
         rsi = 50.0
         if len(self.price_history) >= 15:
-            gains = []
-            losses = []
-            for i in range(-14, 0):
-                delta = self.price_history[i] - self.price_history[i-1]
-                gains.append(max(delta, 0))
-                losses.append(max(-delta, 0))
-            # First avg uses SMA, subsequent would use Wilder's EMA(alpha=1/14)
-            # For single-shot computation, we approximate with SMA
-            # (since we don't maintain running averages across candles)
-            avg_gain = sum(gains) / 14
-            avg_loss = sum(losses) / 14
-            rs = avg_gain / (avg_loss + 1e-9)
+            delta = self.price_history[-1] - self.price_history[-2]
+            gain = max(delta, 0.0)
+            loss = max(-delta, 0.0)
+            if not hasattr(self, '_avg_gain'):
+                # First entry: compute SMA(14)
+                gains = []
+                losses = []
+                for i in range(-14, 0):
+                    d = self.price_history[i] - self.price_history[i-1]
+                    gains.append(max(d, 0))
+                    losses.append(max(-d, 0))
+                self._avg_gain = sum(gains) / 14
+                self._avg_loss = sum(losses) / 14
+            else:
+                # Subsequent entries: Wilder's RMA (alpha=1/14)
+                self._avg_gain = self._avg_gain + (gain - self._avg_gain) / 14.0
+                self._avg_loss = self._avg_loss + (loss - self._avg_loss) / 14.0
+            rs = self._avg_gain / (self._avg_loss + 1e-9)
             rsi = 100 - (100 / (1 + rs))
         
         # Simple MACD (12/26/9)
