@@ -51,8 +51,22 @@ def estimate_metrics_from_trades(trades: List[dict]) -> dict:
 
 def compute_kelly_fraction(win_rate: float, avg_win: float, avg_loss: float) -> float:
     """
-    Computes the Kelly fraction: f* = p - (1-p) / (W/L)
-    where p = win_rate, W = avg_win, L = avg_loss.
+    Computes the Kelly fraction of portfolio to RISK (not allocate) per trade.
+
+    Standard Kelly formula for trading outcomes:
+        f* = (p * W - q * L) / (W * L)
+    where:
+        p = win_rate
+        q = 1 - win_rate (loss rate)
+        W = avg_win  (average winning PnL fraction, positive)
+        L = avg_loss (average losing PnL fraction, positive)
+
+    This gives the fraction of total capital to risk (the amount at stake).
+    The position size is then: f* * capital / stop_loss_pct.
+
+    Previous formula used f* = p - q / (W/L), which is INCORRECT for
+    trading where win/loss amounts are not binary fixed-odds bets.
+    The correct formula from Thorp (1969): f* = (p*W - q*L) / (W*L)
 
     Returns 0 if win_rate or avg_loss is invalid.
     """
@@ -61,8 +75,18 @@ def compute_kelly_fraction(win_rate: float, avg_win: float, avg_loss: float) -> 
     if avg_win <= 0:
         return 0.0  # No winning trades means no edge
 
-    win_loss_ratio = avg_win / avg_loss if avg_loss > 0 else 1.0
-    kelly = win_rate - (1.0 - win_rate) / win_loss_ratio
+    q = 1.0 - win_rate
+    # Edge / odds formulation: f* = (p*W - q*L) / (W*L)
+    # Edge = p*W - q*L, Odds = W*L (product of payoff magnitudes)
+    edge = (win_rate * avg_win) - (q * avg_loss)
+    if edge <= 0:
+        return 0.0  # No positive edge
+
+    odds = avg_win * avg_loss
+    if odds <= 0:
+        return 0.0
+
+    kelly = edge / odds
     return max(0.0, min(kelly, 1.0))
 
 
