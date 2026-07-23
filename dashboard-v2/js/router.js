@@ -386,6 +386,9 @@ const App = {
     // Re-init icons after DOM injection
     try { if (typeof lucide !== 'undefined' && lucide?.createIcons) lucide.createIcons(); } catch(e) {}
     this.selectTicker(this.state.activeTicker || (this.state.tickers && this.state.tickers[0]) || 'BTC-USD');
+
+    // Emit initial ticker prices for other modules
+    this.emit('tickerPrices', this.state.tickerPrices);
   },
 
   selectTicker(ticker) {
