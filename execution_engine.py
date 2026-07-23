@@ -681,7 +681,12 @@ class ExecutionEngine:
         close_trade = False
         pnl = 0.0
         
-        if pos.get("entry_time") and (time.time() - pos["entry_time"]) > (max_position_hours * 3600):
+        position_entry_time = pos.get("entry_time")
+        if position_entry_time is None:
+            # Legacy position without entry_time: assume it's recent to avoid
+            # immediately triggering a time stop.
+            position_entry_time = time.time() - 3600  # Assume 1h old
+        if (time.time() - position_entry_time) > (max_position_hours * 3600):
             close_trade = True
             exit_reason = "Time Stop ({}h max)".format(max_position_hours)
 
