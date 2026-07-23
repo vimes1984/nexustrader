@@ -24,18 +24,24 @@ def sharpe_ratio(returns: Sequence[float], risk_free_rate: float = 0.0) -> float
     return (mean_r - risk_free_rate) / std
 
 
-def sortino_ratio(returns: Sequence[float], risk_free_rate: float = 0.0) -> float:
-    """Sortino ratio — uses downside deviation only."""
+def sortino_ratio(returns: Sequence[float], risk_free_rate: float = 0.0,
+                  annualize: bool = True) -> float:
+    """Sortino ratio — uses downside deviation only. Annualized by sqrt(n) by default."""
     if len(returns) < 2:
         return 0.0
-    mean_r = sum(returns) / len(returns)
+    n = len(returns)
+    mean_r = sum(returns) / n
     downside = [r for r in returns if r < risk_free_rate]
     if not downside:
         return float('inf') if mean_r > risk_free_rate else 0.0
-    down_var = sum((r - risk_free_rate) ** 2 for r in downside) / len(returns)
+    down_var = sum((r - risk_free_rate) ** 2 for r in downside) / n
     if down_var <= 0:
         return 0.0
-    return (mean_r - risk_free_rate) / math.sqrt(down_var)
+    excess = mean_r - risk_free_rate
+    sortino = excess / math.sqrt(down_var)
+    if annualize:
+        sortino = sortino * math.sqrt(n)
+    return sortino
 
 
 def calmar_ratio(returns: Sequence[float], max_drawdown: float, periods_per_year: float = 252.0) -> float:

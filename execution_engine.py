@@ -442,27 +442,26 @@ class ExecutionEngine:
         eprice = evaluation.get("entry_price", 0.0)
         esl = evaluation.get("stop_loss", 0.0)
         
-        # Calculate committed capital from existing positions
+        # Calculate notional exposure from existing positions
+        # BUY positions: entry_price * qty was cost deducted from balance
+        # SELL positions: notional value is NOT deducted (margin/spot short allocation)
+        # Exposure = absolute notional value regardless of direction
         existing_exposure = 0.0
         for pos in self.active_positions.values():
             existing_exposure += pos.get('quantity', 0) * pos.get('entry_price', 0)
         
-        # Available balance = cash balance (position costs already deducted from balance on entry)
-        # BUGFIX: Do NOT subtract committed_capital again — balance already reflects position deductions.
-        # Double-counting would underestimate free capital and prevent new positions.
-        committed_capital = existing_exposure
-        available_balance = max(0.0, self.balance)
+        # Available capital for new positions = total equity minus existing exposure
+        # For BUY: balance already reflects deduction, so this is conservative
+        # For SELL: balance is full, but exposure is notional — cap by total equity
+        available_capital = max(0.0, total_equity - existing_exposure) if total_equity > 0 else max(0.0, self.balance)
         
-        # Multi-asset Kelly: fraction of REMAINING capital, not total balance
-        # This prevents over-betting when multiple concurrent positions exist
-        # Pre-compute the actual Kelly position value (same formula as below) to avoid
-        # a dual-estimate bug: position_value_est was computed one way for risk limits and
-        # position_value was computed differently for execution. A tight stop makes the
-        # Kelly-converted position much larger than the simple fraction check thinks.
+        # Multi-asset Kelly: fraction of available capital, not total balance
+        # This prevents over-betting when multiple concurrent positions exist.
+        # Kelly converts risk budget into position size via stop distance.
         stop_loss_pct_est = abs(eprice - esl) / eprice if eprice > 0 else 0.1
         if stop_loss_pct_est < 0.001:
             stop_loss_pct_est = 0.001
-        kelly_position_value = (available_balance * kf) / min(stop_loss_pct_est, 0.5)
+        kelly_position_value = (available_capital * kf) / min(stop_loss_pct_est, 0.5)
         
         if total_equity > 0 and kelly_position_value > 0:
             new_total_exposure = (existing_exposure + kelly_position_value) / total_equity
