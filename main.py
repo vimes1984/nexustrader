@@ -3339,8 +3339,17 @@ def train_new_brain(name: str, ticker: str):
     ensemble = orchestrator.strategy_ensembles.get(ticker)
     num_strats = len(ensemble.strategies) if ensemble else 6
     
-    fresh_learner = create_learning_engine(num_strats)
-    fresh_weights_json = fresh_learner.policy_net.to_json()
+    # Seed new brain from current active brain's weights instead of random
+    # This ensures the new brain starts with learned knowledge rather than
+    # from scratch, reducing cold-start losses.
+    _active_learner = orchestrator.learning_engines.get(ticker)
+    if _active_learner:
+        fresh_learner = None
+        fresh_weights_json = _active_learner.policy_net.to_json()
+        logging.info(f"[TRAIN BRAIN] Seeding '{name}' from active brain weights ({ticker})")
+    else:
+        fresh_learner = create_learning_engine(num_strats)
+        fresh_weights_json = fresh_learner.policy_net.to_json()
     
     hidden_layers = int(database.load_setting("nn_hidden_layers", "1"))
     hidden_dim = int(database.load_setting("nn_hidden_dim", "12"))
