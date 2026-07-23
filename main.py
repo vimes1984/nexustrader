@@ -1700,6 +1700,8 @@ async def api_health():
         "memory_mb": mem,
         "balance": getattr(getattr(orchestrator, "execution_engine", None), "balance", 0.0),
         "open_positions": len(getattr(getattr(orchestrator, "execution_engine", None), "active_positions", {})),
+        "server_bind": "0.0.0.0:8000",
+        "health_api_version": "1.0",
     }
 
 

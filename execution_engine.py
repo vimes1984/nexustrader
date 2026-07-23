@@ -133,6 +133,10 @@ class ExecutionEngine:
         else:
             self.last_known_prices = {}
 
+        # Rebuild active positions from DB (crash recovery — positions survive restarts)
+        self.active_positions = database.load_active_positions()
+        logging.info(f"Rebuilt {len(self.active_positions)} active positions from DB.")
+        
         # Load closed trades from DB
         self.closed_trades = database.load_trades()
         logging.info(f"Loaded {len(self.closed_trades)} closed trades from DB.")
