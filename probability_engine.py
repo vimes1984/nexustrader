@@ -232,6 +232,8 @@ class ProbabilityEngine:
                     if hasattr(kill_switch, 'calibration_brier') and kill_switch.calibration_brier is not None:
                         brier = kill_switch.calibration_brier
                         calibration_cap = kelly_cap_from_calibration(brier, n_samples=len(trades))
+                        # Calibration module's n_samples guard already handles small samples,
+                        # but pass total trades for the interpolation slope guidance
                     current_dd = drawdown_tracker.current_drawdown if hasattr(drawdown_tracker, 'current_drawdown') else 0.0
                 except Exception:
                     calibration_cap = 0.15
@@ -300,9 +302,19 @@ class ProbabilityEngine:
         final_fraction = final_fraction * death_spiral_risk_mult
         
         # Ensure minimum allocation for small accounts (at least 2.5% = $5 on $200)
-        # Prevents cold-start paradox where sizing rounds to zero
+        # Prevents cold-start paradox where sizing rounds to zero.
+        # Only apply minimum when death spiral hasn't explicitly reduced sizing —
+        # if we're on a losing streak, respect the reduction.
         if final_fraction < 0.025 and final_fraction > 0 and p_win >= 0.40 and ev > 0:
-            final_fraction = 0.025
+            # Only override death spiral if we have very few trades (cold start)
+            try:
+                import database as _db_min
+                ct = _db_min.load_trades()
+                if len(ct) < 5:
+                    final_fraction = 0.025  # Cold start: need data
+                # else: respect death spiral reduction
+            except:
+                pass
         
         # Cold-start override: relax dyn_min for accounts with < 20 trades
         # Small samples produce unreliable WR; need trades to gather data

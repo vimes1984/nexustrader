@@ -211,6 +211,81 @@ def compute_turnover_penalty() -> dict:
     }
 
 
+def compute_optimal_rebalance(assets: dict, perf: dict) -> dict:
+    """Determine whether rebalancing is needed based on drift and volatility.
+    
+    Uses a drift-based threshold approach:
+    - Computes performance-weighted drift from target (Kelly) allocations
+    - Recommends rebalance only if drift exceeds cost-aware threshold
+    - Threshold = 2 * (est_turnover_cost / benefit_of_rebalance)
+    
+    Returns:
+        dict with rebalance_decision, drift_pct, thresholds
+    """
+    if not assets:
+        return {"should_rebalance": False, "reason": "No assets to evaluate"}
+    
+    # Compute current allocation drift from target Kelly
+    total_drift = 0.0
+    asset_count = 0
+    drift_details = {}
+    
+    for ticker, info in assets.items():
+        if not isinstance(info, dict):
+            continue
+        target_kelly = info.get("kelly_ceiling", 0.2)
+        perf_data = perf.get(ticker, {})
+        trade_count = perf_data.get("trades", 0)
+        win_rate = perf_data.get("wins", 0) / max(trade_count, 1)
+        
+        # Estimate current allocation from performance
+        # If win_rate > 0.5 and positive PnL, actual allocation > target
+        total_pnl = perf_data.get("total_pnl", 0.0)
+        if trade_count > 0 and win_rate > 0.55 and total_pnl > 0:
+            # Outperformance suggests drift above target
+            current_alloc = target_kelly * (1.0 + min(win_rate - 0.55, 0.3))
+        elif trade_count > 0 and win_rate < 0.45 and total_pnl < 0:
+            # Underperformance suggests drift below target
+            current_alloc = target_kelly * max(0.0, 1.0 - min(0.45 - win_rate, 0.3))
+        else:
+            current_alloc = target_kelly
+        
+        drift = abs(current_alloc - target_kelly)
+        total_drift += drift
+        asset_count += 1
+        drift_details[ticker] = {
+            "target_kelly": round(target_kelly, 4),
+            "estimated_current": round(current_alloc, 4),
+            "drift": round(drift, 4),
+        }
+    
+    avg_drift = total_drift / max(asset_count, 1)
+    
+    # Cost-aware threshold: rebalance only if expected benefit > cost
+    # Benefit estimate: drift > 5% of allocation ~ 0.5% expected improvement
+    # Cost estimate: round-trip = 2 * taker fee (0.26%) + slippage (0.1%) ≈ 0.72%
+    cost_est = 0.0072  # 0.72% round-trip cost
+    benefit_est = avg_drift * 0.5  # assume 50% of drift is exploitable
+    
+    # Dynamic threshold: rebalance only when drift > 2 * cost/benefit ratio
+    rebalance_threshold = 2.0 * (cost_est / max(benefit_est, 0.0001))
+    should_rebalance = avg_drift > rebalance_threshold and avg_drift > 0.02
+    
+    return {
+        "should_rebalance": bool(should_rebalance),
+        "avg_drift_pct": round(avg_drift * 100, 2),
+        "threshold_pct": round(rebalance_threshold * 100, 2),
+        "est_cost_pct": round(cost_est * 100, 2),
+        "est_benefit_pct": round(benefit_est * 100, 2),
+        "asset_count": asset_count,
+        "reason": (
+            "Drift exceeds cost-aware threshold" if should_rebalance
+            else f"Drift ({avg_drift*100:.2f}%) below threshold ({rebalance_threshold*100:.2f}%)"
+        ),
+        "details": drift_details,
+    }
+
+
 def load_performance_summary():
     summary = {}
     try:
@@ -283,6 +358,22 @@ At the very end of your response, output a strict JSON block with your recommend
         f"  Turnover regime: {turnover['turnover_label']}\n"
     )
     
+    # Drift-based rebalance decision
+    rebalance = compute_optimal_rebalance(active_assets, perf_summary)
+    rebalance_block = (
+        f"\n### Rebalance Decision (Drift-Based, Cost-Aware):\n"
+        f"  Should rebalance: {rebalance['should_rebalance']}\n"
+        f"  Reason: {rebalance['reason']}\n"
+        f"  Avg drift: {rebalance['avg_drift_pct']}% (threshold: {rebalance['threshold_pct']}%)\n"
+        f"  Est. cost: {rebalance['est_cost_pct']}% vs benefit: {rebalance['est_benefit_pct']}%\n"
+    )
+    if rebalance.get("details"):
+        for ticker, det in rebalance["details"].items():
+            rebalance_block += (
+                f"  {ticker}: target={det['target_kelly']:.4f}, "
+                f"current={det['estimated_current']:.4f}, drift={det['drift']:.4f}\n"
+            )
+    
     prompt = f"""{db_prompt}
 
 Current Asset Configs:
@@ -294,11 +385,15 @@ Recent Performance Summary (Last 100 Trades Grouped By Ticker):
 {kelly_block}
 
 {turnover_block}
+
+{rebalance_block}
 """
     
     report_lines = ["\n## ⚖️ Ensemble Asset Allocator Report"]
     if kelly_block:
         report_lines.append(kelly_block)
+    if rebalance_block:
+        report_lines.append(rebalance_block)
     
     try:
         logging.info("Requesting Allocation evaluation from LLM...")
