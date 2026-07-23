@@ -258,7 +258,8 @@ const App = {
       // Require horizontal swipe > 60px and minimal vertical drift
       if (Math.abs(diffX) < 60 || Math.abs(diffY) > Math.abs(diffX) * 0.5) return;
 
-      const currentIdx = tabOrder.indexOf(this.state.activeTab ? 'tab-' + this.state.activeTab : 'tab-dashboard');
+      const currentTabId = this.state && this.state.activeTab ? 'tab-' + this.state.activeTab : 'tab-dashboard';
+      const currentIdx = tabOrder.indexOf(currentTabId);
       if (currentIdx === -1) return;
 
       let nextIdx;
