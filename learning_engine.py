@@ -272,7 +272,19 @@ class PolicyNetwork:
         self.forward(state)
         
         # Scale advantage to a reasonable range for gradient magnitude
-        scaled_reward = np.clip(advantage * 100.0, -5.0, 5.0)
+        _raw_adv = advantage * 100.0
+        scaled_reward = np.clip(_raw_adv, -5.0, 5.0)
+        
+        # Log if advantage was clipped (extreme PnL saturating gradient signal)
+        if abs(_raw_adv) > 5.0:
+            if not hasattr(self, '_clip_count'):
+                self._clip_count = 0
+            self._clip_count += 1
+            if self._clip_count <= 5 or self._clip_count % 50 == 0:
+                logging.warning(
+                    f"[ADV CLIPPED] advantage*100={_raw_adv:.2f} clipped to ±5.0. "
+                    f"advantage={advantage:.6f}, step={self.total_learning_steps}"
+                )
         
         probs = self.probs
         
