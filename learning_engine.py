@@ -230,6 +230,9 @@ class PolicyNetwork:
         
         Stores (state, alignment, advantage) in replay buffer and
         periodically trains from a minibatch to smooth gradients.
+        
+        After each gradient update, verifies that loss decreased.
+        If loss increased, logs WARNING — the update may have been harmful.
         """
         dir_val = 1.0 if trade_direction == "BUY" else -1.0
         alignment = np.array(strategy_signals) * dir_val
@@ -238,6 +241,21 @@ class PolicyNetwork:
         advantage = reward - self.reward_baseline
         self.reward_baseline = (1.0 - self.baseline_alpha) * self.reward_baseline + self.baseline_alpha * reward
         
+        def _compute_loss_for_state(s, al, adv):
+            """Compute current policy loss for a single (state, alignment, advantage)."""
+            probs = self.forward(s, training=False)
+            alignment_flat = al.reshape(-1)
+            if np.any(alignment_flat > 0):
+                action_idx = np.argmax(alignment_flat)
+            else:
+                action_idx = np.argmax(alignment_flat)
+            scaled_adv = np.clip(adv * 100.0, -5.0, 5.0)
+            log_prob = np.log(max(probs[action_idx], 1e-12))
+            return -scaled_adv * log_prob  # REINFORCE loss
+        
+        # Compute loss BEFORE update
+        loss_before = _compute_loss_for_state(state, alignment, advantage)
+        
         # Store in replay buffer
         self.replay.push(np.array(state, dtype=float), alignment, advantage)
         
@@ -245,11 +263,24 @@ class PolicyNetwork:
         dW, db = self._compute_gradients(state, alignment, advantage)
         self._apply_gradients(dW, db)
         
+        # Compute loss AFTER update
+        loss_after = _compute_loss_for_state(state, alignment, advantage)
+        
+        # Verify loss decreased (gradient descent should reduce loss)
+        if loss_after > loss_before * 1.01:  # >1% increase
+            logging.warning(
+                f"[LOSS VERIFICATION] Loss increased from {loss_before:.4f} to {loss_after:.4f} "
+                f"after gradient update. advantage={advantage:.4f}, reward={reward:.4f}"
+            )
+        
         # Periodically train from replay buffer to reinforce patterns
         if len(self.replay) >= self.replay_batch_size and (
             self.t % self.replay_train_interval == 0
         ):
             batch = self.replay.sample(self.replay_batch_size)
+            # Compute loss before batch update
+            batch_loss_before = sum(_compute_loss_for_state(s, al, adv) for s, al, adv in batch) / len(batch)
+            
             # Accumulate gradients across batch
             dW_acc = [np.zeros_like(w) for w in self.W]
             db_acc = [np.zeros_like(b) for b in self.b]
@@ -264,6 +295,14 @@ class PolicyNetwork:
                 dW_acc[i] /= n
                 db_acc[i] /= n
             self._apply_gradients(dW_acc, db_acc)
+            
+            # Compute loss after batch update
+            batch_loss_after = sum(_compute_loss_for_state(s, al, adv) for s, al, adv in batch) / len(batch)
+            if batch_loss_after > batch_loss_before * 1.01:
+                logging.warning(
+                    f"[LOSS VERIFICATION] Batch replay loss increased from {batch_loss_before:.4f} "
+                    f"to {batch_loss_after:.4f} after batch gradient update (n={n})"
+                )
 
     def to_json(self):
         """Serialize network weights to JSON string."""

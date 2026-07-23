@@ -301,7 +301,15 @@ class ProbabilityEngine:
             except Exception:
                 pass
         
-        final_fraction = min(final_fraction, max_cap)
+        # SAFETY: Hard cap final_fraction at 0.15 (15% of capital-at-risk per trade).
+        # The value max_cap=0.50 from hyper_growth mode, combined with a tight stop
+        # (e.g., 1%), produces position_value = (capital * 0.50) / 0.01 = 50x capital = 5000% equity.
+        # This is the root cause of the "125%-500% exposure" log messages.
+        # 0.15 as a risk fraction with a 1% stop = at most 15x = 1500% of equity which is
+        # still extreme. The execution_engine's 3x leverage cap handles the rest, but
+        # we prevent the explosion at source.
+        absolute_max_risk_fraction = 0.15  # 15% of capital-at-risk, hard ceiling
+        final_fraction = min(final_fraction, max_cap, absolute_max_risk_fraction)
         
         # Load trades once and reuse across all sub-components below
         _all_trades = []
