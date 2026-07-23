@@ -505,7 +505,9 @@ const App = {
           this.el.safetyBadge.removeAttribute('role');
         }
       }
-    } catch(e) {}
+    } catch(e) {
+      this.debug('Safety poll failed:', e);
+    }
   },
 
   async pollStatus() {
