@@ -170,7 +170,11 @@ const Dashboard = {
 
   onWSMessage(msg) {
     if (msg.type === 'tick') this.onTick(msg);
-    else if (msg.type === 'init_state' || msg.type === 'state') this.onInitState(msg.data || msg);
+    else if (msg.type === 'init_state' || msg.type === 'state') {
+      // Handle nested data structures: msg.data could be the payload or msg.data.data
+      const payload = msg.data ? (msg.data.data || msg.data) : msg;
+      this.onInitState(payload);
+    }
   },
 
   onTick(msg) {
