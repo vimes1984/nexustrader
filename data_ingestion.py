@@ -153,8 +153,16 @@ class DataIngestion:
         df['stoch_k'] = 100 * ((df['close'] - low_14) / (high_14 - low_14 + 1e-9))
         df['stoch_d'] = df['stoch_k'].rolling(window=3).mean()
         
-        # Clean up NaNs — forward-fill only (no backfill to prevent look-ahead bias)
-        df = df.ffill()
+        # Use expanding mean for early NaN windows instead of ffill
+        # (ffill produces flat lines at trim boundaries; expanding.mean() gives smooth initialization)
+        for col in ['sma_20', 'sma_50', 'ema_12', 'ema_26', 'macd', 'macd_signal', 'macd_hist',
+                    'bb_mid', 'bb_std', 'bb_upper', 'bb_lower', 'vwma_20', 'stoch_d']:
+            if col in df.columns:
+                df[col] = df[col].fillna(df[col].expanding().mean())
+        # RSI, ATR, stoch_k are bounded and harder to expanding-fill; use ffill as last resort
+        df['rsi'] = df['rsi'].fillna(50.0)  # neutral RSI for warmup gaps
+        df['atr'] = df['atr'].fillna(method='ffill')
+        df['stoch_k'] = df['stoch_k'].fillna(method='ffill')
         # Assign back under lock
         self._require_lock()
         with self._data_lock:

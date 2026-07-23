@@ -85,11 +85,18 @@ def estimate_ou_process(prices, dt=1.0):
     x = np.array(prices[:-1])
     y = np.array(prices[1:])
 
+    # Drop NaN values from both arrays (must drop from same positions)
+    valid = ~(np.isnan(x) | np.isnan(y))
+    x = x[valid]
+    y = y[valid]
+    if len(x) < 20:
+        return 0.0, float(np.nanmean(prices)) if np.any(np.isfinite(prices)) else 0.0, False
+
     # Check that prices have meaningful variance — flat/constant prices
     # always appear to be "mean-reverting" (a≈1 with tiny noise)
     x_var = np.var(x)
     if x_var < 1e-10:
-        return 0.0, float(np.mean(prices)), False
+        return 0.0, float(np.nanmean(prices)) if np.any(np.isfinite(prices)) else 0.0, False
 
     # Perform OLS regression: y = a * x + b
     A = np.vstack([x, np.ones(len(x))]).T
