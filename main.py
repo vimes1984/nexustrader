@@ -1316,7 +1316,7 @@ async def api_init_state(request: Request):
         "positions":positions,
         "risk_mode":_db.load_setting("risk_mode","conservative"),
         "trading_mode":_db.load_setting("trading_mode","paper"),
-        "live_holdings":getattr(orc,"live_holdings",{})or{},
+        "live_holdings":getattr(getattr(orc,"execution_engine",None),"live_holdings",{})or{},
     }
 
 @app.get("/api/positions")

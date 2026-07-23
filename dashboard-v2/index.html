@@ -427,13 +427,22 @@ document.getElementById('skip-link')?.addEventListener('blur', function() {
 <div id="fatal-error-display" style="display:none;position:fixed;bottom:0;left:0;right:0;background:rgba(244,63,94,0.95);color:white;padding:12px;z-index:99999;font-family:monospace;font-size:12px;max-height:200px;overflow-y:auto" role="alert" aria-live="assertive" aria-label="Fatal error"></div>
 
 <script>
-// Global error trap
+// Global error trap — deduplicate by error message to avoid flooding
+var _errCache = {};
 window.onerror = function(m,u,l,c,e) {
+  var key = m+'|'+u+'|'+l;
+  if (_errCache[key]) return;
+  _errCache[key] = true;
+  setTimeout(function(){ delete _errCache[key]; }, 5000);
   var el = document.getElementById('fatal-error-display');
   el.style.display='block';
   el.innerHTML+='<div>❌ '+m+'<br><small>'+u+':'+l+'</small></div>';
 };
 window.addEventListener('unhandledrejection',function(e) {
+  var key = 'rej:'+String(e.reason||'unknown');
+  if (_errCache[key]) return;
+  _errCache[key] = true;
+  setTimeout(function(){ delete _errCache[key]; }, 5000);
   var el = document.getElementById('fatal-error-display');
   el.style.display='block';
   el.innerHTML+='<div>❌ Promise: '+(e.reason||'unknown')+'</div>';
