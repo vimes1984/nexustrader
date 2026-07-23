@@ -1515,6 +1515,12 @@ def get_status():
         "fiat_breakdown": fiat_breakdown,
         "positions": ee.active_positions,
         "tickers": orchestrator.tickers,
+        "unrealized_pnl": round(sum(
+            abs(float(pos.get("quantity", 0) or 0)) * (
+                current_prices.get(sym, float(pos.get("entry_price", 0) or 0)) - float(pos.get("entry_price", 0) or 0)
+            ) if pos.get("direction", "BUY") == "BUY" else float(pos.get("entry_price", 0) or 0) - current_prices.get(sym, float(pos.get("entry_price", 0) or 0))
+            for sym, pos in ee.active_positions.items()
+        ), 2),
         "trades": _recent_trades
     }
 

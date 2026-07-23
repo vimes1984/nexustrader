@@ -31,11 +31,22 @@ const Logs = {
       }
 
       if (!lines.length) {
+        // Show total count if available even with empty lines
+        if (data && data.total != null && Number(data.total) > 0) {
+          el.innerHTML = '<div style="padding:10px;text-align:center;font-size:11px;color:var(--text-muted)">' + Number(data.total) + ' total log entries (filtered view)</div>';
+          return;
+        }
         el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted)">No log entries yet</div>';
         return;
       }
 
-      el.innerHTML = lines.map(l => {
+      // Show total log count header
+      let headerHtml = '';
+      if (data && data.total != null) {
+        headerHtml = '<div style="padding:6px 8px;font-size:10px;color:var(--text-muted);border-bottom:1px solid rgba(255,255,255,0.04);text-align:right">' + Number(data.total) + ' total · ' + lines.length + ' shown</div>';
+      }
+
+      el.innerHTML = headerHtml + lines.map(l => {
         let cls = '';
         const lower = l.toLowerCase();
         if (lower.includes('error') || lower.includes('critical') || lower.includes('traceback')) cls = 'color:var(--neon-red)';
