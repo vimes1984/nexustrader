@@ -14,6 +14,13 @@ const API = {
     let attempts = 0;
     const maxAttempts = opts._retryCount || this._retryCount;
 
+    // Auto-attach auth token from localStorage if available
+    const authToken = typeof localStorage !== 'undefined' ? localStorage.getItem('nt_auth_token') : null;
+    const defaultHeaders = { 'Content-Type': 'application/json' };
+    if (authToken) {
+      defaultHeaders['Authorization'] = 'Bearer ' + authToken;
+    }
+
     for (attempts = 0; attempts < maxAttempts; attempts++) {
       try {
         // Add cache-bust parameter per attempt to prevent stale responses on retry
@@ -23,7 +30,7 @@ const API = {
           fetchPath = path + separator + '_t=' + Date.now() + '_r=' + attempts;
         }
         const res = await fetch(this.base + fetchPath, {
-          headers: { 'Content-Type': 'application/json', ...opts.headers },
+          headers: { ...defaultHeaders, ...opts.headers },
           ...opts,
           signal: AbortSignal.timeout(15000),
         });

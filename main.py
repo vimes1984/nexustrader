@@ -1578,7 +1578,22 @@ def get_status():
         "health_reason": _health_reason,
         "uptime_seconds": _uptime,
         "fiat_breakdown": fiat_breakdown,
-        "positions": ee.active_positions,
+        "positions": [
+            {
+                "symbol": sym,
+                "direction": pos.get("direction", "BUY"),
+                "entry_price": float(pos.get("entry_price", 0)),
+                "current_price": float(current_prices.get(sym, pos.get("entry_price", 0))),
+                "quantity": float(pos.get("quantity", 0)),
+                "unrealized_pnl": round(
+                    (current_prices.get(sym, pos.get("entry_price", 0)) - pos.get("entry_price", 0)) * pos.get("quantity", 0)
+                    if pos.get("direction", "BUY") == "BUY"
+                    else (pos.get("entry_price", 0) - current_prices.get(sym, pos.get("entry_price", 0))) * pos.get("quantity", 0)
+                , 2),
+                "entry_time": pos.get("entry_time", 0),
+            }
+            for sym, pos in ee.active_positions.items()
+        ],
         "tickers": orchestrator.tickers,
         "unrealized_pnl": round(sum(
             abs(float(pos.get("quantity", 0) or 0)) * (
