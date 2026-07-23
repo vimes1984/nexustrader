@@ -398,6 +398,80 @@ class StrategyEnsemble:
             if isinstance(strat, MLPredictorStrategy):
                 strat.train(history_df)
 
+    # ------------------------------------------------------------------
+    # Alpha decay / signal half-life estimation
+    # ------------------------------------------------------------------
+
+    def estimate_alpha_decay(self, lookback: int = 50) -> dict:
+        """Estimate the half-life of each strategy's predictive signal by
+        computing the autocorrelation of recent correct/incorrect labels.
+        
+        The Information Coefficient (IC) at lag k is approximated by the
+        autocorrelation of the binary correctness series.  Half-life is
+        the lag at which autocorrelation decays below 0.5.
+        
+        Returns:
+            dict: {strategy_name: {"half_life": int, "ic_1": float, "ic_decay": float}}
+        """
+        results = {}
+        for strat in self.strategies:
+            perf = self.strategy_performance.get(strat.name, [])
+            if len(perf) < 10:
+                results[strat.name] = {"half_life": 1, "ic_1": 0.0, "ic_decay": 0.0}
+                continue
+            
+            # Convert correct/incorrect to 1/0 series
+            series = np.array([1.0 if p['correct'] else 0.0 for p in perf[-lookback:]])
+            n = len(series)
+            if n < 5:
+                results[strat.name] = {"half_life": 1, "ic_1": 0.0, "ic_decay": 0.0}
+                continue
+            
+            mean_s = np.mean(series)
+            demeaned = series - mean_s
+            var_s = np.sum(demeaned ** 2)
+            if var_s < 1e-12:
+                results[strat.name] = {"half_life": 1, "ic_1": 0.0, "ic_decay": 0.0}
+                continue
+            
+            # Autocorrelation at lag 1
+            acf_1 = np.sum(demeaned[:-1] * demeaned[1:]) / var_s
+            acf_1 = float(np.clip(acf_1, -1.0, 1.0))
+            
+            # Autocorrelation at lag 2 (multi-step decay)
+            if n >= 3:
+                acf_2 = np.sum(demeaned[:-2] * demeaned[2:]) / var_s
+                acf_2 = float(np.clip(acf_2, -1.0, 1.0))
+            else:
+                acf_2 = 0.0
+            
+            # Half-life: lag at which ACF crosses 0.5 via exponential decay model
+            # If ACF(1) > 0.5, half-life = log(0.5) / log(acf_1), rounded up
+            if acf_1 > 0.5:
+                half_life = max(1, int(math.ceil(math.log(0.5) / math.log(acf_1))))
+            elif acf_1 > 0.0:
+                half_life = 1
+            else:
+                half_life = 0  # negative autocorrelation = no persistence
+            
+            # Decay rate: how fast IC drops from lag 1 to lag 2
+            decay = acf_1 - acf_2 if acf_1 > 0 else 0.0
+            
+            results[strat.name] = {
+                "half_life": half_life,
+                "ic_1": round(acf_1, 4),
+                "ic_decay": round(decay, 4)
+            }
+        return results
+
+    def get_alpha_decay_report(self) -> str:
+        """Return a human-readable report of alpha decay per strategy."""
+        decay = self.estimate_alpha_decay()
+        lines = ["### Alpha Decay / Signal Half-Life Estimation"]
+        for sname, d in decay.items():
+            lines.append(f"  {sname}: half-life={d['half_life']} bars, IC(1)={d['ic_1']:.4f}, decay={d['ic_decay']:.4f}")
+        return "\n".join(lines)
+
     def update_base_weights(self):
         """Persists performance-biased weights back to self.weights after each trade.
         
