@@ -91,6 +91,37 @@ def get_slippage_bps_for_symbol(cost_model: CostModel, symbol: str = "") -> floa
     return max(base_slip, pair_spread)
 
 
+def get_volume_adjusted_slippage(position_value: float, cost_model: CostModel,
+                                  symbol: str = "", daily_volume_usd: float = 0.0) -> float:
+    """Returns slippage multiplier adjusted for order size vs daily volume.
+
+    Market impact grows with order size relative to daily volume:
+    - < 0.01% of daily vol: 1x baseline (no additional impact)
+    - 0.01-0.1% of daily vol: 2x baseline (moderate impact)
+    - 0.1-1% of daily vol: 5x baseline (significant impact)
+    - > 1% of daily vol: 50x baseline (whale-sized, unlikely to fill cleanly)
+
+    Returns:
+        Price multiplier (e.g., 0.005 = 0.5% price adjustment).
+    """
+    total_slip_bps = get_slippage_bps_for_symbol(cost_model, symbol)
+
+    if daily_volume_usd > 0 and position_value > 0:
+        vol_fraction = position_value / daily_volume_usd
+        if vol_fraction > 0.01:
+            impact_mult = 50.0
+        elif vol_fraction > 0.001:
+            impact_mult = 5.0
+        elif vol_fraction > 0.0001:
+            impact_mult = 2.0
+        else:
+            impact_mult = 1.0
+    else:
+        impact_mult = 1.0
+
+    return total_slip_bps * impact_mult / 10_000.0
+
+
 def estimate_round_trip_cost(position_value: float, cost_model: CostModel,
                              symbol: str = "", maker_entry: bool = False,
                              maker_exit: bool = False) -> float:

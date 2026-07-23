@@ -223,15 +223,11 @@ class ProbabilityEngine:
                 # Get calibration cap from evaluation singletons
                 try:
                     from evaluation.singletons import kill_switch, drawdown_tracker
+                    from probability_calibration import kelly_cap_from_calibration
                     calibration_cap = 0.15  # default
                     if hasattr(kill_switch, 'calibration_brier') and kill_switch.calibration_brier is not None:
                         brier = kill_switch.calibration_brier
-                        if brier > 0.25:
-                            calibration_cap = 0.02
-                        elif brier > 0.20:
-                            calibration_cap = 0.05
-                        else:
-                            calibration_cap = 0.15
+                        calibration_cap = kelly_cap_from_calibration(brier, n_samples=len(trades))
                     current_dd = drawdown_tracker.current_drawdown if hasattr(drawdown_tracker, 'current_drawdown') else 0.0
                 except Exception:
                     calibration_cap = 0.15
