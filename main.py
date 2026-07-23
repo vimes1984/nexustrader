@@ -1039,6 +1039,7 @@ orchestrator = NexusTraderOrchestrator()
 
 @app.on_event("startup")
 async def startup_event():
+    orchestrator.start_time = time.time()
     await orchestrator.initialize()
 
     # Initialize safety systems from saved state
