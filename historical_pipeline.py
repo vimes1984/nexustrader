@@ -393,13 +393,21 @@ class OfflineTrainer:
             _log.warning(f"Only {len(samples)} samples — need >= 50 for meaningful training")
             return []
         
-        # Shuffle and split
-        np.random.shuffle(samples)
-        split_idx = int(len(samples) * (1 - self.val_split))
-        train_samples = samples[:split_idx]
-        val_samples = samples[split_idx:]
+        # Chronological split with embargo to prevent look-ahead leakage.
+        # Samples are generated with look-ahead labeling (e.g., +12 candles forward),
+        # so sample at time t contains information up to t+12.  Random shuffle would
+        # leak future info into the training set.  We sort by timestamp, split
+        # chronologically (~80/20), and apply an embargo of `self.lookahead` samples
+        # to ensure no val sample's look-ahead window overlaps with train data.
+        lookahead = getattr(getattr(self, 'engine', None), 'lookahead', 12)
+        embargo = max(lookahead, 1)
+        samples_sorted = sorted(samples, key=lambda s: s.timestamp)
+        split_idx = int(len(samples_sorted) * (1 - self.val_split))
+        # Apply embargo: val split starts at split_idx + embargo
+        train_samples = samples_sorted[:split_idx]
+        val_samples = samples_sorted[split_idx + embargo:]
         
-        _log.info(f"Training on {len(train_samples)} samples, validating on {len(val_samples)}")
+        _log.info(f"Training on {len(train_samples)} samples, validating on {len(val_samples)} (embargo={embargo})")
         
         best_val_loss = float('inf')
         patience_counter = 0
@@ -408,7 +416,8 @@ class OfflineTrainer:
         for epoch in range(1, self.epochs + 1):
             ep_start = time.time()
             
-            # Train on minibatches
+            # Train on minibatches — shuffle within train set is safe since
+            # all train samples are before the embargo gap
             np.random.shuffle(train_samples)
             batch_losses = []
             batch_rewards = []
