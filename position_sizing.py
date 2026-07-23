@@ -46,9 +46,15 @@ def estimate_metrics_from_trades(trades: List[dict]) -> dict:
     if avg_loss < 0.0005:
         avg_loss = 0.005  # Floor: at least 0.5% average loss for Kelly computation
 
+    # Protection: if avg_win is also a floor, cap win_rate so Kelly doesn't
+    # amplify noise. Trades with tiny PnLs relative to capital are unreliable.
+    if avg_win < 0.001 and avg_loss <= 0.01 and n < 50:
+        # Scale win_rate toward 0.5 (no edge) in proportion to tiny PnLs
+        win_rate = 0.5 * win_rate + 0.25  # Shrink toward 50%
+
     return {
         "win_rate": win_rate,
-        "avg_win": avg_win,
+        "avg_win": avg_win if avg_win >= 0.001 else 0.001,
         "avg_loss": avg_loss,
         "count": n
     }
