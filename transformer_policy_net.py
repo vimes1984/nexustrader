@@ -453,26 +453,33 @@ class TransformerPolicyNetwork:
         
         Args:
             state: Can be either:
-              - (seq_len, d_model) — token embedder output (Transformer path)
-              - (state_dim,) — flat feature vector (MLP fallback)
+              - (seq_len, max_tokens) — token ID array (embedded internally)
+              - (seq_len, d_model) — pre-embedded feature array
+              - (state_dim,) — flat feature vector (MLP fallback, legacy)
         
         Returns:
             Weights list of length action_dim
         """
         self._training = False
         
+        if isinstance(state, list):
+            state = np.array(state, dtype=np.float32)
+        
         if state.ndim == 1:
-            # Flat state vector — use as if it's a 1-timestep sequence
-            # Pad to seq_len
-            x = np.zeros((self.max_seq_len, self.d_model))
+            # Flat state vector — use as if it's a 1-timestep sequence padded to seq_len
+            x = np.zeros((self.max_seq_len, self.d_model), dtype=np.float32)
             x[0, :min(state.shape[0], self.d_model)] = state[:self.d_model]
             x = x[np.newaxis, :, :]
-        elif state.ndim == 2:
-            x = state[np.newaxis, :, :]
+        elif state.ndim == 2 and state.dtype.kind in ('i', 'u'):
+            # Token ID array — forward handles embedding
+            probs = self.forward(state, training=False)  # no batch dim needed
         else:
-            x = state
-        
-        probs = self.forward(x, training=False)
+            # Already embedded or batched
+            if state.ndim == 2:
+                x = state[np.newaxis, :, :]
+            else:
+                x = state
+            probs = self.forward(x, training=False)
         weights = probs[0].tolist()
         
         # Apply soft floor

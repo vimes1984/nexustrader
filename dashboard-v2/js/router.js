@@ -176,13 +176,18 @@ const App = {
   },
 
   async togglePause() {
-    this.state.isPaused = !this.state.isPaused;
-    const icon = document.querySelector('#play-pause-btn i');
-    const text = byId('play-pause-text');
-    if (icon) icon.setAttribute('data-lucide', this.state.isPaused ? 'play' : 'pause');
-    if (text) text.textContent = this.state.isPaused ? 'Play' : 'Pause';
-    try { if (typeof lucide !== 'undefined' && lucide?.createIcons) lucide.createIcons(); } catch(e) {}
-    try { await API.control(this.state.isPaused ? 'pause' : 'resume'); } catch(e) {}
+    const newPaused = !this.state.isPaused;
+    try {
+      await API.control(newPaused ? 'pause' : 'resume');
+      this.state.isPaused = newPaused;
+      const icon = document.querySelector('#play-pause-btn i');
+      const text = byId('play-pause-text');
+      if (icon) icon.setAttribute('data-lucide', this.state.isPaused ? 'play' : 'pause');
+      if (text) text.textContent = this.state.isPaused ? 'Play' : 'Pause';
+      try { if (typeof lucide !== 'undefined' && lucide?.createIcons) lucide.createIcons(); } catch(e) {}
+    } catch(e) {
+      this.toast('Failed to ' + (newPaused ? 'pause' : 'resume') + ': ' + (e.message || 'API error'), 'error');
+    }
   },
 
   async resetSim() {
