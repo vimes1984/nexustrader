@@ -720,6 +720,8 @@ class ExecutionEngine:
             "risk_reward_ratio": evaluation.get("risk_reward_ratio"),
             "kelly_fraction": evaluation.get("kelly_fraction"),
         }
+        # Persist open position to DB immediately for crash recovery
+        database.save_active_position(symbol, self.active_positions[symbol])
         self._last_trade_time = time.time()
         logging.info(f"Opened {exec_label} {direction} position for {symbol}: Qty {actual_qty:.6f} at {effective_entry:.2f} (incl. slippage). Fee: {fee:.2f}")
         return True
