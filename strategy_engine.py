@@ -68,8 +68,14 @@ class BollingerBandsStrategy(TradingStrategy):
 
     def generate_signal(self, row, history=None):
         close = row.get('close', 0)
+        if close is None:
+            close = 0
         lower = row.get('bb_lower', 0)
+        if lower is None:
+            lower = 0
         upper = row.get('bb_upper', 0)
+        if upper is None:
+            upper = 0
         
         if close < lower:
             return 1.0  # Price broke below lower band -> expectation of bounce buy
@@ -86,6 +92,8 @@ class KalmanTrendStrategy(TradingStrategy):
 
     def generate_signal(self, row, history=None):
         close = row.get('close', 0)
+        if close is None:
+            close = 0
         kf_price = self.kf.update(close)
         
         # Load optimized threshold parameter (default to 0.001 / 0.1%)

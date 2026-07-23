@@ -828,6 +828,9 @@ class NexusTraderOrchestrator:
                 )
                 evaluation["state"] = state
                 
+                # Store last evaluation on probability_engine for API queries
+                self.probability_engine.last_evaluation = evaluation
+                
                 # If viable, open position
                 if evaluation["is_viable"]:
                     # KillSwitch check before opening — use current market value not entry price
