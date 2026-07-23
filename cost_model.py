@@ -121,12 +121,12 @@ def get_volume_adjusted_slippage(position_value: float, cost_model: CostModel,
     impact_mult = 1.0
     if daily_volume_usd > 0 and position_value > 0:
         vol_fraction = position_value / daily_volume_usd
-        if vol_fraction > 0.01:
-            impact_mult = 50.0
-        elif vol_fraction > 0.001:
-            impact_mult = 5.0
-        elif vol_fraction > 0.0001:
-            impact_mult = 2.0
+        # Sub-linear scaling: impact grows with sqrt of volume fraction
+        # 0.01% of daily vol → 1x, 0.1% → ~3x, 1% → ~10x, 10% → ~32x
+        # Using min(10 * sqrt(vol_fraction * 10000), 50) gives smooth curve
+        scaled_fraction = vol_fraction * 10000  # Convert to basis points of daily vol
+        impact_mult = min(10.0 * (scaled_fraction ** 0.5), 50.0)
+        impact_mult = max(1.0, impact_mult)  # Never go below 1x
 
     return total_slip_bps * impact_mult / 10_000.0
 
