@@ -612,6 +612,9 @@ class TransformerPolicyNetwork:
             ]:
                 if hasattr(ffn, attr_name):
                     grads[key] = getattr(ffn, attr_name)
+        # Positional embedding gradient (computed by pos_encoding.backward)
+        if hasattr(self.pos_encoding, 'd_embeddings'):
+            grads['pos_emb'] = self.pos_encoding.d_embeddings
         return grads
     
     def apply_gradients(self):
