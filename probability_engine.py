@@ -114,30 +114,44 @@ class ProbabilityEngine:
         p_win = np.clip(base_p + rsi_adjustment, 0.30, 0.80)
         
         # Simple historical refinement if history is available
-        if history_df is not None and len(history_df) > 50:
+        if history_df is not None and len(history_df) > 50 and 'rsi' in history_df:
             try:
-                # FUTURE INFO WARNING: history_df may contain all data up to present.
-                # We only use data that is strictly BEFORE the current row to avoid
-                # look-ahead bias when a full history dataframe is passed.
+                # Guard against look-ahead: we must use only rows STRICTLY BEFORE the
+                # current candle.  The history_df may contain all data up to the present,
+                # so we cannot use shift(-5) to compute forward returns on rows that
+                # overlap with or are after the current position.
+                #
+                # Instead, we restrict the similar-RSI search to only the first 60% of
+                # the dataframe (the oldest portion) and require at least 5 more rows
+                # after each candidate to compute a forward return.  This is conservative
+                # but ensures no future data leaks into the win probability.
                 close_series = history_df['close']
-                # Forward return: close 5 periods ahead (only valid for historical data)
-                forward_close = close_series.shift(-5)
-                valid_idx = close_series.notna() & forward_close.notna()
-                
-                # Find historical instances with similar RSI — EXCLUDING current position
                 rsi_series = history_df['rsi']
-                similar_mask = rsi_series.between(rsi - 10, rsi + 10) & valid_idx
-                # Exclude last 5 rows to avoid look-ahead from shift(-5) NaN values
-                # shift(-5) creates NaN for the 5 most recent rows
-                # Use iloc-based position instead of index comparison for multi-type index support
                 n_rows = len(close_series)
-                position_mask = pd.Series([True] * (n_rows - 5) + [False] * 5, index=close_series.index)
+                
+                # Only consider the first 60% of data to guarantee forward-looking
+                # returns have no overlap with current/future data
+                safe_end = int(n_rows * 0.60)
+                if safe_end < 20:
+                    # Not enough safe data for historical refinement
+                    return float(p_win)
+                
+                safe_close = close_series.iloc[:safe_end]
+                safe_rsi = rsi_series.iloc[:safe_end]
+                
+                # Forward return over 5 bars
+                forward_close = safe_close.shift(-5)
+                valid_mask = safe_close.notna() & forward_close.notna()
+                
+                # Find instances with similar RSI in the safe window
+                similar_mask = safe_rsi.between(rsi - 10, rsi + 10) & valid_mask
+                # Exclude the last 5 within the safe window (shift creates NaN)
+                position_mask = pd.Series([True] * (safe_end - 5) + [False] * 5, index=safe_close.index)
                 similar_mask = similar_mask & position_mask
                 similar_count = similar_mask.sum()
                 
                 if similar_count > 10:
-                    # Mean of boolean True=1, False=0 gives win rate
-                    hist_win_rate = float(forward_close[similar_mask].gt(close_series[similar_mask]).mean())
+                    hist_win_rate = float(forward_close[similar_mask].gt(safe_close[similar_mask]).mean())
                     # Blend 70% model / 30% empirical historical win rate
                     p_win = 0.7 * p_win + 0.3 * hist_win_rate
             except Exception as e:
