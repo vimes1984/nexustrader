@@ -431,22 +431,21 @@ class ExecutionEngine:
         
         # Multi-asset Kelly: fraction of REMAINING capital, not total balance
         # This prevents over-betting when multiple concurrent positions exist
-        kelly_cap = min(kf, 0.25)  # Never bet more than 25% of remaining capital
-        position_value_est = available_balance * kelly_cap
-        
-        # Also apply the existing single-asset Kelly-computed position value
+        # Pre-compute the actual Kelly position value (same formula as below) to avoid
+        # a dual-estimate bug: position_value_est was computed one way for risk limits and
+        # position_value was computed differently for execution. A tight stop makes the
+        # Kelly-converted position much larger than the simple fraction check thinks.
         stop_loss_pct_est = abs(eprice - esl) / eprice if eprice > 0 else 0.1
         if stop_loss_pct_est < 0.001:
             stop_loss_pct_est = 0.001
         kelly_position_value = (available_balance * kf) / min(stop_loss_pct_est, 0.5)
-        position_value_est = min(position_value_est, kelly_position_value)
         
-        if total_equity > 0 and position_value_est > 0:
-            new_total_exposure = (existing_exposure + position_value_est) / total_equity
+        if total_equity > 0 and kelly_position_value > 0:
+            new_total_exposure = (existing_exposure + kelly_position_value) / total_equity
             if new_total_exposure > self.max_total_exposure:
                 logging.warning(f"[PORTFOLIO RISK] Total exposure {new_total_exposure:.1%} would exceed {self.max_total_exposure:.1%}. Skipping {symbol}.")
                 return False
-            single_exposure = position_value_est / total_equity
+            single_exposure = kelly_position_value / total_equity
             if single_exposure > self.max_concentration:
                 logging.warning(f"[PORTFOLIO RISK] Single position {single_exposure:.1%} exceeds {self.max_concentration:.1%}. Skipping {symbol}.")
                 return False
