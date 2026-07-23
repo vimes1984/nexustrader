@@ -162,6 +162,12 @@ class ProbabilityEngine:
             risk = sl - price
             
         risk = max(risk, 1e-9)
+        # Guard against NaN/Inf reward or risk (should not happen, but be defensive)
+        if reward is None or (isinstance(reward, float) and (reward != reward)):
+            reward = risk  # fallback: 1:1
+        if risk is None or (isinstance(risk, float) and (risk != risk)):
+            risk = reward if reward > 0 else 1e-9
+        
         # Cap reward:risk ratio to prevent numerical issues with extreme values
         risk_reward_ratio = min(reward / risk, 20.0)
         

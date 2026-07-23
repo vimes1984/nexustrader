@@ -380,7 +380,7 @@ const Dashboard = {
       tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state" style="padding:30px 20px"><div class="empty-state-icon" style="font-size:36px" aria-hidden="true">📊</div><div class="empty-state-title">No trades yet</div><div class="empty-state-desc">The bot is collecting data and analyzing market conditions. Trades will appear here once executed.</div></div></td></tr>';
       return;
     }
-    // Limit trades to avoid huge DOM operations
+    // Limit trades to avoid huge DOM operations (show latest trades up to 50)
     const tradeSlice = trades.slice(0, 50);
     tbody.innerHTML = tradeSlice.map(t => {
       const rawTs = t.entry_time || t.exit_time || t.timestamp || t.time;
