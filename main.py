@@ -3225,6 +3225,9 @@ def get_notifications():
     try:
         import notification_manager
         settings = notification_manager.get_notification_settings()
+        # Mask SMTP password in GET response (never leak secrets to frontend)
+        if settings.get("notif_smtp_pass"):
+            settings["notif_smtp_pass"] = settings["notif_smtp_pass"][:2] + "****" if len(settings["notif_smtp_pass"]) > 2 else "****"
         return {"status": "success", "settings": settings}
     except Exception as e:
         return {"status": "error", "error": str(e)}
