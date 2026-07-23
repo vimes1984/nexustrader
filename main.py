@@ -1609,8 +1609,6 @@ def get_safety_status():
 @app.get("/api/status")
 def get_status():
     import datetime, os as _os
-    if not hasattr(get_status, "_start_time"):
-        get_status._start_time = time.time()
 
     current_prices = {}
     for t in orchestrator.tickers:
@@ -1673,7 +1671,7 @@ def get_status():
         _health = "warning"
         _health_reason = "{0} open positions".format(len(ee.active_positions))
     
-    _uptime = int(time.time() - getattr(get_status, "_start_time", time.time()))
+    _uptime = int(time.time() - getattr(orchestrator, "start_time", time.time())) if getattr(orchestrator, "start_time", None) else 0
     
     # Recent trades for dashboard display
     _recent_trades = _all_trades[-20:] if len(_all_trades) > 20 else _all_trades
