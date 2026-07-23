@@ -147,8 +147,12 @@ const Dashboard = {
 
   async onInitState(data) {
     this.updateKPIs(data);
-    this.renderTrades(data.trades || []);
-    if (App.state.activeTicker !== 'portfolio') this.loadHistory(App.state.activeTicker);
+    // Collect trades from multiple possible field names
+    const trades = data.trades || data.recent_trades || data.trade_history || [];
+    this.renderTrades(trades);
+    // Render positions if present in init state
+    if (data.positions) this.renderPositions(data.positions);
+    if (App.state && App.state.activeTicker !== 'portfolio') this.loadHistory(App.state.activeTicker);
     this.fetchWeights();
   },
 
