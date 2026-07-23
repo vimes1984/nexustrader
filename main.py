@@ -4404,11 +4404,13 @@ if __name__ == "__main__":
         import time
         
         def run_server():
-            logging.info("Starting backend server thread...")
+            _host = "0.0.0.0"
+            _port = 8000
+            logging.info(f"Starting backend server thread on {_host}:{_port}...")
             try:
-                uvicorn.run(app, host="0.0.0.0", port=8000, log_level="warning")
+                uvicorn.run(app, host=_host, port=_port, log_level="warning")
             except Exception as e:
-                logging.error(f"Uvicorn server crashed: {e}")
+                logging.error(f"Uvicorn server crashed on {_host}:{_port}: {e}")
 
         server_thread = threading.Thread(target=run_server, daemon=True)
         server_thread.start()
@@ -4434,8 +4436,10 @@ if __name__ == "__main__":
             except KeyboardInterrupt:
                 logging.info("Shutting down via KeyboardInterrupt.")
     else:
-        logging.info("Headless environment detected (no DISPLAY). Running server on main thread...")
+        _host = "0.0.0.0"
+        _port = 8000
+        logging.info(f"Headless environment detected (no DISPLAY). Running server on {_host}:{_port} (main thread)...")
         try:
-            uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info", access_log=False)
+            uvicorn.run(app, host=_host, port=_port, log_level="info", access_log=False)
         except KeyboardInterrupt:
             logging.info("Shutting down server.")

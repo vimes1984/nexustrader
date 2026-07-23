@@ -443,6 +443,22 @@ class ExecutionEngine:
             logging.warning(f"[LOSS COOLDOWN] Ticker {symbol} is in a loss cooldown period. {remaining_minutes} mins remaining. Skipping.")
             return False
 
+        # Exchange minimum viability check: fail fast BEFORE any risk calculation.
+        # If the value at entry_price * minimum_exchange_qty is below $5 exchange minimum,
+        # no amount of risk math can make this trade executable.
+        try:
+            _min_qty = float(database.load_setting(f"min_qty_{symbol}", "0")) or 0.0
+        except (ValueError, TypeError):
+            _min_qty = 0.0
+        if _min_qty > 0 and evaluation.get("entry_price", 0) > 0:
+            _min_notional = _min_qty * evaluation["entry_price"]
+            if _min_notional > self.balance:
+                logging.warning(
+                    f"[EXCHANGE MIN] {symbol}: min qty {_min_qty} @ ${evaluation['entry_price']:.2f} = "
+                    f"${_min_notional:.2f} > balance ${self.balance:.2f}. Skipping."
+                )
+                return False
+        
         # Portfolio-level risk checks — reload limits each time so optimizer/prompt changes take effect
         self.max_open_positions = int(database.load_setting("max_open_positions", str(self.max_open_positions)))
         self.max_concentration = float(database.load_setting("max_concentration_pct", str(self.max_concentration * 100))) / 100.0
@@ -700,6 +716,7 @@ class ExecutionEngine:
             "risk_reward_ratio": evaluation.get("risk_reward_ratio"),
             "kelly_fraction": evaluation.get("kelly_fraction"),
         }
+        self._last_trade_time = time.time()
         logging.info(f"Opened {exec_label} {direction} position for {symbol}: Qty {actual_qty:.6f} at {effective_entry:.2f} (incl. slippage). Fee: {fee:.2f}")
         return True
 
@@ -897,6 +914,9 @@ class ExecutionEngine:
 
             logging.info(f"Closed {direction} position for {symbol} at {current_price:.2f} due to {exit_reason}. PnL: {pnl_after_fee:.2f} ({pnl_percent*100:.2f}%)")
 
+            # Update starvation guard clock
+            self._last_trade_time = time.time()
+            
             # Trigger online learning callback
             if self.learning_callback:
                 try:
