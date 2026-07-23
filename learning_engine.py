@@ -400,6 +400,10 @@ class PolicyNetwork:
             "v_W": [vw.tolist() for vw in self.v_W],
             "v_b": [vb.tolist() for vb in self.v_b],
             "t": self.t,
+            "initial_lr": self.initial_lr,
+            "min_lr": self.min_lr,
+            "lr_decay_steps": self.lr_decay_steps,
+            "total_learning_steps": self.total_learning_steps,
         }
         return json.dumps(data)
 

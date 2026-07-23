@@ -921,6 +921,8 @@ class ExecutionEngine:
             database.save_trade(closed_trade_record)
 
             self.closed_trades.append(closed_trade_record)
+            # Remove from active_positions DB table (crash recovery cleanup)
+            database.delete_active_position(symbol)
             del self.active_positions[symbol]
 
             logging.info(f"Closed {direction} position for {symbol} at {current_price:.2f} due to {exit_reason}. PnL: {pnl_after_fee:.2f} ({pnl_percent*100:.2f}%)")

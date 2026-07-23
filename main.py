@@ -1547,23 +1547,25 @@ async def api_init_state(request: Request):
     import json as _json, time as _time, datetime as _dt, traceback as _tb
     _db = __import__("database")
     orc = orchestrator
-    ee = orc.execution_engine
+    ee = getattr(orc, "execution_engine", None)
+    if ee is None:
+        return {"status": "error", "detail": "Execution engine not initialized"}
 
     # Tickers: same as /api/status
-    tickers = orc.tickers or _json.loads(_db.load_setting("active_tickers","[]"))
+    tickers = getattr(orc, "tickers", []) or _json.loads(_db.load_setting("active_tickers","[]"))
     default_ticker = tickers[0] if tickers else "BTC-USD"
 
     # Live prices from data_ingestions (mirrors /api/status)
     current_prices = {}
     ticker_prices = {}
     for t in tickers:
-        if t in orc.data_ingestions:
+        if t in getattr(orc, "data_ingestions", {}):
             di_t = orc.data_ingestions.get(t)
             p = di_t.live_price or 0.0
             current_prices[t] = p
             ticker_prices[t] = p
 
-    balance = ee.balance
+    balance = getattr(ee, "balance", 0.0)
     equity = ee.get_equity(current_prices) if current_prices else balance
 
     # Trades from DB
