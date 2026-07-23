@@ -20,13 +20,25 @@ const Settings = {
   async loadConfig() {
     try {
       const data = await API.settings();
-      if (!data) return;
+      if (!data) {
+        // Set placeholder values when no config returned
+        ['config-max-position','config-max-drawdown','config-cooldown','config-tp','config-sl'].forEach(function(id) {
+          var el = byId(id);
+          if (el && !el.value) el.placeholder = 'Not configured';
+        });
+        return;
+      }
       setInput('config-max-position', data.max_position_size);
       setInput('config-max-drawdown', data.max_drawdown_pct);
       setInput('config-cooldown', data.cooldown_minutes);
       setInput('config-tp', data.tp_multiplier);
       setInput('config-sl', data.sl_multiplier);
-    } catch(e) {}
+    } catch(e) {
+      ['config-max-position','config-max-drawdown','config-cooldown','config-tp','config-sl'].forEach(function(id) {
+        var el = byId(id);
+        if (el && !el.value) el.placeholder = 'Load error';
+      });
+    }
   },
 
   async saveConfig() {
