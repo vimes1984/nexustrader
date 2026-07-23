@@ -63,6 +63,9 @@ At the very end of your response, output a strict JSON block with risk parameter
     except Exception as e:
         logging.error(f"Error querying trades for risk audit: {e}")
 
+    # --- Quantitative risk analysis: correlation matrix with eigenvalue cleaning ---
+    corr_block = _compute_correlation_risk_block()
+
     prompt = f"""{db_prompt}
 
 Current Risk Settings:
@@ -71,6 +74,8 @@ Current Risk Settings:
 
 Recent trades telemetry:
 {json.dumps(recent_trades, indent=2) if recent_trades else '[]'}
+
+{corr_block}
 """
     
     report_lines = ["\n## 🛡️ Portfolio Risk Audit Report"]

@@ -60,11 +60,16 @@ def calculate_metrics(equity_curve: List[float], trades: List[dict], periods_per
         return m
 
     pnls = [t.get("pnl", 0.0) for t in trades]
+    # Neutral trades (exactly 0.0 PnL) are NOT counted as wins or losses
+    # They only contribute to total_pnl and trade_count.
     winners = [p for p in pnls if p > 0]
-    losers = [p for p in pnls if p <= 0]
+    neutral = [p for p in pnls if p == 0.0]
+    losers = [p for p in pnls if p < 0]
 
     m.total_pnl = sum(pnls)
-    m.win_rate = len(winners) / len(pnls) if pnls else 0.0
+    m.trade_count = len(pnls)
+    decision_count = len(winners) + len(losers)  # Exclude neutrals from win rate
+    m.win_rate = len(winners) / decision_count if decision_count > 0 else 0.0
     m.avg_trade_pnl = m.total_pnl / len(pnls) if pnls else 0.0
     m.avg_winner = sum(winners) / len(winners) if winners else 0.0
     m.avg_loser = sum(losers) / len(losers) if losers else 0.0
@@ -74,9 +79,15 @@ def calculate_metrics(equity_curve: List[float], trades: List[dict], periods_per
     # Cap profit factor at 100 for JSON-safety (inf breaks serialization)
     if gross_loss > 0:
         m.profit_factor = min(gross_profit / gross_loss, 100.0)
+    elif gross_profit > 0:
+        m.profit_factor = 100.0
     else:
-        m.profit_factor = 100.0 if gross_profit > 0 else 0.0
+        m.profit_factor = 0.0
 
-    m.expectancy = (m.win_rate * m.avg_winner) + ((1 - m.win_rate) * m.avg_loser)
+    # Expectancy: expected PnL per trade (including neutrals at 0)
+    # Using decision_count isolates predictive power from non-trading days
+    m.expectancy = (m.win_rate * m.avg_winner) + ((1.0 - m.win_rate) * m.avg_loser)
+    if decision_count == 0:
+        m.expectancy = 0.0
 
     return m
