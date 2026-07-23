@@ -239,6 +239,9 @@ class BacktestEngine:
         2. Block bootstrap (preserves autocorrelation structure)
         3. Convergence diagnostics
         """
+        # Use deterministic seed for reproducibility
+        rng = np.random.default_rng(random_seed)
+        
         # Get the ensemble's trade list from one full pass
         base = self._run_nexus_ensemble(
             candles, entry_threshold=entry_threshold,
@@ -269,7 +272,7 @@ class BacktestEngine:
         # --- Standard bootstrap (i.i.d. resampling) ---
         boot_returns = []
         for _ in range(n_simulations):
-            indices = np.random.randint(0, n_trades, size=n_trades)
+            indices = rng.integers(0, n_trades, size=n_trades)
             sampled = pnl_array[indices]
             boot_ret = np.sum(sampled)
             boot_returns.append(boot_ret)
@@ -296,7 +299,7 @@ class BacktestEngine:
         for _ in range(n_simulations):
             sampled_blocks = []
             for _ in range(n_blocks):
-                start = np.random.randint(0, n_trades - block_size + 1)
+                start = rng.integers(0, n_trades - block_size + 1)
                 sampled_blocks.extend(pnl_array[start:start + block_size].tolist())
             sampled_blocks = sampled_blocks[:n_trades]
             block_ret = np.sum(sampled_blocks)

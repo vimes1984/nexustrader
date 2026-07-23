@@ -175,12 +175,19 @@ class KillSwitch:
             return
         self.daily_pnl += pnl_float
 
-    def reset(self):
-        """Manual reset after investigation."""
+    def reset(self, current_equity: Optional[float] = None):
+        """Manual reset after investigation.
+
+        Clears hysteresis state and optionally resets base_equity
+        to the current account value (for recovery after drawdown).
+        """
         self.tripped = False
         self.trigger_reason = None
         self.daily_pnl = 0.0
         self.daily_reset_time = time.time()
+        self._drawdown_hysteresis_active = False
+        if current_equity is not None and current_equity > 0:
+            self._base_equity = current_equity
 
     def to_dict(self) -> dict:
         return {
