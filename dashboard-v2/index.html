@@ -454,9 +454,19 @@ if ('serviceWorker' in navigator) {
 
 <!-- Application Scripts (order matters!) — cache bust via inline timestamp -->
 <script>
-(function() { var ts = Date.now(); ['api','router','dashboard','neural','assets','llm','agents','settings','strategy','optimizations','architecture','logs'].forEach(function(m) {
-  var s = document.createElement('script'); s.src = '/dashboard-v2/js/' + m + '.js?v=' + ts; document.body.appendChild(s);
-}); })();
+(function() { 
+  var ts = Date.now();
+  var scripts = ['api','router','dashboard','neural','assets','llm','agents','settings','strategy','optimizations','architecture','logs'];
+  function loadNext(i) {
+    if (i >= scripts.length) return;
+    var s = document.createElement('script');
+    s.src = '/dashboard-v2/js/' + scripts[i] + '.js?v=' + ts;
+    s.onload = function() { loadNext(i+1); };
+    s.onerror = function() { console.error('Failed to load ' + scripts[i]); loadNext(i+1); };
+    document.body.appendChild(s);
+  }
+  loadNext(0);
+})();
 </script>
 <noscript><div style="background:rgba(244,63,94,0.2);color:var(--neon-red);text-align:center;padding:20px;font-weight:700">JavaScript is required to run NexusTrader Dashboard.</div></noscript>
 
