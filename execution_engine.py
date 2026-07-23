@@ -566,14 +566,14 @@ class ExecutionEngine:
         effective_slip = self.base_slippage_rate * vol_multiplier
         
         # Pre-trade check: reject if slippage would consume too much of expected edge
-        # Compute expected return as % of entry from TP/SL weighted by direction
-        if direction == "BUY":
-            expected_return_pct = abs(tp - entry_price) / entry_price if entry_price > 0 else 0.0
-        else:
-            expected_return_pct = abs(entry_price - sl) / entry_price if entry_price > 0 else 0.0
+        # Slippage erodes both take-profit (reduces gain) and stop-loss (deepens loss),
+        # so the minimum distance to either exit price is the relevant comparison.
+        tp_dist = abs(tp - entry_price) / entry_price if entry_price > 0 else 0.0
+        sl_dist = abs(sl - entry_price) / entry_price if entry_price > 0 else 0.0
+        min_edge = min(tp_dist, sl_dist) if tp_dist > 0 and sl_dist > 0 else max(tp_dist, sl_dist)
         slip_pct = effective_slip
-        if expected_return_pct > 0 and slip_pct / expected_return_pct > 0.5:
-            logging.warning(f"[SLIPPAGE] {symbol}: slippage {slip_pct*100:.2f}% > 50% of expected return {expected_return_pct*100:.2f}%. Skipping.")
+        if min_edge > 0 and slip_pct / min_edge > 0.5:
+            logging.warning(f"[SLIPPAGE] {symbol}: slippage {slip_pct*100:.2f}% > 50% of min edge {min_edge*100:.2f}% (TP={tp_dist*100:.2f}%, SL={sl_dist*100:.2f}%). Skipping.")
             return False
         
         slippage_cost = entry_price * effective_slip
