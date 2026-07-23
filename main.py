@@ -3887,7 +3887,7 @@ async def websocket_endpoint(websocket: WebSocket):
             "tickers": orchestrator.tickers,
             "ticker": first_ticker,
             "balance": orchestrator.execution_engine.balance,
-            "equity": orchestrator.execution_engine.live_equity,
+            "equity": orchestrator.execution_engine.get_equity({t: (orchestrator.data_ingestions[t].live_price if t in orchestrator.data_ingestions and orchestrator.data_ingestions[t].live_price else orchestrator.latest_ticks.get(t, {}).get("close", 0.0)) for t in orchestrator.tickers}),
             "initial_balance": _init_bal_ws,
             "total_pnl": round(_total_pnl_ws, 2),
             "total_pnl_pct": round(_total_pnl_pct_ws, 2),
