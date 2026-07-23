@@ -34,9 +34,11 @@ const LLM = {
       if (data?.last_sentiment) {
         const s = data.last_sentiment;
         const dirEl = byId('llm-sentiment-dir');
-        if (dirEl) dirEl.textContent = (s.direction || 'neutral').toUpperCase();
+        const dir = s.direction || s.sentiment || s.label || 'neutral';
+        if (dirEl) dirEl.textContent = String(dir).toUpperCase();
         const scoreEl = byId('llm-sentiment-score');
-        if (scoreEl) scoreEl.textContent = (s.sentiment_score || 0).toFixed(4);
+        const score = Number(s.sentiment_score || s.score || s.confidence || 0);
+        if (scoreEl) scoreEl.textContent = score.toFixed(4);
       }
       // Show LLM server URL in status
       if (data?.llama_server_url || data?.server_url) {
