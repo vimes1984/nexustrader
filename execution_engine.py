@@ -868,6 +868,11 @@ class ExecutionEngine:
                 #           = pnl - entry_fee - exit_fee = pnl_after_fee
                 self.balance += cost_basis + pnl - exit_fee
             
+            # Safety check: balance must not go negative after close.
+            if self.balance < 0:
+                logging.error(f"[BALANCE BUG] Balance went negative (${self.balance:.4f}) after closing {symbol}. Clamping to $0.")
+                self.balance = 0.0
+            
             # Save updated balance to DB (batch if possible)
             database.save_setting("portfolio_balance", self.balance)
             

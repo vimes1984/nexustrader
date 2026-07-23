@@ -832,23 +832,47 @@ class NexusTraderOrchestrator:
                             f"[STARVATION RELAX] {ticker}: {_minutes_without_trade:.0f}m no trades. "
                             f"Relaxing threshold from {old_threshold:.3f} to {_min_sig:.3f}"
                         )
+            # ── Signal batching: Buffer this signal for batch evaluation ──
+            # Instead of executing first-come-first-blocked, collect signals from
+            # all tickers and pick the BEST one (highest expected value) in a batch.
             if abs(weighted_signal) >= _min_sig:
-                direction = "BUY" if weighted_signal > 0 else "SELL"
+                _dir = "BUY" if weighted_signal > 0 else "SELL"
                 
                 # Evaluate probability and risk
-                evaluation = self.probability_engine.evaluate_trade(
+                _eval = self.probability_engine.evaluate_trade(
                     price=current_price,
                     atr=atr,
-                    direction=direction,
+                    direction=_dir,
                     weighted_signal=weighted_signal,
                     row=row,
                     history_df=ingestor.data,
                     symbol=ticker
                 )
-                evaluation["state"] = state
+                _eval["state"] = state
+                _eval["_ticker"] = ticker
+                _eval["_current_price"] = current_price
+                _eval["_weighted_signal"] = weighted_signal
+                _eval["_strategy_breakdown"] = strategy_breakdown
                 
-                # Store last evaluation on probability_engine for API queries
-                self.probability_engine.last_evaluation = evaluation
+                if not hasattr(self, '_pending_signal_buffer'):
+                    self._pending_signal_buffer = {}
+                self._pending_signal_buffer[ticker] = _eval
+                
+                # Store last evaluation for API queries
+                evaluation = _eval
+                self.probability_engine.last_evaluation = _eval
+            
+            # Cycle tracking: mark ticker as reported, flush when batch is complete
+            if not hasattr(self, '_signal_batch_reported'):
+                self._signal_batch_reported = set()
+            self._signal_batch_reported.add(ticker)
+            
+            _tickers_without_pos = [t for t in self.tickers if t not in self.execution_engine.active_positions]
+            if len(self._signal_batch_reported) >= len(self.tickers) or \
+               (len(getattr(self, '_pending_signal_buffer', {})) > 0 and \
+                len(self._signal_batch_reported) >= len(_tickers_without_pos)):
+                self._flush_signal_batch()
+                self._signal_batch_reported = set()
 
         # Check Loss Cooldown status
         try:
@@ -1505,6 +1529,38 @@ async def api_health():
         "memory_mb": mem,
         "balance": getattr(getattr(orchestrator, "execution_engine", None), "balance", 0.0),
         "open_positions": len(getattr(getattr(orchestrator, "execution_engine", None), "active_positions", {})),
+    }
+
+
+@app.get("/api/metrics")
+async def api_metrics():
+    """Prometheus-style metric counters for dashboard and monitoring.
+    Returns trading activity counters — no DB queries, purely in-memory."""
+    ee = getattr(orchestrator, "execution_engine", None)
+    pe = getattr(orchestrator, "probability_engine", None)
+    close_trades = getattr(ee, "closed_trades", []) or []
+    open_pos = getattr(ee, "active_positions", {}) or {}
+    signals = getattr(orchestrator, "latest_signals", {}) or {}
+    # Count open signals by direction
+    bullish = sum(1 for s in signals.values() if s.get("direction") == "BULLISH")
+    bearish = sum(1 for s in signals.values() if s.get("direction") == "BEARISH")
+    neutral = sum(1 for s in signals.values() if s.get("direction") == "NEUTRAL")
+    trades_opened = sum(1 for t in close_trades if t.get("entry_time", 0) > 0)
+    trades_closed = len(close_trades)
+    wins = sum(1 for t in close_trades if float(t.get("pnl", 0) or 0) > 0)
+    losses = sum(1 for t in close_trades if float(t.get("pnl", 0) or 0) < 0)
+    trades_blocked = getattr(kill_switch, "blocked_count", 0)
+    return {
+        "signals_evaluated": len(signals),
+        "trades_opened": trades_opened,
+        "trades_closed": trades_closed,
+        "trades_blocked": trades_blocked,
+        "open_positions": len(open_pos),
+        "wins": wins,
+        "losses": losses,
+        "signal_breakdown": {"bullish": bullish, "bearish": bearish, "neutral": neutral},
+        "balance": getattr(ee, "balance", 0.0),
+        "kill_switch_tripped": getattr(kill_switch, "tripped", False),
     }
 
 @app.post("/api/quant/prompt/save")
