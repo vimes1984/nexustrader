@@ -128,7 +128,11 @@ class MultiHeadAttention:
         scores = scores + attn_mask
         
         # Softmax + dropout
-        attn_weights = self._softmax(scores, axis=-1)
+        attn_weights_raw = self._softmax(scores, axis=-1)
+        # Cache pre-dropout softmax weights (needed for correct softmax Jacobian in backward)
+        # Dropping out softmax outputs introduces zero entries that corrupt the Jacobian
+        # ∂softmax(z)_i/∂z_j = p_i*(δ_ij - p_j): the formula requires the PRE-dropout p values
+        attn_weights = attn_weights_raw
         
         if training and self.dropout > 0:
             dropout_mask = (np.random.rand(*attn_weights.shape) > self.dropout) / (1.0 - self.dropout)
@@ -149,7 +153,8 @@ class MultiHeadAttention:
                 'x': x,
                 'Q': Q, 'K': K, 'V': V,
                 'scores': scores,
-                'attn_weights': attn_weights,
+                'attn_weights': attn_weights,  # post-dropout (correct for weighting values)
+                'attn_weights_raw': attn_weights_raw,  # pre-dropout (correct for softmax Jacobian)
                 'head_outputs': head_outputs,
                 'concat': concat,
                 'mask': attn_mask,

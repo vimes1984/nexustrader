@@ -564,6 +564,18 @@ class ExecutionEngine:
                 pass
         vol_multiplier = max(0.5, min(5.0, atr_ratio * 50.0)) if atr_ratio > 0 else 1.0
         effective_slip = self.base_slippage_rate * vol_multiplier
+        
+        # Pre-trade check: reject if slippage would consume too much of expected edge
+        # Compute expected return as % of entry from TP/SL weighted by direction
+        if direction == "BUY":
+            expected_return_pct = abs(tp - entry_price) / entry_price if entry_price > 0 else 0.0
+        else:
+            expected_return_pct = abs(entry_price - sl) / entry_price if entry_price > 0 else 0.0
+        slip_pct = effective_slip
+        if expected_return_pct > 0 and slip_pct / expected_return_pct > 0.5:
+            logging.warning(f"[SLIPPAGE] {symbol}: slippage {slip_pct*100:.2f}% > 50% of expected return {expected_return_pct*100:.2f}%. Skipping.")
+            return False
+        
         slippage_cost = entry_price * effective_slip
         if direction == "BUY":
             effective_entry = entry_price + slippage_cost
