@@ -591,8 +591,22 @@ class StrategyEnsemble:
                     elif regime == 'mean_reversion':
                         active_weights[i] *= max(1.0 - 0.5 * trend_strength, 0.1)
         
-        # Layer 2: Omitted — performance bias is already persisted in self.weights
-        # via update_base_weights().  Applying it again here would double-count.
+        # Layer 2: Signal Correlation Penalty — diversify correlated strategies
+        # Compute pairwise signal correlation and penalize highly-correlated pairs
+        # by reducing the weight of the lower-performing correlated strategy.
+        n_strats = len(signals)
+        if n_strats > 1 and np.any(signals != 0):
+            sig_matrix = np.tile(signals, (n_strats, 1))
+            # Pairwise dot-product similarity (direction agreement)
+            sim = (sig_matrix == sig_matrix.T).astype(float)
+            np.fill_diagonal(sim, 0.0)
+            # Average similarity for each strategy (excluding self)
+            avg_sim = sim.sum(axis=1) / max(n_strats - 1, 1)
+            # Penalize strategies with > 50% signal overlap: reduce weight proportional to similarity
+            for i in range(n_strats):
+                if avg_sim[i] > 0.5:
+                    overlap_penalty = 1.0 - (avg_sim[i] - 0.5)
+                    active_weights[i] *= overlap_penalty
         
         # Normalize
         weight_sum = np.sum(active_weights)

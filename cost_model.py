@@ -35,8 +35,8 @@ def get_spread_bps_for_symbol(symbol: str) -> float:
 class CostModel:
     maker_fee: float = 0.0016      # 0.16% (Kraken <$50K 30d volume, maker)
     taker_fee: float = 0.0026      # 0.26% (Kraken <$50K 30d volume, taker)
-    slippage_bps: float = 10.0     # 10 bps estimated market impact
-    spread_bps: float = 5.0        # 5 bps default (overridden by get_spread_bps_for_symbol)
+    slippage_bps: float = 10.0     # 10 bps estimated total market impact per side
+    # spread_bps is per-asset via get_spread_bps_for_symbol()
 
 
 def apply_entry_cost(price: float, side: str, cost_model: CostModel,
