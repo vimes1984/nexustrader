@@ -124,8 +124,12 @@ def detect_psychological_sweep(df, lookback=24, round_number_base=5.0):
 
     # Round number psychological alignment
     # Check if support/resistance is close to a psychological boundary (e.g. multiples of €5, €10, €100)
-    round_support = round(local_support / round_number_base) * round_number_base
-    is_near_round_support = abs(local_support - round_support) / local_support < 0.005 # within 0.5%
+    round_support = round(local_support / round_number_base) * round_number_base if local_support != 0 else 0.0
+    # Guard against division by zero when local_support = 0
+    if local_support != 0:
+        is_near_round_support = abs(local_support - round_support) / local_support < 0.005
+    else:
+        is_near_round_support = (round_support == 0.0)
 
     if is_support_sweep:
         # Strong psychological reversal signal (Buy)
