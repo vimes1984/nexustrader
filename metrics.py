@@ -123,7 +123,14 @@ def brier_score(probabilities: Sequence[float], outcomes: Sequence[int]) -> floa
     Returns 0.25 (random baseline) for empty or mismatched data."""
     if len(probabilities) != len(outcomes) or len(probabilities) == 0:
         return 0.25  # Random baseline for insufficient data
-    return sum((p - o) ** 2 for p, o in zip(probabilities, outcomes)) / len(probabilities)
+    # Filter out invalid outcomes (must be 0 or 1) to prevent out-of-range Brier scores
+    clean = [(p, o) for p, o in zip(probabilities, outcomes) if o in (0, 1)]
+    if len(clean) < len(probabilities) < 2:
+        return 0.25
+    if len(clean) < 1:
+        return 0.25
+    n = len(clean)
+    return sum((p - o) ** 2 for p, o in clean) / n
 
 
 def calibration_error(probabilities: Sequence[float], outcomes: Sequence[int], bins: int = 10) -> float:
