@@ -101,10 +101,20 @@ class KillSwitch:
     ) -> Tuple[bool, Optional[str]]:
         """Returns (is_safe, reason_if_tripped).
 
-        If already tripped, stays tripped until reset.
+        If tripped, auto-resets after 1 hour to prevent permanent trade lockout.
+        Exception: drawdown hysteresis requires recovery below threshold.
         current_equity: if provided, enables dynamic scaling of limits to account size.
         """
         if self.tripped:
+            # Auto-reset after 1 hour unless it's drawdown hysteresis
+            if not self._drawdown_hysteresis_active:
+                elapsed = time.time() - self.daily_reset_time
+                if elapsed > 3600:  # 1 hour
+                    self.tripped = False
+                    self.trigger_reason = None
+                    self.daily_pnl = 0.0
+                    self.daily_reset_time = time.time()
+                    self._base_equity = 0.0
             return False, self.trigger_reason
 
         # Set base equity on first check with real value
