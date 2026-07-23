@@ -308,6 +308,9 @@ class DataIngestion:
                     try:
                         ccxt_symbol = self.ticker.replace("-", "/")
                         ticker_data = exchange.fetch_ticker(ccxt_symbol)
+                        # Guard against ccxt returning a scalar (float) instead of dict
+                        if not isinstance(ticker_data, dict):
+                            raise TypeError(f"Expected dict from fetch_ticker, got {type(ticker_data).__name__}: {ticker_data}")
                         price = float(ticker_data['last'])
                         self.live_price = price
                         exchange_failures = 0  # reset on success

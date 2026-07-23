@@ -211,12 +211,20 @@ class ExecutionEngine:
             total_bal = balance_info.get('total', {})
             self._last_raw_balances = total_bal  # Cache for balance checks
             
-            # Load markets to check symbols
+            # Load markets to check symbols — safely extract symbol set
+            exchange_symbols = None
             try:
                 if not exchange.markets:
                     exchange.load_markets()
+                raw_syms = getattr(exchange, 'symbols', None)
+                if raw_syms is not None and isinstance(raw_syms, (list, set, tuple)):
+                    exchange_symbols = set(raw_syms)
             except Exception as le:
                 logging.warning(f"Failed to load markets: {le}")
+
+            def _has_symbol(sym):
+                """Check if a symbol is available on the exchange, with safe fallback."""
+                return exchange_symbols is None or sym in exchange_symbols
 
             held_assets = []
             fiat_symbols = {
@@ -239,21 +247,21 @@ class ExecutionEngine:
                     fiat_name = fiat_symbols[norm]
                     if fiat_name != "USD":
                         symbol = f"{fiat_name}/USD"
-                        if not exchange.symbols or symbol in exchange.symbols:
+                        if _has_symbol(symbol):
                             held_assets.append(symbol)
                 else:
                     symbol = f"{norm}/USD"
-                    if not exchange.symbols or symbol in exchange.symbols:
+                    if _has_symbol(symbol):
                         held_assets.append(symbol)
                     else:
                         alt_symbol = f"{asset}/USD"
-                        if not exchange.symbols or alt_symbol in exchange.symbols:
+                        if _has_symbol(alt_symbol):
                             held_assets.append(alt_symbol)
             
             # Always ensure baseline default tickers are queried
             for base in ["BTC", "ETH", "SOL", "DOGE", "LINK", "ADA", "XRP"]:
                 symbol = f"{base}/USD"
-                if not exchange.symbols or symbol in exchange.symbols:
+                if _has_symbol(symbol):
                     held_assets.append(symbol)
                     
             held_assets = list(set(held_assets))
@@ -479,9 +487,12 @@ class ExecutionEngine:
                 return False
         
         # Portfolio-level risk checks — reload limits each time so optimizer/prompt changes take effect
-        self.max_open_positions = int(database.load_setting("max_open_positions", str(self.max_open_positions)))
-        self.max_concentration = float(database.load_setting("max_concentration_pct", str(self.max_concentration * 100))) / 100.0
-        self.max_total_exposure = float(database.load_setting("max_total_exposure_pct", str(self.max_total_exposure * 100))) / 100.0
+        _mop_raw = database.load_setting("max_open_positions", str(self.max_open_positions))
+        self.max_open_positions = int(float(_mop_raw)) if _mop_raw is not None else 3
+        _mcp_raw = database.load_setting("max_concentration_pct", str(self.max_concentration * 100))
+        self.max_concentration = (float(_mcp_raw) if _mcp_raw is not None else 40.0) / 100.0
+        _mte_raw = database.load_setting("max_total_exposure_pct", str(self.max_total_exposure * 100))
+        self.max_total_exposure = (float(_mte_raw) if _mte_raw is not None else 60.0) / 100.0
         
         if len(self.active_positions) >= self.max_open_positions:
             logging.warning(f"[PORTFOLIO RISK] Max open positions ({self.max_open_positions}) reached. Skipping {symbol}.")
