@@ -150,8 +150,20 @@ class PolicyNetwork:
         return self.probs[0]
 
     def _apply_gradients(self, dW, db):
-        """Apply gradients using the configured optimizer."""
+        """Apply gradients using the configured optimizer.
+        
+        Also applies learning rate decay: LR halves roughly every
+        lr_decay_steps gradient updates, down to min_lr (10% of initial).
+        This reduces aggressive updates as more data accumulates.
+        """
         self.t += 1
+        self.total_learning_steps += 1
+        
+        # Cosine-like LR scheduling: gentle decay, accelerates as steps accumulate
+        fraction = min(1.0, self.total_learning_steps / self.lr_decay_steps)
+        self.lr = self.initial_lr * (1.0 - fraction * 0.9)  # Decay to 10% of initial over lr_decay_steps
+        self.lr = max(self.lr, self.min_lr)
+        
         for i in range(len(self.W)):
             if self.optimizer == "Adam":
                 beta1 = 0.9
