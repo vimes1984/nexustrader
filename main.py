@@ -1298,17 +1298,32 @@ async def api_positions():
         if ee:
             # active_positions is dict of dicts
             active_pos = getattr(ee, "active_positions", {})
+            # Compute current prices once for all positions
+            live_prices = {}
+            for t in orchestrator.tickers:
+                if t in orchestrator.data_ingestions:
+                    di = orchestrator.data_ingestions.get(t)
+                    live_prices[t] = float(di.live_price or 0.0)
             for sym, pos in active_pos.items():
                 entry_time = pos.get("entry_time", int(_time.time())) if isinstance(pos, dict) else int(_time.time())
+                entry_price = float(pos.get("entry_price", 0) if isinstance(pos, dict) else 0)
+                quantity = float(pos.get("quantity", 0) if isinstance(pos, dict) else 0)
+                direction = pos.get("direction", "BUY") if isinstance(pos, dict) else "BUY"
+                current_price = live_prices.get(sym, float(pos.get("current_price", entry_price) if isinstance(pos, dict) else entry_price))
+                if direction == "BUY":
+                    unrealized_pnl = (current_price - entry_price) * quantity
+                else:
+                    unrealized_pnl = (entry_price - current_price) * quantity
+                unrealized_pnl_pct = unrealized_pnl / (entry_price * quantity + 1e-9) * 100 if entry_price * quantity != 0 else 0.0
                 positions.append({
                     "symbol": sym,
-                    "direction": pos.get("direction", "BUY") if isinstance(pos, dict) else "BUY",
-                    "entry_price": pos.get("entry_price", 0) if isinstance(pos, dict) else 0,
-                    "current_price": pos.get("current_price", 0) if isinstance(pos, dict) else 0,
-                    "quantity": pos.get("quantity", 0) if isinstance(pos, dict) else 0,
+                    "direction": direction,
+                    "entry_price": entry_price,
+                    "current_price": current_price,
+                    "quantity": quantity,
                     "entry_time": entry_time,
-                    "unrealized_pnl": pos.get("unrealized_pnl", 0) if isinstance(pos, dict) else 0,
-                    "unrealized_pnl_pct": pos.get("unrealized_pnl_pct", 0) if isinstance(pos, dict) else 0,
+                    "unrealized_pnl": round(unrealized_pnl, 2),
+                    "unrealized_pnl_pct": round(unrealized_pnl_pct, 2),
                     "age_seconds": int(_time.time()) - entry_time,
                 })
     except Exception:
