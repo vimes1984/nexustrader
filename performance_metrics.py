@@ -45,16 +45,29 @@ def calculate_metrics(equity_curve: List[float], trades: List[dict], periods_per
         for i in range(1, len(equity_curve)):
             prev = equity_curve[i - 1]
             curr = equity_curve[i]
-            r = (curr - prev) / prev if prev > 0 else 0.0
+            # Guard against zero or negative equity causing division issues
+            r = (curr - prev) / prev if prev > 1e-10 else 0.0
             returns.append(r)
         n = len(returns)
-        if n > 1:
+        if n >= 5:  # Minimum 5 observations for meaningful Sharpe
             mean_r = sum(returns) / n
-            variance = sum((r - mean_r) ** 2 for r in returns) / (n - 1)
-            std_r = math.sqrt(variance) if variance > 0 else 0.0
+            # Use population variance (MLE) with Bessel correction for small samples
+            if n > 1:
+                variance = sum((r - mean_r) ** 2 for r in returns) / (n - 1)
+            else:
+                variance = 0.0
+            std_r = math.sqrt(variance) if variance > 1e-20 else 0.0
             # Annualized Sharpe (with risk-free rate)
-            excess_mean = mean_r - (risk_free_rate / periods_per_year)  # convert yearly rf to per-period
-            m.sharpe = (excess_mean / std_r * math.sqrt(periods_per_year)) if std_r > 1e-10 else 0.0
+            # Convert annual risk-free rate to per-period
+            rf_period = risk_free_rate / periods_per_year
+            excess_mean = mean_r - rf_period
+            # Annualize: multiply per-period Sharpe by sqrt(periods)
+            if std_r > 1e-10:
+                m.sharpe = excess_mean / std_r * math.sqrt(periods_per_year)
+            elif excess_mean > 0:
+                m.sharpe = 3.0  # No volatility, pure profit — capped at 3.0 
+            else:
+                m.sharpe = 0.0  # No volatility, no profit
 
     if not trades:
         return m
