@@ -713,6 +713,13 @@ class ExecutionEngine:
             self.balance -= (position_cost + fee)
         else:
             self.balance -= fee  # SELL: only fee (position margin covered by holdings)
+        
+        # Safety check: balance must not go negative. If it does, it's a bug.
+        if self.balance < 0:
+            logging.error(f"[BALANCE BUG] Balance went negative (${self.balance:.4f}) after {direction} {symbol}. "
+                          f"position_cost=${position_cost:.2f}, fee=${fee:.2f}. Clamping to $0.")
+            self.balance = 0.0
+        
         database.save_setting("portfolio_balance", self.balance)
         
         self.active_positions[symbol] = {
