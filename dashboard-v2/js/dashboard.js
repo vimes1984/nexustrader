@@ -152,8 +152,13 @@ const Dashboard = {
     this.renderTrades(trades);
     // Render positions if present in init state
     if (data.positions) this.renderPositions(data.positions);
+    // Render weights directly if in init data, otherwise fetch
+    if (data.weights && Object.keys(data.weights).length) {
+      this.renderWeights(data.weights);
+    } else {
+      this.fetchWeights();
+    }
     if (App.state && App.state.activeTicker !== 'portfolio') this.loadHistory(App.state.activeTicker);
-    this.fetchWeights();
   },
 
   async fetchWeights() {

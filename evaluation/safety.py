@@ -185,6 +185,10 @@ class MutationFreeze:
             "reason": reason,
         }
         self.pending_suggestions.append(suggestion)
+        # BUGFIX: Cap pending suggestions at 500 to prevent unbounded memory growth.
+        # Optimizer agents can generate thousands of suggestions during backtesting.
+        if len(self.pending_suggestions) > 500:
+            self.pending_suggestions = self.pending_suggestions[-500:]
         logging.info(
             f"[MutationFreeze] SUGGESTION from {agent_name}: "
             f"{parameter} = {new_value} (was {old_value}) — {reason}"
