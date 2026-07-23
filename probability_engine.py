@@ -220,13 +220,19 @@ class ProbabilityEngine:
         
         final_fraction = min(final_fraction, max_cap)
         
-        # Layer 2: Drawdown-aware & calibration-aware safe fraction
-        # Uses historical trade metrics to cap position size when underwater
+        # Load trades once and reuse across all sub-components below
+        _all_trades = []
         try:
             import database as _db
-            trades = _db.load_trades()
-            if len(trades) >= 5:
-                metrics = estimate_metrics_from_trades(trades)
+            _all_trades = _db.load_trades()
+        except Exception:
+            pass
+
+        # Layer 2: Drawdown-aware & calibration-aware safe fraction
+        # Uses historical trade metrics to cap position size when underwater
+        if len(_all_trades) >= 5:
+            try:
+                metrics = estimate_metrics_from_trades(_all_trades)
                 # Get calibration cap from evaluation singletons
                 try:
                     from evaluation.singletons import kill_switch, drawdown_tracker
@@ -234,9 +240,7 @@ class ProbabilityEngine:
                     calibration_cap = 0.15  # default
                     if hasattr(kill_switch, 'calibration_brier') and kill_switch.calibration_brier is not None:
                         brier = kill_switch.calibration_brier
-                        calibration_cap = kelly_cap_from_calibration(brier, n_samples=len(trades))
-                        # Calibration module's n_samples guard already handles small samples,
-                        # but pass total trades for the interpolation slope guidance
+                        calibration_cap = kelly_cap_from_calibration(brier, n_samples=len(_all_trades))
                     current_dd = drawdown_tracker.current_drawdown if hasattr(drawdown_tracker, 'current_drawdown') else 0.0
                 except Exception:
                     calibration_cap = 0.15
@@ -253,8 +257,8 @@ class ProbabilityEngine:
                 )
                 # Cap position by safe fraction
                 final_fraction = min(final_fraction, sizing['safe_fraction'])
-        except Exception:
-            pass
+            except Exception:
+                pass
         
         # Entry quality check: RSI must align with direction
         # Relaxed threshold: allow trend-following entries up to RSI 75
@@ -278,28 +282,21 @@ class ProbabilityEngine:
             entry_ok = False
         
         # Dynamic sizing based on recent performance (not min_win_rate gating)
-        # DO NOT gate trades by raising dyn_min — position sizing already handles risk.
-        # Gating trades during cold starts creates a paradox: you can't improve WR without taking trades.
         dyn_min = self.min_win_rate
         death_spiral_risk_mult = 1.0  # Position size multiplier when on a losing streak
-        try:
-            import database as _db2
-            recent_trades = _db2.load_trades()
-            recent_n = min(len(recent_trades), 20)
-            if recent_n >= 3:
-                wins = sum(1 for t in recent_trades[-recent_n:] if t.get('pnl', 0) > 0)
+        recent_n = min(len(_all_trades), 20)
+        if recent_n >= 3:
+            try:
+                wins = sum(1 for t in _all_trades[-recent_n:] if t.get('pnl', 0) > 0)
                 wr = wins / recent_n
-                # ONLY adjust position size — never gate trades with dyn_min.
-                # The cold-start paradox: a 10-trade bot with 10% WR needs to trade to improve.
-                # Gating all trades prevents any path to profitability.
                 if wr < 0.3:
-                    death_spiral_risk_mult = 0.25  # Micro-sizing on cold streak (was 0.4)
+                    death_spiral_risk_mult = 0.25  # Micro-sizing on cold streak
                 elif wr < 0.5:
-                    death_spiral_risk_mult = 0.5  # Half-size on choppy streak (was 0.7)
+                    death_spiral_risk_mult = 0.5  # Half-size on choppy streak
                 elif wr > 0.7:
                     death_spiral_risk_mult = 1.15  # Slight increase when crushing it
-        except:
-            pass
+            except:
+                pass
         
         # Apply death spiral position size reduction
         final_fraction = final_fraction * death_spiral_risk_mult
@@ -309,26 +306,13 @@ class ProbabilityEngine:
         # Only apply minimum when death spiral hasn't explicitly reduced sizing —
         # if we're on a losing streak, respect the reduction.
         if final_fraction < 0.025 and final_fraction > 0 and p_win >= 0.40 and ev > 0:
-            # Only override death spiral if we have very few trades (cold start)
-            try:
-                import database as _db_min
-                ct = _db_min.load_trades()
-                if len(ct) < 5:
-                    final_fraction = 0.025  # Cold start: need data
-                # else: respect death spiral reduction
-            except:
-                pass
+            if len(_all_trades) < 5:
+                final_fraction = 0.025  # Cold start: need data
         
         # Cold-start override: relax dyn_min for accounts with < 20 trades
-        # Small samples produce unreliable WR; need trades to gather data
         actual_dyn_min = dyn_min
-        try:
-            import database as _db3
-            ct = _db3.load_trades()
-            if len(ct) < 20:
-                actual_dyn_min = max(0.35, dyn_min * 0.70)  # relaxed for trading
-        except:
-            pass
+        if len(_all_trades) < 20:
+            actual_dyn_min = max(0.35, dyn_min * 0.70)  # relaxed for trading
         
         is_viable = (p_win >= actual_dyn_min) and (ev > 0) and (final_fraction > 0) and entry_ok
         
