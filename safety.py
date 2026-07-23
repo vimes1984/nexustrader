@@ -108,7 +108,7 @@ class KillSwitch:
             return False, self.trigger_reason
 
         # Set base equity on first check with real value
-        if self._base_equity == 0.0 and current_equity is not None and current_equity > 0:
+        if self._base_equity <= 0.0 and current_equity is not None and current_equity > 0:
             self._base_equity = current_equity
 
         # Dynamic limits scaled to account size
