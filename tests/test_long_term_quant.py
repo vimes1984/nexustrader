@@ -17,12 +17,12 @@ database.log_agent_run = MagicMock()
 from long_term_quant import run_long_term_strategy_optimization
 
 class TestLongTermQuant(unittest.TestCase):
-    @patch('sqlite3.connect')
-    @patch('quant_utils.query_gemini_robust')
-    def test_run_long_term_strategy_optimization(self, mock_query_gemini, mock_connect):
-        # Configure sqlite mock
+    @patch('long_term_quant.query_openclaw')
+    def test_run_long_term_strategy_optimization(self, mock_query_openclaw):
+        # Configure database.get_db_connection mock
+        import database
         mock_conn = MagicMock()
-        mock_connect.return_value = mock_conn
+        database.get_db_connection = MagicMock(return_value=mock_conn)
         mock_cursor = MagicMock()
         mock_conn.cursor.return_value = mock_cursor
         
@@ -45,8 +45,8 @@ class TestLongTermQuant(unittest.TestCase):
             ]
         ]
         
-        # Mock Gemini responses
-        mock_query_gemini.side_effect = [
+        # Mock OpenClaw LLM responses
+        mock_query_openclaw.side_effect = [
             # Response 1: Parameter advice with settings JSON block
             """The performance shows stable bounds.
 ```json
@@ -58,22 +58,24 @@ class TestLongTermQuant(unittest.TestCase):
   "shadow_max_holding_hours": 36.0
 }
 ```""",
-            # Response 2: Meta-prompt optimization response
-            """{"revised_prompt_long_term_quant": "Evolved prompt focuses on $1,000 USD/day target"}"""
+            # Response 2: Meta-prompt optimization response (with ```json block)
+            """```json
+{"revised_prompt_long_term_quant": "Evolved prompt focuses on $1,000 USD/day target"}
+```"""
         ]
         
         # Run optimization session
         run_long_term_strategy_optimization()
         
-        # Verify database inserts were triggered for recommendations
-        mock_cursor.execute.assert_any_call("INSERT OR REPLACE INTO settings (key, value) VALUES ('shadow_volatility_target_pct', ?)", ("1.6",))
-        mock_cursor.execute.assert_any_call("INSERT OR REPLACE INTO settings (key, value) VALUES ('shadow_tp_atr_multiplier', ?)", ("3.1",))
-        mock_cursor.execute.assert_any_call("INSERT OR REPLACE INTO settings (key, value) VALUES ('shadow_sl_atr_multiplier', ?)", ("1.4",))
-        mock_cursor.execute.assert_any_call("INSERT OR REPLACE INTO settings (key, value) VALUES ('shadow_nn_consensus_min_weight', ?)", ("0.15",))
-        mock_cursor.execute.assert_any_call("INSERT OR REPLACE INTO settings (key, value) VALUES ('shadow_max_holding_hours', ?)", ("36.0",))
+        # Verify database inserts were triggered for recommendations (parameterized query)
+        mock_cursor.execute.assert_any_call("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", ("shadow_volatility_target_pct", "1.6"))
+        mock_cursor.execute.assert_any_call("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", ("shadow_tp_atr_multiplier", "3.1"))
+        mock_cursor.execute.assert_any_call("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", ("shadow_sl_atr_multiplier", "1.4"))
+        mock_cursor.execute.assert_any_call("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", ("shadow_nn_consensus_min_weight", "0.15"))
+        mock_cursor.execute.assert_any_call("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", ("shadow_max_holding_hours", "36.0"))
         
         # Verify meta-prompt optimization updated prompt template
-        mock_cursor.execute.assert_any_call("INSERT OR REPLACE INTO settings (key, value) VALUES ('prompt_long_term_quant', ?)", ("Evolved prompt focuses on $1,000 USD/day target",))
+        mock_cursor.execute.assert_any_call("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", ("prompt_long_term_quant", "Evolved prompt focuses on $1,000 USD/day target"))
         
         # Verify transaction logs were saved to audit trail
         self.assertTrue(database.log_agent_run.called)

@@ -25,7 +25,15 @@ def load_setting_mock(key, default=None):
         return "false"
     if key == "risk_mode":
         return "conservative"
-    return default or f"mocked_{key}"
+    if key == "portfolio_balance":
+        return "100.0"
+    if key == "portfolio_live_equity":
+        return "100.0"
+    if key == "initial_portfolio_balance":
+        return "100.0"
+    if default is not None:
+        return default
+    return f"mocked_{key}"
 
 class TestMainApi(unittest.TestCase):
     def setUp(self):

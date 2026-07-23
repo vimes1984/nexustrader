@@ -1073,11 +1073,22 @@ class ExecutionEngine:
                     total_value += qty * price
             return float(total_value)
             
+        # BUGFIX: equity must include the market value of open positions, not just cash.
+        # self.balance was reduced by cost_basis + fee_paid when positions opened.
+        # To get total equity, start from balance and add back each position's
+        # current market value (cost_basis at entry + unrealized PnL).
+        # 
+        # Previously this started from self.balance and only added unrealized PnL,
+        # but when price falls back to entry (no current data), unrealized = 0
+        # and equity = cash only — understating true equity by the cost_basis of
+        # all open positions. This caused the ABSOLUTE MAX POSITION PCT (25%)
+        # to shrink with each trade, creating a geometric portfolio decay.
         equity = self.balance
         last_prices = getattr(self, "last_known_prices", {})
         for symbol, pos in self.active_positions.items():
             qty = pos["quantity"]
             entry = pos["entry_price"]
+            cost_basis = pos.get("cost_basis", entry * qty)
             # Cascade: caller prices > position current_price > last_known > entry
             if symbol in current_prices and current_prices[symbol] is not None and current_prices[symbol] > 0:
                 price = float(current_prices[symbol])
@@ -1089,12 +1100,19 @@ class ExecutionEngine:
                 fallback = last_prices.get(base, last_prices.get(symbol, entry))
                 price = float(fallback) if fallback and float(fallback) > 0 else entry
             
+            # BUGFIX: Include the full current value of each BUY position in equity.
+            # self.balance was already reduced by cost_basis + fee_paid when BUY
+            # positions opened, so adding back market_value = price * qty restores
+            # the position's current worth to the equity calculation.
+            # 
+            # For SELL positions, balance was only reduced by the fee, and the
+            # position's market value at entry is not deducted from balance.
+            # So only unrealized PnL is added.
             if pos["direction"] == "BUY":
-                unrealized = (price - entry) * qty
+                equity += price * qty
             else:
-                unrealized = (entry - price) * qty
-                
-            equity += unrealized
+                # SELL: unrealized PnL only (entry price less current price)
+                equity += (entry - price) * qty
         result = float(equity)
         if math.isnan(result) or math.isinf(result):
             logging.error("[EQUITY] NaN/Inf equity detected. Falling back to balance.")

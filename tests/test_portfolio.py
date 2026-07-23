@@ -178,13 +178,15 @@ class TestPortfolioBalance(unittest.TestCase):
         }
 
         # Equity with price above entry
+        # BUGFIX: equity includes full position market value, not just unrealized PnL.
+        # equity = balance + price * qty = balance + 52000*0.01
         equity = self.engine.get_equity({symbol: 52000.0})
-        expected = self.engine.balance + (52000.0 - 50000.0) * 0.01
+        expected = self.engine.balance + 52000.0 * 0.01
         self.assertAlmostEqual(equity, expected, delta=0.01)
 
         # Equity with price below entry
         equity_down = self.engine.get_equity({symbol: 48000.0})
-        expected_down = self.engine.balance + (48000.0 - 50000.0) * 0.01
+        expected_down = self.engine.balance + 48000.0 * 0.01
         self.assertAlmostEqual(equity_down, expected_down, delta=0.01)
 
     def test_multiple_trades_dont_drift_balance(self):

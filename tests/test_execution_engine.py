@@ -322,9 +322,10 @@ class TestExecutionEngine(unittest.TestCase):
         }
         self.engine.balance = 75000.0
         
-        # Equity with price above entry: 75000 + (52000-50000)*0.5 = 76000
+        # Equity with price above entry:
+        # BUGFIX: equity = balance + current_market_value = 75000 + price * qty = 75000 + 52000*0.5 = 101000
         equity = self.engine.get_equity({symbol: 52000.0})
-        self.assertAlmostEqual(equity, 76000.0, delta=0.01)
+        self.assertAlmostEqual(equity, 101000.0, delta=0.01)
 
     def test_get_equity_with_eur_link_ada(self):
         self.engine.trading_mode = "live"
