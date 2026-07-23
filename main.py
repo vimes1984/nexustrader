@@ -1884,8 +1884,8 @@ def get_weights(ticker: str = "ETH-USD"):
         
     return {
         "weights": {
-            ensemble.strategies[i].name: float(ensemble.weights[i])
-            for i in range(min(len(ensemble.weights), len(ensemble.strategies)))
+            ensemble.strategies[i].name: normalized_weights[i]
+            for i in range(min(len(normalized_weights), len(ensemble.strategies)))
         },
         "lifetime_steps": steps,
         "model_dna": model_dna
