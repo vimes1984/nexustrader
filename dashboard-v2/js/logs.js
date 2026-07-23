@@ -25,7 +25,31 @@ const Logs = {
       } else if (Array.isArray(data)) {
         lines = data.map(l => (typeof l === 'string') ? l : (l.message || l.text || l.msg || JSON.stringify(l)));
       } else if (data?.logs && Array.isArray(data.logs)) {
-        lines = data.logs.map(l => (typeof l === 'string') ? l : (l.message || l.text || l.msg || JSON.stringify(l)));
+        lines = data.logs.map(function(l) {
+          if (typeof l === 'string') return l;
+          if (l && typeof l === 'object') {
+            // Try common log field names
+            var msg = l.message || l.text || l.msg || l.log || l.entry || '';
+            if (msg) {
+              var ts = l.timestamp || l.time || l.created || '';
+              if (ts) {
+                var tsN = Number(ts);
+                if (!isNaN(tsN)) {
+                  if (tsN > 1e12) tsN = Math.floor(tsN / 1000);
+                  ts = new Date(tsN * 1000).toISOString().replace('T',' ').substring(0,19);
+                } else {
+                  ts = String(ts);
+                }
+                return '[' + ts + '] ' + msg;
+              }
+              return msg;
+            }
+            var level = l.level || l.severity || '';
+            if (level) return '[' + level.toUpperCase() + '] ' + JSON.stringify(l);
+            return JSON.stringify(l);
+          }
+          return String(l);
+        });
       } else if (typeof data === 'object' && data !== null) {
         lines = Object.entries(data).map(([k,v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`);
       }
