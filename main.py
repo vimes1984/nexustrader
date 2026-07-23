@@ -1684,6 +1684,15 @@ def get_trades():
             
     # Return database-stored trades matching that mode (or all if no mode filter)
     local_trades = database.load_trades(trading_mode if not is_live else None)
+    # Normalize required fields for all trades so dashboard always has consistent shape
+    for t in local_trades:
+        for key in ("symbol", "direction", "quantity", "entry_price", "exit_price", "pnl", "pnl_percent", "exit_reason", "entry_time", "exit_time"):
+            if key not in t:
+                t[key] = None if key in ("exit_reason", "symbol", "direction") else 0.0
+        # Ensure float types for numeric fields
+        for nkey in ("quantity", "entry_price", "exit_price", "pnl", "pnl_percent", "entry_time", "exit_time"):
+            if t[nkey] is not None:
+                t[nkey] = float(t[nkey])
     return local_trades
 
 @app.get("/api/portfolio/history")
