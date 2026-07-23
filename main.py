@@ -827,9 +827,11 @@ class NexusTraderOrchestrator:
                     # KillSwitch check before opening — use current market value not entry price
                     # BUGFIX: entry_price underestimates exposure when price moves up.
                     # Use current_price from latest_ticks for accurate real-time exposure.
+                    # Fall back to entry_price if tick data hasn't arrived yet (warm-up).
                     _exposure_prices = self.latest_ticks
+                    _current_exposure_prices = current_prices if current_prices else _exposure_prices
                     exposure = sum(
-                        abs(v.get("quantity", 0)) * _exposure_prices.get(k, {}).get("close", v.get("entry_price", 0))
+                        abs(v.get("quantity", 0)) * _current_exposure_prices.get(k, {}).get("close", v.get("entry_price", 0))
                         for k, v in self.execution_engine.active_positions.items()
                     )
                     safe, reason = kill_switch.check(
