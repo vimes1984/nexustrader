@@ -629,7 +629,26 @@ class LearningEngine:
         # 7. Real-time news sentiment (value in [-1.0, 1.0])
         sentiment = float(row.get('sentiment', 0.0))
 
-        return [is_mr, theta, rsi, macd_norm, bb_pos, atr_ratio, win_trend, sentiment]
+        state_vec = [is_mr, theta, rsi, macd_norm, bb_pos, atr_ratio, win_trend, sentiment]
+        
+        # Degenerate feature detection (every 50th call to avoid log spam)
+        if not hasattr(self, '_state_check_count'):
+            self._state_check_count = 0
+        self._state_check_count += 1
+        if self._state_check_count % 50 == 0:
+            _arr = np.array(state_vec)
+            if np.any(np.isnan(_arr)) or np.any(np.isinf(_arr)):
+                logging.warning(
+                    f"[DEGENERATE STATE] State vector contains NaN/Inf: {state_vec}. "
+                    f"Row keys: {list(row.keys()) if row else 'None'}"
+                )
+            if np.all(_arr == 0):
+                logging.warning(
+                    f"[DEGENERATE STATE] All state features are zero. "
+                    f"Row: price_history_len={len(price_history)}, closed_trades={len(closed_trades)}"
+                )
+        
+        return state_vec
 
     def select_weights(self, state):
         """Queries the Policy Network for optimal strategy weights given current state.
