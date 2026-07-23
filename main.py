@@ -1575,9 +1575,14 @@ def get_status():
     _recent_trades = _all_trades[-20:] if len(_all_trades) > 20 else _all_trades
     _recent_trades.reverse()  # newest first
     
+    _equity_val = ee.balance
+    try:
+        _equity_val = ee.get_equity(current_prices)
+    except Exception as e:
+        logging.error(f"/api/status get_equity failed: {e}")
     return {
         "balance": ee.balance,
-        "equity": ee.get_equity(current_prices),
+        "equity": _equity_val,
         "trading_mode": ee.trading_mode,
         "total_pnl": round(_total_pnl, 2),
         "total_pnl_pct": round((_total_pnl / ee.initial_balance * 100) if ee.initial_balance > 0 else 0.0, 2),
