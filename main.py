@@ -2040,8 +2040,8 @@ def get_system_config():
     return {
         "trading_mode": trading_mode,
         "broker": broker,
-        "api_key": api_key,
-        "api_secret": api_secret,
+        "api_key": (api_key[:4] + "..." + api_key[-4:]) if len(api_key) > 8 else (api_key[:4] + "...") if api_key else "",
+        "api_secret": (api_secret[:4] + "..." + api_secret[-4:]) if len(api_secret) > 8 else ("***") if api_secret else "",
         "trailing_stop": database.load_setting("trailing_stop_enabled", "false") == "true",
         "cooldown": float(database.load_setting("loss_cooldown_hours", "4.0")),
         "tp_multiplier": float(database.load_setting("opt_tp_multiplier", "2.5")),

@@ -96,6 +96,26 @@ def kelly_cap_from_calibration(brier: float, n_samples: int = 0) -> float:
     if n_samples < MINIMUM_CALIBRATION_SAMPLES:
         return 0.05
 
+    # Guard against None, NaN, or out-of-range Brier scores
+    if brier is None:
+        logging.warning(f"[CALIBRATION] Brier score is None. Using random baseline cap.")
+        return POOR_CALIBRATION_KELLY_CAP
+    if isinstance(brier, float) and brier != brier:  # NaN check
+        logging.warning(f"[CALIBRATION] Brier score is NaN. Using random baseline cap.")
+        return POOR_CALIBRATION_KELLY_CAP
+    if brier < 0.0:
+        logging.warning(
+            f"[CALIBRATION] Brier score {brier:.4f} is negative (impossible value). "
+            f"Clamping to 0.0."
+        )
+        brier = 0.0
+    if brier > 1.0:
+        logging.warning(
+            f"[CALIBRATION] Brier score {brier:.4f} exceeds maximum possible (1.0). "
+            f"Clamping to 1.0."
+        )
+        brier = 1.0
+
     if brier >= POOR_CALIBRATION_THRESHOLD:
         logging.warning(
             f"[CALIBRATION] Brier score {brier:.4f} >= {POOR_CALIBRATION_THRESHOLD} threshold. "
