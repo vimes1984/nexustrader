@@ -252,7 +252,7 @@ class BacktestEngine:
         3. Convergence diagnostics
         """
         # Use deterministic seed for reproducibility
-        rng = np.random.default_rng(random_seed)
+        rng = np.random.default_rng(42)
         
         # Get the ensemble's trade list from one full pass
         base = self._run_nexus_ensemble(
