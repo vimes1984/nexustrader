@@ -95,8 +95,8 @@ def log_blocked_mutation(agent_name: str, key: str, value, reason: str = "live_m
     if _db is None:
         return
     try:
-        import time
-        rec_key = f"mutation_recommendation_{int(time.time())}_{agent_name}_{key}"
+        import random
+        rec_key = f"mutation_rec_{int(time.time()*1000)}_{random.randint(0,9999):04d}_{agent_name}_{key}"
         _db.save_setting(rec_key, str(value))
     except Exception:
         pass
