@@ -726,6 +726,20 @@ class ExecutionEngine:
         logging.info(f"Opened {exec_label} {direction} position for {symbol}: Qty {actual_qty:.6f} at {effective_entry:.2f} (incl. slippage). Fee: {fee:.2f}")
         return True
 
+    def rebuild_active_positions_from_db(self):
+        """Reloads active positions from the database.
+        Called on restart to restore positions that were open before the crash.
+        Logs how many positions were recovered.
+        """
+        with _exec_lock:
+            recovered = database.load_active_positions()
+            if recovered:
+                self.active_positions.clear()
+                self.active_positions.update(recovered)
+                logging.info(f"[RESTART RECOVERY] Rebuilt {len(recovered)} active positions from DB: {list(recovered.keys())}")
+            else:
+                logging.info("[RESTART RECOVERY] No active positions found in DB to rebuild.")
+
     def update_positions(self, symbol, current_price):
         """Checks active positions for TP/SL hits. Uses slippage-adjusted exit prices."""
         with _exec_lock:
