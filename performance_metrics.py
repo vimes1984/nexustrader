@@ -124,7 +124,16 @@ def calculate_metrics(equity_curve: List[float], trades: List[dict], periods_per
     if not trades:
         return m
 
-    pnls = [t.get("pnl", 0.0) for t in trades]
+    # Sanitize PnL values: filter NaN, None, inf
+    raw_pnls = [t.get("pnl", 0.0) for t in trades]
+    pnls = []
+    for p in raw_pnls:
+        if p is None:
+            pnls.append(0.0)
+        elif isinstance(p, float) and (math.isnan(p) or math.isinf(p)):
+            pnls.append(0.0)
+        else:
+            pnls.append(float(p))
     # Neutral trades (exactly 0.0 PnL) are NOT counted as wins or losses
     # They only contribute to total_pnl and trade_count.
     winners = [p for p in pnls if p > 0]

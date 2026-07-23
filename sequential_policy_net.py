@@ -382,9 +382,11 @@ class SequentialPolicyNetwork:
                 #   dc_in  = ∂L/∂c_{t-1} — same for cell state
                 
                 # Vertical: gradient flows to lower layer (layer_idx-1) at THIS timestep
+                # dx is the gradient w.r.t. the input x_t, which is the output of the layer below.
+                # Cell state (dc_in) does NOT flow between layers — it stays within the same
+                # layer across time steps.
                 if layer_idx > 0:
                     dh_per_layer[layer_idx - 1] += dx  # ∂L/∂x is input gradient for layer below
-                    dc_per_layer[layer_idx - 1] += dc_in  # cell state flows through layers
                 
                 # Horizontal: gradient flows to PREVIOUS timestep (t-1) of SAME layer
                 dh_per_layer[layer_idx] = dh_in  # ∂L/∂h_{t-1} for this layer
