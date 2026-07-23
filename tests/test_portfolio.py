@@ -7,15 +7,19 @@ import time
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Mock infrastructure
-sys.modules['ccxt'] = MagicMock()
-sys.modules['database'] = MagicMock()
+# Mock infrastructure — only create if not already present (avoids orphaned mocks)
+# when another test file already installed one in sys.modules
+sys.modules.setdefault('ccxt', MagicMock())
+if 'database' not in sys.modules or not isinstance(sys.modules['database'], MagicMock):
+    sys.modules['database'] = MagicMock()
 import database
-database.load_setting = MagicMock(return_value=None)
-database.save_setting = MagicMock()
-database.init_db = MagicMock()
-database.load_active_positions = MagicMock(return_value={})
-database.load_trades = MagicMock(return_value=[])
+# Only set up mocks at module level if they haven't been customized yet
+if not database.load_setting._mock_return or database.load_setting() is None:
+    database.load_setting = MagicMock(return_value=None)
+    database.save_setting = MagicMock()
+    database.init_db = MagicMock()
+    database.load_active_positions = MagicMock(return_value={})
+    database.load_trades = MagicMock(return_value=[])
 
 from execution_engine import ExecutionEngine
 
