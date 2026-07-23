@@ -97,12 +97,13 @@ const Settings = {
     App.toast('Testing broker connection...', 'info');
     try {
       const data = await API.testBroker();
-      if (data.ok || data.status === 'success' || data.connected) {
-        App.toast('Broker connection successful! ' + (data.balance ? '$' + data.balance : ''), 'success');
+      var isOk = data.ok === true || data.status === 'success' || data.connected === true;
+      if (isOk) {
+        App.toast('Broker connection successful!' + (data.balance ? ' Balance: $' + Number(data.balance).toFixed(2) : ''), 'success');
       } else {
-        App.toast('Broker test failed: ' + (data.error || data.message || 'Unknown'), 'error');
+        App.toast('Broker test failed: ' + (data.error || data.message || 'Unknown error'), 'error');
       }
-    } catch(e) { App.toast('Broker test error: ' + e.message, 'error'); }
+    } catch(e) { App.toast('Broker test error: ' + (e.message || 'Connection refused'), 'error'); }
   },
 
   async loadDailyGoal() {
