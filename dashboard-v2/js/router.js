@@ -377,7 +377,9 @@ const App = {
     pb.addEventListener('click', () => this.selectTicker('portfolio'));
     c.appendChild(pb);
 
-    this.selectTicker(this.state.activeTicker || (this.state.tickers[0]));
+    // Re-init icons after DOM injection
+    try { if (typeof lucide !== 'undefined' && lucide?.createIcons) lucide.createIcons(); } catch(e) {}
+    this.selectTicker(this.state.activeTicker || (this.state.tickers && this.state.tickers[0]) || 'BTC-USD');
   },
 
   selectTicker(ticker) {
