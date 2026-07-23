@@ -10,8 +10,8 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <!-- Static CSS — cache-bust with inline timestamp -->
-  <script>document.write('<link rel="preload" href="/dashboard-v2/css/main.css?v='+Date.now()+'" as="style"><link rel="stylesheet" href="/dashboard-v2/css/main.css?v='+Date.now()+'">');</script>
+  <link rel="stylesheet" href="/dashboard-v2/css/main.css" id="main-css">
+  <script>document.getElementById('main-css').href = '/dashboard-v2/css/main.css?v=' + Date.now();</script>
   <!-- Vendor libraries preloaded for fast script injection -->
   <link rel="preload" href="/dashboard-v2/vendor/lucide.min.js" as="script">
   <link rel="preload" href="/dashboard-v2/vendor/lightweight-charts.standalone.production.js" as="script">
