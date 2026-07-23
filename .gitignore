@@ -33,3 +33,6 @@ antigravity_proxy.py
 *.bak*
 *.corrupted
 data/
+.db
+*.db-wal
+*.db-shm
