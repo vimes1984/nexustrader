@@ -151,6 +151,7 @@ class KillSwitch:
             "trigger_reason": self.trigger_reason,
             "daily_pnl": self.daily_pnl,
             "daily_reset_time": self.daily_reset_time,
+            "_base_equity": self._base_equity,
         }
 
     @classmethod
@@ -160,6 +161,7 @@ class KillSwitch:
         ks.trigger_reason = data.get("trigger_reason")
         ks.daily_pnl = data.get("daily_pnl", 0.0)
         ks.daily_reset_time = data.get("daily_reset_time", time.time())
+        ks._base_equity = data.get("_base_equity", 0.0)
         return ks
 
 
