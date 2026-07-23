@@ -251,7 +251,12 @@ const Dashboard = {
         const p = Number(data.unrealized_pnl); const e = byId('val-unrealized-pnl');
         if (e) { e.textContent = 'Active Trade PnL: $' + p.toFixed(2); e.style.color = p >= 0 ? 'var(--neon-green)' : 'var(--neon-red)'; }
       }
-      if (data.winrate != null) { const e = byId('val-winrate'); if (e) e.textContent = (Number(data.winrate)*100).toFixed(1) + '%'; }
+      if (data.winrate != null) { 
+        const wr = Number(data.winrate);
+        // Normalize: if already > 1, assume it's already percentage value (e.g. 75)
+        const e = byId('val-winrate'); 
+        if (e) e.textContent = (wr > 1 ? wr : wr * 100).toFixed(1) + '%'; 
+      }
       const tc = data.today_trade_count ?? data.trade_count ?? (typeof data.closed_trades === 'number' ? data.closed_trades : Array.isArray(data.trades) ? data.trades.length : undefined);
       if (tc != null) { const e = byId('val-trade-count'); if (e) e.textContent = tc + ' trades completed'; }
       if (data.total_pnl != null) {
