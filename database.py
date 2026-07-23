@@ -862,19 +862,22 @@ def save_setting(key, value):
 
 def load_setting(key, default=None):
     """Loads system setting."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    val = default
+    conn = None
     try:
-        cursor.execute("SELECT value FROM settings WHERE key = ?", (key,))
-        row = cursor.fetchone()
-        if row:
-            val = row[0]
-    except Exception as e:
-        logging.error(f"Error loading setting {key}: {e}")
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        val = default
+        try:
+            cursor.execute("SELECT value FROM settings WHERE key = ?", (key,))
+            row = cursor.fetchone()
+            if row:
+                val = row[0]
+        except Exception as e:
+            logging.error(f"Error loading setting {key}: {e}")
+        return val
     finally:
-        conn.close()
-    return val
+        if conn:
+            conn.close()
 
 
 # -------------------------------------------------------------
