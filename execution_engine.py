@@ -472,8 +472,16 @@ class ExecutionEngine:
             base_asset = symbol.split('-')[0] if '-' in symbol else symbol
             try:
                 base_bal = self._get_asset_balance(base_asset)
-                max_sell_qty = base_bal * 0.995  # Reserve 0.5% for fees/slippage
-                max_sell_value = max_sell_qty * entry_price
+                # BUGFIX: In paper mode _last_raw_balances is None, so _get_asset_balance returns 0.
+                # This caused ALL SELL signals to silently return None (max_sell_value = 0 < $5).
+                # Paper mode should not require exchange balance — assume the position's notional value.
+                if self.trading_mode != "live" or base_bal <= 0:
+                    # Paper mode: SELL position is opened assuming we hold the asset synthetically.
+                    max_sell_qty = position_value / entry_price if entry_price > 0 else 0
+                    max_sell_value = position_value
+                else:
+                    max_sell_qty = base_bal * 0.995  # Reserve 0.5% for fees/slippage
+                    max_sell_value = max_sell_qty * entry_price
                 if max_sell_value < 5.0:
                     return None  # skip — cannot meet $5 minimum
                 if position_value > max_sell_value:
