@@ -630,6 +630,16 @@ class NexusTraderOrchestrator:
             except Exception as e:
                 logging.error(f"[AUTO-BRAIN-SWITCH ERROR] Failed to auto-switch brain: {e}")
         
+        # ── Stale brain detection — warn if brain has zero training steps ──
+        _steps_key = f"lifetime_training_steps_{ticker}"
+        _steps = int(database.load_setting(_steps_key, "0"))
+        if _steps == 0 and len(getattr(self.execution_engine, 'closed_trades', [])) >= 10:
+            logging.warning(
+                f"[STALE BRAIN] {ticker}: active brain has 0 training steps despite "
+                f"{len([t for t in self.execution_engine.closed_trades if t.get('symbol') == ticker])} "
+                f"closed trades. Learning may not be configured correctly."
+            )
+        
         # ── Cumulative PnL tracking per ticker (detect if learning is improving) ──
         _cumul_key = f"_cumulative_pnl_{ticker}"
         _cumul_count_key = f"_cumulative_pnl_count_{ticker}"
