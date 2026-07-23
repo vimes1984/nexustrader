@@ -98,8 +98,14 @@ class PolicyNetwork:
         e_x = np.exp(x - np.max(x, axis=-1, keepdims=True))
         return e_x / np.sum(e_x, axis=-1, keepdims=True)
 
-    def forward(self, state):
-        """Runs forward pass to allocate strategy weights based on market state."""
+    def forward(self, state, training=True):
+        """Runs forward pass to allocate strategy weights based on market state.
+        
+        Args:
+            state: Input feature vector
+            training: If True, apply dropout (inverted dropout scaling).
+                      During inference, set to False to disable dropout.
+        """
         self.state = np.array(state).reshape(1, -1)
         self.a = [self.state]
         self.z = []
@@ -109,8 +115,8 @@ class PolicyNetwork:
             z_curr = np.dot(self.a[-1], self.W[i]) + self.b[i]
             self.z.append(z_curr)
             a_curr = np.maximum(0, z_curr)  # ReLU
-            # Apply dropout in training if active
-            if self.dropout > 0:
+            # Apply dropout only in training mode
+            if training and self.dropout > 0:
                 mask = (np.random.rand(*a_curr.shape) >= self.dropout) / (1.0 - self.dropout)
                 a_curr = a_curr * mask
             self.a.append(a_curr)
@@ -475,7 +481,7 @@ class LearningEngine:
         """
         if self.nn_architecture in ("lstm", "transformer") and hasattr(self.policy_net, 'select_weights'):
             return self.policy_net.select_weights(state, weight_floor=self.weight_floor)
-        raw_weights = self.policy_net.forward(state)
+        raw_weights = self.policy_net.forward(state, training=False)
         
         # Apply weight floor to ensure all strategies keep active search-space exploration
         n = len(raw_weights)
