@@ -1876,19 +1876,26 @@ def get_ticker_history(ticker: str = "ETH-USD"):
     history = []
     for idx, r in df.iterrows():
         # Parse timestamp to Unix epoch seconds (float)
-        raw_ts = str(r['timestamp']) if 'timestamp' in r else str(idx)
+        raw_ts = r['timestamp'] if 'timestamp' in r else idx
         ts = None
-        # Try converting string timestamp to float
-        try:
-            ts = float(raw_ts)
-            if ts > 1e12:  # milliseconds → seconds
-                ts = ts / 1000.0
-        except (ValueError, TypeError):
+        # If pandas Timestamp or datetime, use .timestamp()
+        if hasattr(raw_ts, 'timestamp'):
+            ts = raw_ts.timestamp()
+        else:
             try:
-                from datetime import datetime
-                ts = datetime.fromisoformat(raw_ts.replace('Z', '+00:00').split('.')[0]).timestamp()
-            except Exception:
-                ts = idx if isinstance(idx, (int, float)) else time.mktime(time.strptime(str(idx)[:19], '%Y-%m-%d %H:%M:%S')) if len(str(idx)) >= 19 else time.time()
+                ts = float(raw_ts)
+                if ts > 1e12:  # milliseconds → seconds
+                    ts = ts / 1000.0
+            except (ValueError, TypeError):
+                try:
+                    from datetime import datetime
+                    ts = datetime.fromisoformat(str(raw_ts).replace('Z', '+00:00').split('.')[0]).timestamp()
+                except Exception:
+                    # Last resort: try pandas Timestamp from the index
+                    try:
+                        ts = idx.timestamp()
+                    except Exception:
+                        ts = 0.0
         
         history.append({
             "timestamp": ts if ts else time.time(),
