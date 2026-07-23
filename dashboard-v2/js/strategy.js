@@ -29,7 +29,8 @@ const Strategy = {
         const clr = sig >= 0 ? 'var(--neon-green)' : 'var(--neon-red)';
         const name = this._escape(s.name || s.strategy || s.id || 'Unknown');
         const ticker = this._escape(s.ticker || s.symbol || '');
-        const details = s.details ? this._escape(s.details) : '';
+        const rawDetails = s.details || '';
+        const details = rawDetails ? this._escape(rawDetails.length > 200 ? rawDetails.substring(0, 200) + '...' : rawDetails) : '';
         return `<div class="glass-panel" style="padding:12px 14px;margin-bottom:8px">
           <div style="display:flex;justify-content:space-between;align-items:center">
             <div>

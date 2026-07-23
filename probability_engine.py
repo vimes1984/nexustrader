@@ -147,6 +147,16 @@ class ProbabilityEngine:
 
     def evaluate_trade(self, price, atr, direction, weighted_signal, row, history_df=None, symbol=None):
         """Evaluates trade parameters including entry, SL, TP, Win Probability, EV, and size."""
+        # Guard against None row
+        if row is None:
+            row = {}
+        
+        # Guard against NaN/None price or direction
+        if price is None or (isinstance(price, float) and price != price):
+            price = 0.0
+        if direction is None:
+            direction = "BUY"
+        
         # 1. Calc SL/TP
         tp, sl = self.calculate_atr_bounds(price, atr, direction, symbol)
         
