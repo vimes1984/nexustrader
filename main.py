@@ -905,11 +905,19 @@ class NexusTraderOrchestrator:
             else:
                 pass  # Normal flow continues below
             
+            # ── Signal logging: log what signal was generated before any blocking ──
+            # This ensures pipeline visibility even when all signals get blocked.
+            # Strategy breakdown log: direction, strength, kelly, expected_value
+            _sig_strength = abs(weighted_signal)
+            _top_strats = sorted(strategy_breakdown.items(), key=lambda x: abs(x[1].get("signal",0)), reverse=True)[:3]
+            _top_strat_info = ", ".join(f"{s}: {d['signal']:.3f}@{d['weight']:.1%}" for s, d in _top_strats)
+            
             # ── Signal batching: Buffer this signal for batch evaluation ──
             # Instead of executing first-come-first-blocked, collect signals from
             # all tickers and pick the BEST one (highest expected value) in a batch.
             if time.time() >= _blocked_until and abs(weighted_signal) >= _min_sig:
                 _dir = "BUY" if weighted_signal > 0 else "SELL"
+                logging.debug(f"[SIGNAL] {ticker} {_dir} sig={weighted_signal:.4f} str={_sig_strength:.4f} min_sig={_min_sig:.3f} top={_top_strat_info}")
                 
                 # Evaluate probability and risk
                 _eval = self.probability_engine.evaluate_trade(
