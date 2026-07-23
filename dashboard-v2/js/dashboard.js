@@ -259,7 +259,7 @@ const Dashboard = {
       if (data.balance != null) { const e = byId('val-balance'); if (e) e.textContent = '$' + Number(data.balance).toFixed(2); }
       if (data.unrealized_pnl != null) {
         const p = Number(data.unrealized_pnl); const e = byId('val-unrealized-pnl');
-        if (e) { e.textContent = 'Active Trade PnL: $' + p.toFixed(2); e.style.color = p >= 0 ? 'var(--neon-green)' : 'var(--neon-red)'; }
+        if (e) { e.textContent = 'UPL: $' + p.toFixed(2); e.style.color = p >= 0 ? 'var(--neon-green)' : 'var(--neon-red)'; }
       }
       if (data.winrate != null) { 
         const wr = Number(data.winrate);
