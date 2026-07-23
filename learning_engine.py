@@ -724,14 +724,16 @@ class LearningEngine:
     def learn_from_trade(self, state, strategy_signals, trade_direction, pnl_percent):
         """Performs backward propagation on the Policy Network using the trade PnL as reward."""
         # Ensure strategy_signals matches action_dim; pad/trim if needed
+        # Use a COPY to avoid mutating the caller's strategy_signals list
         target_len = self.policy_net.action_dim
-        if len(strategy_signals) > target_len:
-            strategy_signals = strategy_signals[:target_len]
-        elif len(strategy_signals) < target_len:
-            strategy_signals = list(strategy_signals) + [0.0] * (target_len - len(strategy_signals))
+        signals_copy = list(strategy_signals)
+        if len(signals_copy) > target_len:
+            signals_copy = signals_copy[:target_len]
+        elif len(signals_copy) < target_len:
+            signals_copy = signals_copy + [0.0] * (target_len - len(signals_copy))
         # backward() calls forward() internally — no need for separate forward() call
         # The reward is the actual trade percentage profit/loss (e.g. +0.024 for +2.4%)
-        self.policy_net.backward(state, strategy_signals, trade_direction, pnl_percent)
+        self.policy_net.backward(state, signals_copy, trade_direction, pnl_percent)
         
         # Return updated weights for the current state after learning
         return self.select_weights(state)
