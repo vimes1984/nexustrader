@@ -404,7 +404,17 @@ class NexusTraderOrchestrator:
                 ensemble.price_history,
                 [t for t in self.execution_engine.closed_trades if t['symbol'] == ticker]
             )
-            
+        
+        # Minimum data for learning: wait until at least 10 closed trades
+        # with BOTH wins AND losses before triggering gradient updates.
+        # Training on only wins (or only losses) produces biased gradients.
+        _ticker_closed_count = len([t for t in getattr(self.execution_engine, 'closed_trades', [])
+                                     if t.get('symbol') == ticker])
+        _ticker_wins = sum(1 for t in getattr(self.execution_engine, 'closed_trades', [])
+                           if t.get('symbol') == ticker and t.get('pnl', 0) > 0)
+        _ticker_losses = _ticker_closed_count - _ticker_wins
+        _min_data_ok = _ticker_closed_count >= 10 and _ticker_wins >= 1 and _ticker_losses >= 1
+        
         # Feed trade outcome to strategy performance tracker
         if strategy_signals:
             ensemble.record_trade_outcome(strategy_signals, direction, pnl_percent)
@@ -413,12 +423,27 @@ class NexusTraderOrchestrator:
         _weights_before = learner.policy_net.to_json()
         
         # Run backpropagation on neural network weights using PnL as reward
-        new_weights = learner.learn_from_trade(
-            state,
-            strategy_signals,
-            direction,
-            pnl_percent
-        )
+        # Skip gradient update if minimum data threshold not met
+        if _min_data_ok:
+            new_weights = learner.learn_from_trade(
+                state,
+                strategy_signals,
+                direction,
+                pnl_percent
+            )
+        else:
+            # Still store experience in replay buffer, but skip gradient update
+            dir_val = 1.0 if direction == "BUY" else -1.0
+            alignment_val = np.array(strategy_signals) * dir_val
+            advantage_val = pnl_percent - learner.policy_net.reward_baseline
+            learner.policy_net.reward_baseline = (
+                (1.0 - learner.policy_net.baseline_alpha) * learner.policy_net.reward_baseline
+                + learner.policy_net.baseline_alpha * pnl_percent
+            )
+            learner.policy_net.replay.push(np.array(state, dtype=float), alignment_val, advantage_val)
+            new_weights = learner.select_weights(state)
+            if _ticker_closed_count == 10 and _ticker_wins >= 1 and _ticker_losses >= 1:
+                logging.info(f"[MIN DATA] {ticker}: reached 10 trades with both wins({_ticker_wins}) and losses({_ticker_losses}). Enabling gradient updates.")
         
         # Catastrophic forgetting guard: if rolling WR drops >20% after update, revert weights
         _ticker_closed = [t for t in getattr(self.execution_engine, 'closed_trades', [])
@@ -1120,6 +1145,22 @@ class NexusTraderOrchestrator:
             if not hasattr(self, '_flush_blocked_count'):
                 self._flush_blocked_count = 0
             self._flush_blocked_count += 1
+            
+            # ── Circuit breaker: CRITICAL if ALL tickers blocked for >10 cycles ──
+            # If ALL tickers get blocked for >10 consecutive flush cycles, log CRITICAL
+            # and suggest relaxing thresholds so the user/admin can take action.
+            _circuit_breaker_threshold = int(database.load_setting("signal_circuit_breaker_threshold", "10"))
+            if self._flush_blocked_count >= _circuit_breaker_threshold:
+                logging.critical(
+                    f"[CIRCUIT BREAKER] ALL signals blocked for {self._flush_blocked_count} consecutive cycles!\n"
+                    f"  This means no trades can execute despite {total_signals} tickers generating signals.\n"
+                    f"  Possible causes:\n"
+                    f"    1. Signal thresholds too high — check signal_threshold setting\n"
+                    f"    2. Risk limits too tight — check max_open_positions, max_total_exposure_pct\n"
+                    f"    3. Balance too low — min position ($5) exceeds max position per equity\n"
+                    f"    4. All tickers in loss cooldown — check cooldown_end_* settings\n"
+                    f"  Suggested fix: reduce signal_threshold to 0.10, or increase max_position_pct"
+                )
         else:
             self._flush_blocked_count = 0
             
