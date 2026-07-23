@@ -1601,16 +1601,16 @@ def get_status():
                 "symbol": sym,
                 "direction": pos.get("direction", "BUY"),
                 "entry_price": float(pos.get("entry_price", 0)),
-                "current_price": float(current_prices.get(sym, pos.get("entry_price", 0))),
-                "quantity": float(pos.get("quantity", 0)),
+                "current_price": float(current_prices.get(sym, float(pos.get("entry_price", 0)))),
+                "quantity": abs(float(pos.get("quantity", 0))),
                 "unrealized_pnl": round(
-                    (current_prices.get(sym, pos.get("entry_price", 0)) - pos.get("entry_price", 0)) * pos.get("quantity", 0)
+                    (float(current_prices.get(sym, float(pos.get("entry_price", 0)))) - float(pos.get("entry_price", 0))) * abs(float(pos.get("quantity", 0)))
                     if pos.get("direction", "BUY") == "BUY"
-                    else (pos.get("entry_price", 0) - current_prices.get(sym, pos.get("entry_price", 0))) * pos.get("quantity", 0)
+                    else (float(pos.get("entry_price", 0)) - float(current_prices.get(sym, float(pos.get("entry_price", 0))))) * abs(float(pos.get("quantity", 0)))
                 , 2),
                 "entry_time": pos.get("entry_time", 0),
             }
-            for sym, pos in ee.active_positions.items()
+            for sym, pos in (ee.active_positions.items() if ee.active_positions else [])
         ],
         "tickers": orchestrator.tickers,
         "unrealized_pnl": round(sum(
