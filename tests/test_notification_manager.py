@@ -48,6 +48,7 @@ class TestNotificationManager(unittest.TestCase):
         conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('portfolio_live_equity', '1650.00')")
         conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('initial_portfolio_balance', '1000.00')")
         conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('daily_income_goal', '500.00')")
+        conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('notif_email_recipient', 'churchill.c.j@gmail.com')")
         
         conn.execute("INSERT INTO trades (id, status, pnl) VALUES ('t1', 'closed', 150.0)")
         conn.execute("INSERT INTO trades (id, status, pnl) VALUES ('t2', 'open', 0.0)")

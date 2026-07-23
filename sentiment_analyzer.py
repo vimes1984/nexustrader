@@ -39,9 +39,10 @@ def finbert_sentiment(text: str) -> Optional[Tuple[float, float]]:
         # Take first (and only) batch element — squeeze() can flatten batch dim
         # incorrectly if the logits tensor has non-standard shape
         probs = torch.nn.functional.softmax(outputs.logits, dim=-1)[0]
-        # FinBERT model outputs: [negative, neutral, positive] logits
-        # (ProsusAI/finbert uses the original FinBERT label order)
-        neg, neu, pos = probs[0].item(), probs[1].item(), probs[2].item()
+        # FinBERT label order (from config.json id2label):
+        #   0 = positive, 1 = negative, 2 = neutral
+        # (ProsusAI/finbert config confirms this order)
+        pos, neg, neu = probs[0].item(), probs[1].item(), probs[2].item()
         # Map to [-1, 1] score: positive - negative, weighted by confidence
         score = pos - neg
         confidence = 1.0 - neu  # higher confidence = less neutral

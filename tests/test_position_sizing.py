@@ -152,6 +152,51 @@ class TestEvalPositionSizing(unittest.TestCase):
         qty = eval_volatility_adjusted_qty(1000.0, 0.02, 100.0, 0.0)
         self.assertEqual(qty, 0.0)
 
+    def test_eval_safe_fraction_without_drawdown_min_floor(self):
+        """Safe fraction should apply min floor when drawdown=0."""
+        result = eval_compute_safe_fraction(0.6, 0.02, 0.01, n_trades=50)
+        # kelly = (0.6*0.02 - 0.4*0.01)/(0.02*0.01) = (0.012-0.004)/0.0002 = 40
+        # capped at 0.5, half = 0.25, calibration_cap=0.15 -> 0.15
+        # drawdown_penalty=1.0, min floor 0.02
+        self.assertGreaterEqual(result["safe_fraction"], 0.02)
+        self.assertLessEqual(result["safe_fraction"], 0.25)
+
+
+class TestPositionSizingWith1000Balance(unittest.TestCase):
+    """Position sizing scenarios with a $1000 account balance."""
+
+    def test_safe_fraction_gives_reasonable_dollars(self):
+        """With $1000 and 60% win rate, the safe fraction should translate
+        to a reasonable dollar amount to risk (within bounds)."""
+        result = compute_safe_fraction(
+            win_rate=0.6, avg_win=0.02, avg_loss=0.01, n_trades=50
+        )
+        risk_dollars = 1000.0 * result["safe_fraction"]
+        self.assertGreaterEqual(risk_dollars, 10.0,
+                                msg=f"${risk_dollars:.2f} risk too small for $1000")
+        self.assertLessEqual(risk_dollars, 250.0,
+                             msg=f"${risk_dollars:.2f} exceeds 25% cap")
+
+    def test_vol_adjusted_position_with_1000(self):
+        """With $1000, 2% risk_fraction, $50 price, $2 ATR.
+        risk_amount = $20, qty = 20/(2*1) = 10 units."""
+        qty = volatility_adjusted_qty(
+            capital=1000.0, risk_fraction=0.02,
+            price=50.0, atr=2.0, atr_multiplier=1.0
+        )
+        position_value = qty * 50.0
+        self.assertAlmostEqual(qty, 10.0, places=2)
+        self.assertAlmostEqual(position_value, 500.0, places=2)
+
+    def test_cold_start_minimum_dollars(self):
+        """Cold-start with $1000 should give $50 minimum risk (5%)."""
+        result = compute_safe_fraction(
+            win_rate=0.5, avg_win=0.02, avg_loss=0.01, n_trades=5
+        )
+        self.assertEqual(result["signal"], "cold_start_default")
+        risk_dollars = 1000.0 * result["safe_fraction"]
+        self.assertAlmostEqual(risk_dollars, 50.0, places=2)
+
 
 if __name__ == "__main__":
     unittest.main()

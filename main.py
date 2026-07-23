@@ -1281,8 +1281,16 @@ class NexusTraderOrchestrator:
         else:
             self._flush_blocked_count = 0
             
-            # Pick the best signal (highest expected_value)
-            best_ticker = max(viable_signals, key=lambda t: viable_signals[t].get("expected_value", 0))
+            # Pick the best signal (highest risk-adjusted expected return = EV × kelly)
+            # Raw EV doesn't account for position sizing differences. A signal with
+            # EV=0.3 and kelly=0.5 (risk-adjusted EV=0.15) is better than one with
+            # EV=0.5 and kelly=0.1 (risk-adjusted EV=0.05) because the higher-kelly
+            # signal can be deployed at 5x the position size.
+            def _risk_adjusted_ev(t):
+                ev = viable_signals[t].get("expected_value", 0)
+                kf = viable_signals[t].get("kelly_fraction", 0)
+                return ev * max(kf, 1e-9)
+            best_ticker = max(viable_signals, key=_risk_adjusted_ev)
             best_eval = viable_signals[best_ticker]
             
             # Check cooldown before executing
