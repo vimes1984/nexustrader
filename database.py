@@ -731,6 +731,103 @@ def _detect_agent_name():
     return None
 
 
+# ── Active position persistence for crash recovery ──
+def save_active_position(symbol, pos):
+    """Saves an active (open) position to the active_positions table.
+    Used for crash recovery: on restart, active_positions are rebuilt from DB.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        strategy_signals = pos.get('strategy_signals', [])
+        if hasattr(strategy_signals, 'tolist'):
+            strategy_signals = strategy_signals.tolist()
+        sentiment_sources = pos.get('sentiment_sources', {})
+        if hasattr(sentiment_sources, 'tolist'):
+            sentiment_sources = sentiment_sources.tolist()
+        cursor.execute(
+            """
+            INSERT OR REPLACE INTO active_positions (
+                symbol, direction, entry_price, entry_price_raw, quantity,
+                take_profit, stop_loss, entry_time, cost_basis, fee_paid,
+                trading_mode, strategy_signals, sentiment_sources,
+                predicted_win_probability, expected_value,
+                risk_reward_ratio, kelly_fraction
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                symbol,
+                pos.get('direction', ''),
+                float(pos.get('entry_price', 0)),
+                float(pos.get('entry_price_raw', pos.get('entry_price', 0))),
+                float(pos.get('quantity', 0)),
+                float(pos.get('take_profit', 0)),
+                float(pos.get('stop_loss', 0)),
+                float(pos.get('entry_time', time.time())),
+                float(pos.get('cost_basis', 0)),
+                float(pos.get('fee_paid', 0)),
+                pos.get('trading_mode', 'paper'),
+                json.dumps(strategy_signals),
+                json.dumps(sentiment_sources),
+                pos.get('predicted_win_probability'),
+                pos.get('expected_value'),
+                pos.get('risk_reward_ratio'),
+                pos.get('kelly_fraction'),
+            )
+        )
+        conn.commit()
+    except Exception as e:
+        logging.error(f"Error saving active position {symbol}: {e}")
+    finally:
+        conn.close()
+
+
+def load_active_positions():
+    """Loads all active positions from the active_positions table.
+    Returns a dict of symbol -> position dict, or empty dict if none.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    positions = {}
+    try:
+        cursor.execute("SELECT * FROM active_positions")
+        rows = cursor.fetchall()
+        for r in rows:
+            pos = dict(r)
+            # Parse JSON fields
+            for fld in ('strategy_signals', 'sentiment_sources'):
+                if pos.get(fld):
+                    try:
+                        pos[fld] = json.loads(pos[fld])
+                    except Exception:
+                        if fld == 'strategy_signals':
+                            pos[fld] = []
+                        else:
+                            pos[fld] = {}
+            symbol = pos.pop('symbol', '')
+            positions[symbol] = pos
+    except Exception as e:
+        logging.error(f"Error loading active positions: {e}")
+    finally:
+        conn.close()
+    return positions
+
+
+def delete_active_position(symbol):
+    """Deletes an active position from the active_positions table.
+    Called when a position is closed.
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM active_positions WHERE symbol = ?", (symbol,))
+        conn.commit()
+    except Exception as e:
+        logging.error(f"Error deleting active position {symbol}: {e}")
+    finally:
+        conn.close()
+
+
 def save_setting(key, value):
     """Saves system setting (json string or float/int).
 
