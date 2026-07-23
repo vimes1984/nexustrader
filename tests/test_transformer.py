@@ -240,7 +240,8 @@ class TestTransformerPolicyNetwork(unittest.TestCase):
         x = np.random.randn(1, 24, 64)
         self.net.forward(x, training=True)
         d_out = np.ones((1, self.action_dim))
-        d_x = self.net.backward(d_out)
+        # backward is aliased to reinforce_backward; use _backward_pass directly for gradient testing
+        d_x = self.net._backward_pass(d_out)
         self.assertEqual(d_x.shape, (1, 24, 64))
     
     def test_serialization_round_trip(self):
