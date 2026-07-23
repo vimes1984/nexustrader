@@ -38,7 +38,8 @@ class ExecutionEngine:
         self.initial_balance = initial_balance
         self.transaction_fee_rate = transaction_fee_rate  # Default: Kraken taker fee (0.26%)
         # Slippage estimation for realistic paper trading
-        self.slippage_rate = 0.001  # 0.1% estimated market impact for small orders
+        self.slippage_rate = 0.001  # 0.1% base slippage; actual varies by ATR/volatility
+        self.base_slippage_rate = 0.001  # Persist for re-scaling
         self.active_positions = {}  # symbol -> position dict
         self.max_open_positions = 3  # Hard limit: max concurrent positions
         self.max_concentration = 0.40  # Max portfolio % in a single ticker
@@ -530,8 +531,19 @@ class ExecutionEngine:
             return False
         quantity = position_value / entry_price
 
-        # Apply slippage on entry for realistic simulation
-        slippage_cost = entry_price * self.slippage_rate
+        # Apply slippage on entry for realistic simulation — scale with volatility
+        # Use 0.5x ATR/price ratio as volatility multiplier, or 1x base if no ATR data
+        atr_ratio = 0.0
+        if hasattr(self, 'last_known_prices'):
+            try:
+                db_atr = database.load_setting(f"atr_{symbol}", "0")
+                if db_atr:
+                    atr_ratio = float(db_atr) / entry_price if entry_price > 0 else 0.0
+            except (ValueError, TypeError):
+                pass
+        vol_multiplier = max(0.5, min(5.0, atr_ratio * 50.0)) if atr_ratio > 0 else 1.0
+        effective_slip = self.base_slippage_rate * vol_multiplier
+        slippage_cost = entry_price * effective_slip
         if direction == "BUY":
             effective_entry = entry_price + slippage_cost
         else:  # SELL
@@ -665,8 +677,18 @@ class ExecutionEngine:
             close_trade = True
             exit_reason = "Time Stop ({}h max)".format(max_position_hours)
 
-        # Apply slippage on exit for realistic simulation
-        slippage_cost = current_price * self.slippage_rate
+        # Apply slippage on exit for realistic simulation — use same volatility scaling
+        atr_ratio = 0.0
+        if hasattr(self, 'last_known_prices'):
+            try:
+                db_atr = database.load_setting(f"atr_{symbol}", "0")
+                if db_atr:
+                    atr_ratio = float(db_atr) / current_price if current_price > 0 else 0.0
+            except (ValueError, TypeError):
+                pass
+        vol_multiplier = max(0.5, min(5.0, atr_ratio * 50.0)) if atr_ratio > 0 else 1.0
+        effective_slip = self.base_slippage_rate * vol_multiplier
+        slippage_cost = current_price * effective_slip
         if direction == "BUY":
             exit_price = current_price - slippage_cost  # Worse price when selling
         else:  # SELL
