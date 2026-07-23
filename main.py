@@ -1527,17 +1527,22 @@ def get_status():
     _win_count = sum(1 for t in _all_trades if float(t.get("pnl", 0) or 0) > 0)
     _loss_count = sum(1 for t in _all_trades if float(t.get("pnl", 0) or 0) < 0)
     
-    _peak = ee.initial_balance
-    _max_dd = 0.0
-    _running = ee.initial_balance
-    for t in sorted(_all_trades, key=lambda x: x.get("exit_time", 0)):
-        _running += float(t.get("pnl", 0.0) or 0.0)
-        if _running > _peak:
-            _peak = _running
-        if _peak > 0:
-            _dd = (_peak - _running) / _peak * 100
-            if _dd > _max_dd:
-                _max_dd = _dd
+    # Use drawdown_tracker for max drawdown (includes unrealized PnL from open positions)
+    # Falls back to trade-based calculation if tracker has no data
+    if drawdown_tracker.max_drawdown > 0:
+        _max_dd = drawdown_tracker.max_drawdown * 100
+    else:
+        _peak = ee.initial_balance
+        _max_dd = 0.0
+        _running = ee.initial_balance
+        for t in sorted(_all_trades, key=lambda x: x.get("exit_time", 0)):
+            _running += float(t.get("pnl", 0.0) or 0.0)
+            if _running > _peak:
+                _peak = _running
+            if _peak > 0:
+                _dd = (_peak - _running) / _peak * 100
+                if _dd > _max_dd:
+                    _max_dd = _dd
     
     _dd_limit = float(_db.load_setting("max_drawdown", "5.0"))
     
