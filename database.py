@@ -478,8 +478,16 @@ def load_trades(trading_mode=None):
         else:
             cursor.execute("SELECT * FROM trades ORDER BY exit_time ASC")
         rows = cursor.fetchall()
+        numeric_fields = {"pnl", "pnl_percent", "entry_price", "exit_price", "quantity", "entry_time", "exit_time", "entry_rsi", "exit_rsi", "slippage", "fee"}
         for r in rows:
             trade = dict(r)
+            # Convert numeric fields to proper float/int types (SQLite may return str)
+            for k in list(trade.keys()):
+                if k in numeric_fields:
+                    try:
+                        trade[k] = float(trade[k]) if k != "entry_time" and k != "exit_time" else float(trade[k])
+                    except (ValueError, TypeError):
+                        trade[k] = 0.0
             if "strategy_signals" in trade and trade["strategy_signals"]:
                 try:
                     trade["strategy_signals"] = json.loads(trade["strategy_signals"])
