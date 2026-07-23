@@ -48,9 +48,33 @@ def run_monthly_researcher():
             c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", ("prompt_monthly_researcher", db_prompt))
             conn.commit()
 
-        prompt = db_prompt + "\n\nCurrent Strategy Roster:\n" + json.dumps(strategies_info, indent=2) + "\n\nRecent Trades:\n" + json.dumps(recent_trades, indent=2) + "\n\nTarget: $1,000/day profit."
-
-        from openclaw_bridge import query_openclaw, extract_json_block
+        # Summarize trades instead of dumping all 50 into LLM context
+        total = len(recent_trades)
+        wins = sum(1 for t in recent_trades if (t.get('pnl') or 0.0) > 0.0)
+        losses = sum(1 for t in recent_trades if (t.get('pnl') or 0.0) < 0.0)
+        total_pnl = sum(t.get('pnl') or 0.0 for t in recent_trades)
+        resolved = wins + losses
+        win_rate = (wins / resolved * 100.0) if resolved > 0 else 0.0
+        trade_summary = {
+            "total": total, "wins": wins, "losses": losses,
+            "ties": total - wins - losses,
+            "win_rate_pct": round(win_rate, 1),
+            "total_pnl": round(total_pnl, 2),
+            "avg_pnl": round(total_pnl / max(total, 1), 2),
+        }
+        recent_5 = [
+            {"s": t.get('symbol', ''), "d": t.get('direction', ''),
+             "pnl": round(t.get('pnl') or 0.0, 2),
+             "r": t.get('exit_reason', '')[:20]}
+            for t in recent_trades[:5]
+        ]
+        prompt = (
+            f"{db_prompt}\n\n"
+            f"Current Strategy Roster:\n{json.dumps(strategies_info, indent=2)}\n\n"
+            f"Trade Summary:\n{json.dumps(trade_summary, indent=2)}\n\n"
+            f"Recent Trades (last 5):\n{json.dumps(recent_5, indent=2)}\n\n"
+            f"Target: $1,000/day profit."
+        )
 
         try:
             raw_advice = query_openclaw(prompt, agent_name="quant", max_tokens=4096)
