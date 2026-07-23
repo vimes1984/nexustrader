@@ -1267,7 +1267,12 @@ async def startup_event():
     database.save_setting("prompt_long_term_quant", DEFAULT_PROMPT_LONG_TERM_QUANT)
 
     # Auto-start live stream on startup (true live data)
-    orchestrator.start_stream(mode="live", poll_interval=5)
+    # Wrap in try/except so a crashed stream doesn't prevent API routes from working
+    try:
+        orchestrator.start_stream(mode="live", poll_interval=5)
+        logging.info("Live stream started on startup.")
+    except Exception as e:
+        logging.error(f"Failed to start live stream on startup: {e}. API routes remain available.")
     try:
         update_crontab_schedule()
     except Exception as e:

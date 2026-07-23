@@ -109,6 +109,12 @@ class PolicyNetwork:
         self.replay_batch_size = 32
         # How often to train from replay (every N trades)
         self.replay_train_interval = 5
+        
+        # Learning rate scheduling: initial and minimum LR
+        self.initial_lr = learning_rate
+        self.min_lr = learning_rate * 0.1  # Decay floor at 10% of initial
+        self.lr_decay_steps = 100  # Halving point (in gradient steps)
+        self.total_learning_steps = 0  # Tracks all gradient updates
 
     def softmax(self, x):
         e_x = np.exp(x - np.max(x, axis=-1, keepdims=True))
