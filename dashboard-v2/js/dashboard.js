@@ -336,10 +336,23 @@ const Dashboard = {
     } catch(e) {
       console.error('History load failed:', e);
       if (infoEl) infoEl.textContent = '❌ Chart error';
-      // Show retry option
-      const c = byId('main-chart');
-      if (c) {
-        c.innerHTML = '<div class="retry-indicator"><span>⚠️ Chart data unavailable</span><button class="retry-btn" onclick="Dashboard?.loadHistory(App.state.activeTicker)">Retry</button></div>';
+      // Show retry option above chart, not replacing the chart container
+      const freshEl = byId('freshness-chart');
+      if (freshEl) {
+        freshEl.className = 'data-freshness stale';
+        const t = freshEl.querySelector('.freshness-text');
+        if (t) t.textContent = 'Chart error';
+      }
+      // Add retry button next to chart info
+      const chartInfo = byId('chart-data-info');
+      if (chartInfo && !byId('chart-retry-btn')) {
+        const retryBtn = document.createElement('button');
+        retryBtn.id = 'chart-retry-btn';
+        retryBtn.className = 'btn btn-sm';
+        retryBtn.textContent = '🔄 Retry';
+        retryBtn.style.marginLeft = '8px';
+        retryBtn.addEventListener('click', function() { Dashboard.loadHistory(App.state.activeTicker); });
+        chartInfo.parentNode.appendChild(retryBtn);
       }
     }
   },
