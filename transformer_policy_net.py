@@ -24,6 +24,7 @@ Architecture:
 """
 
 import numpy as np
+import logging
 from multi_head_attention import MultiHeadAttention, LayerNorm
 
 

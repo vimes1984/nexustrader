@@ -1304,6 +1304,8 @@ async def api_init_state(request: Request):
     except Exception as e:
         logging.warning(f"/api/init position serialization error: {e}")
 
+    # Reverse trades to show newest first (same as /api/status)
+    all_trades.reverse()
     return {
         "status":"ok", "balance":balance, "equity":equity,
         "trades":all_trades, "total_pnl":round(sum(float(t.get("pnl",0)or 0) for t in all_trades), 2),
@@ -3328,14 +3330,20 @@ def list_backups():
     except Exception as e:
         return {"status": "error", "error": str(e)}
 
-@app.get("/api/system/backup/download/{filename}")
+@app.get("/api/system/backup/download/{filename:path}")
 def download_backup(filename: str):
     from fastapi import HTTPException
     try:
         import backup_manager
         # sanitize input to prevent directory traversal
         filename = os.path.basename(filename)
+        # Only allow .tar.gz files
+        if not filename.endswith(".tar.gz") or ".." in filename or "/" in filename:
+            raise HTTPException(status_code=400, detail="Invalid backup filename")
         path = os.path.join(backup_manager.BACKUP_DIR, filename)
+        path = os.path.normpath(path)
+        if not path.startswith(os.path.normpath(backup_manager.BACKUP_DIR)):
+            raise HTTPException(status_code=400, detail="Invalid backup filename")
         if not os.path.exists(path):
             raise HTTPException(status_code=404, detail="Backup file not found")
         return FileResponse(path, filename=filename, media_type="application/gzip")
