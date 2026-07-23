@@ -208,10 +208,13 @@ def volatility_adjusted_qty(
 
     Formula: qty = risk_amount / (ATR * atr_multiplier)
 
-    ATR/price ratio sanity checks:
-    - If ATR is near-zero (< 0.001% of price), use price-based fallback
-      to avoid unrealistically large positions.
-    - Position is capped at capital * 3 / price (3x leverage-like max).
+    Sanity checks:
+    - ATR-based stop distance can't exceed 50% of price (avoids impossible
+      position sizes from extremely wide stops).
+    - Near-zero ATR (< 0.001% of price): fall back to flat capital fraction.
+    - Position notional capped at 3x capital (3x leverage max).
+    - Position notional also capped at `capital / (1 - atr_ratio * atr_multiplier)`
+      to avoid total-loss-on-gap scenarios.
 
     Args:
         capital: Available capital
@@ -228,27 +231,34 @@ def volatility_adjusted_qty(
         return 0.0
 
     risk_amount = capital * risk_fraction
-
-    # Cap risk_amount to prevent degenerate positions
     risk_amount = min(risk_amount, capital * 0.5)  # Never risk > 50% of capital
 
-    if atr > 0 and price > 0:
+    if atr > 0:
         atr_ratio = atr / price
-        if atr_ratio >= 0.00001:
-            # Sufficient ATR/price ratio: use volatility-based sizing
+        if 0.00001 <= atr_ratio <= 0.5:
+            # Volatility-based sizing: stop = atr_multiplier * ATR in price units
+            # qty = risk_amount / (atr * atr_multiplier)
             denominator = atr * atr_multiplier
             qty = risk_amount / denominator if denominator > 0 else 0.0
+
+            # Also cap notional so that a gap of stop_distance won't exceed capital
+            # stop_fraction = atr_ratio * atr_multiplier (as fraction of price)
+            stop_fraction = atr_ratio * atr_multiplier
+            if stop_fraction > 0 and stop_fraction < 1.0:
+                max_notional_by_stop = capital / stop_fraction
+                qty = min(qty, max_notional_by_stop / price)
+        elif atr_ratio > 0.5:
+            # Extremely wide ATR (ATR > 50% of price): extremely volatile
+            # Use conservative flat fraction instead
+            qty = (capital * min(risk_fraction, 0.05)) / price
         else:
-            # Near-zero ATR (e.g., stablecoin): use flat capital fraction
+            # Near-zero ATR (stablecoin): just use flat capital fraction
             qty = risk_amount / price
     else:
-        # No ATR data: use flat capital fraction
         qty = risk_amount / price
 
-    # Hard cap to prevent excessive leverage: max 3x notional vs capital
-    max_notional = capital * 3.0
-    max_leverage_qty = max_notional / price if price > 0 else float('inf')
-    qty = min(qty, max_leverage_qty)
+    # Hard cap: notional should not exceed 3x capital
+    qty = min(qty, (capital * 3.0) / price)
 
     if max_qty is not None:
         qty = min(qty, max_qty)
