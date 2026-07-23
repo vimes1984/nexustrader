@@ -255,10 +255,18 @@ Recommended settings JSON format:
 ```"""
                 save_setting("prompt_self_improvement", db_prompt)
             
-            prompt = f"""{db_prompt}
+            # Summarize trades for LLM context instead of dumping all raw dicts
+        trade_summary = {
+            "total": len(recent_trades),
+            "wins": sum(1 for t in recent_trades if (t.get('pnl') or 0.0) > 0.0),
+            "losses": sum(1 for t in recent_trades if (t.get('pnl') or 0.0) < 0.0),
+            "total_pnl": round(sum(t.get('pnl') or 0.0 for t in recent_trades), 2),
+            "avg_pnl": round(sum(t.get('pnl') or 0.0 for t in recent_trades) / max(len(recent_trades), 1), 2),
+        }
+        prompt = f"""{db_prompt}
 
 Current Session Data:
-- Recent trade details: {json.dumps(recent_trades, indent=2) if recent_trades else '[]'}
+- Trade summary: {json.dumps(trade_summary)}
 - RSI Oversold: {best_oversold}, Overbought: {best_overbought}
 - Kalman threshold: {best_threshold}
 - Volatility ATR multipliers: TP = {best_tp_mult}x, SL = {best_sl_mult}x
@@ -367,7 +375,7 @@ Recent Blogger Reports:
 \"\"\"{blog_summary}\"\"\"
 
 Current Session Data:
-- Recent trades: {json.dumps(recent_trades) if recent_trades else '[]'}
+- Trade summary: {json.dumps(trade_summary)}
 - Optimized: RSI({best_oversold}/{best_overbought}), Kalman({best_threshold}), TP({best_tp_mult}x), SL({best_sl_mult}x)
 
 Critically analyze this context. Redesign your own prompt template to focus it even more tightly on achieving $1,000 USD/day, ensuring it asks for correct statistical checks and keeps its final settings JSON format.

@@ -108,7 +108,7 @@ def compute_kelly_fraction(win_rate: float, avg_win: float, avg_loss: float) -> 
         return 0.0
 
     kelly = edge / odds
-    return max(0.0, min(kelly, 1.0))
+    return max(0.0, min(kelly, 0.5))  # Cap raw Kelly at 0.5 — above this means 'bet it all' which breaks down in trading
 
 
 def compute_safe_fraction(

@@ -186,10 +186,36 @@ class PositionalEncoding:
         """
         if x.ndim == 2:
             seq_len = x.shape[0]
-            return x + self.embeddings[:seq_len]
+            result = x + self.embeddings[:seq_len]
+            self._cache_input_len = seq_len
+            return result
         else:
             seq_len = x.shape[1]
-            return x + self.embeddings[np.newaxis, :seq_len, :]
+            result = x + self.embeddings[np.newaxis, :seq_len, :]
+            self._cache_input_len = seq_len
+            return result
+
+    def backward(self, d_out: np.ndarray) -> np.ndarray:
+        """Backprop: gradient flows through unchanged (output = input + embedding).
+        
+        d_out: (batch, seq, d_model) or (seq, d_model)
+        Returns: d_x = d_out (gradient w.r.t. input)
+        Stores: d_embeddings for later optimizer step.
+        """
+        seq_len = self._cache_input_len
+        if d_out.ndim == 3:
+            # (batch, seq, d_model)
+            self.d_embeddings = np.sum(d_out, axis=0)  # sum over batch
+            # Only the first seq_len positions received gradients
+            d_emb = np.zeros_like(self.embeddings)
+            d_emb[:seq_len] = self.d_embeddings[:seq_len]
+            self.d_embeddings = d_emb
+            return d_out  # gradient to input is identity (y = x + emb → ∂y/∂x = I)
+        else:
+            # (seq, d_model)
+            self.d_embeddings = np.zeros_like(self.embeddings)
+            self.d_embeddings[:seq_len] = d_out[:seq_len]
+            return d_out
     
     def to_json(self) -> str:
         import json
@@ -453,6 +479,8 @@ class TransformerPolicyNetwork:
                 d_x = layer.backward(d_x)
             except Exception:
                 pass
+        # Backward through positional encoding: dL/d(embeddings) flows from d_x
+        instance.pos_encoding.backward(d_x)
         return d_x
 
     backward = reinforce_backward
