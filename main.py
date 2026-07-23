@@ -1152,8 +1152,8 @@ class NexusTraderOrchestrator:
                         "equity": _current_equity,
                     }))
                 else:
-                    _limit_order = self.execution_engine.pending_limit_orders.get(
-                        best_ticker, self.execution_engine.active_positions.get(best_ticker, {})
+                    _limit_order = self.execution_engine.active_positions.get(
+                        best_ticker, {}
                     )
                     self._run_async(self.broadcast_message({
                         "type": "limit_order_placed",

@@ -11,8 +11,12 @@ async def health_monitor_loop(orchestrator, kill_switch, drawdown_tracker):
     """Periodic health check - runs every 60s and pushes alerts."""
     await asyncio.sleep(15)
     last_orphan_alert = 0
+    last_http_warn = 0
+    last_watchdog_warn = 0
     # Auto-resolve orphaned alerts from previous run
     notification_manager.resolve_alerts_by_category("system", "Trading Stream Orphaned")
+    notification_manager.resolve_alerts_by_category("system", "API Server Unreachable")
+    notification_manager.resolve_alerts_by_category("system", "Loop Watchdog
     
     while True:
         try:
@@ -90,6 +94,40 @@ async def health_monitor_loop(orchestrator, kill_switch, drawdown_tracker):
             else:
                 notification_manager.set_health_state('drawdown_alerted', '0')
             
+            # 6. Self-probe: check API server is responding on its own port
+            try:
+                import urllib.request, json as _json
+                _url = "http://127.0.0.1:8000/api/health"
+                _req = urllib.request.Request(_url, method="GET")
+                _resp = urllib.request.urlopen(_req, timeout=3.0)
+                _body = _resp.read().decode("utf-8")
+                _data = _json.loads(_body)
+                if _data.get("status") == "ok":
+                    notification_manager.resolve_alerts_by_category("system", "API Server Unreachable")
+                    last_http_warn = 0
+                else:
+                    raise ValueError("unexpected status")
+            except Exception as _http_err:
+                if last_http_warn == 0 or (now - last_http_warn) > 600:
+                    logging.warning(f"[HEALTH] API self-probe FAILED: {_http_err}")
+                    notification_manager.push_alert("critical", "system",
+                        "API Server Unreachable",
+                        f"Self-probe on http://127.0.0.1:8000/api/health failed: {_http_err}. Dashboard will be disconnected.")
+                    last_http_warn = now
+            
+            # 7. Watchdog: check if main loop processed a tick recently
+            _last_tick_time = getattr(orchestrator.execution_engine, '_last_trade_time', 0) if hasattr(orchestrator, 'execution_engine') else 0
+            if _last_tick_time > 0 and (now - _last_tick_time) > 60:
+                if last_watchdog_warn == 0 or (now - last_watchdog_warn) > 600:
+                    _idle_sec = int(now - _last_tick_time)
+                    logging.warning(f"[HEALTH] Loop watchdog: no tick/trade for {_idle_sec}s (>60s threshold)")
+                    notification_manager.push_alert("warning", "trading",
+                        "Main Loop Stalled",
+                        f"No market data tick or trade closed in {_idle_sec} seconds. Main loop may be hung.")
+                    last_watchdog_warn = now
+            else:
+                last_watchdog_warn = 0
+
             # Track last trade timestamp
             if trades:
                 max_ts = max(t.get('exit_time', 0) for t in trades)
