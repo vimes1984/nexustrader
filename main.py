@@ -1863,6 +1863,14 @@ def get_weights(ticker: str = "ETH-USD"):
         return {}
     ensemble = orchestrator.strategy_ensembles[ticker]
     
+    # Normalize weights to ensure they sum to ~1.0 (neural network drift can cause minor divergence)
+    raw_weights = [float(ensemble.weights[i]) for i in range(min(len(ensemble.weights), len(ensemble.strategies)))]
+    w_sum = sum(raw_weights)
+    if w_sum > 0:
+        normalized_weights = [w / w_sum for w in raw_weights]
+    else:
+        normalized_weights = [1.0 / len(raw_weights)] * len(raw_weights)
+    
     # Calculate DNA and load steps
     steps_key = f"lifetime_training_steps_{ticker}"
     steps = int(database.load_setting(steps_key, "0"))

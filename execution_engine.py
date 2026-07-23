@@ -396,7 +396,10 @@ class ExecutionEngine:
     def _open_position_internal(self, symbol, evaluation, strategy_signals):
         """Internal: called with _exec_lock held."""
         # Check Loss Cooldown
-        cooldown_end = float(database.load_setting(f"cooldown_end_{symbol}", "0.0"))
+        try:
+            cooldown_end = float(database.load_setting(f"cooldown_end_{symbol}", "0.0"))
+        except (ValueError, TypeError):
+            cooldown_end = 0.0
         if time.time() < cooldown_end:
             remaining_minutes = int((cooldown_end - time.time()) / 60)
             logging.warning(f"[LOSS COOLDOWN] Ticker {symbol} is in a loss cooldown period. {remaining_minutes} mins remaining. Skipping.")
