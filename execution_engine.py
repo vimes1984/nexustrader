@@ -787,7 +787,8 @@ class ExecutionEngine:
         pos["unrealized_pnl_pct"] = pos["unrealized_pnl"] / entry_value
 
         # Trailing Stop-Loss logic — config-driven
-        trailing_stop_enabled = database.load_setting("trailing_stop_enabled", "true").lower() == "true"
+        _ts_setting = database.load_setting("trailing_stop_enabled", "true")
+        trailing_stop_enabled = (_ts_setting or "true").lower() == "true"
         if trailing_stop_enabled:
             # Default trail offset widened from 0.5% to 1.5% for crypto noise tolerance
             trail_offset_pct = float(database.load_setting("trailing_stop_offset_pct", "0.015"))

@@ -35,13 +35,23 @@ class EMACrossoverStrategy(TradingStrategy):
                 return -1.0
             return 0.0
         
-        # Fallback: MACD line is EMA(12) - EMA(26), so MACD crossing zero
-        # is equivalent to EMA fast crossing EMA slow
+        # Fallback: MACD line is EMA(12) - EMA(26), so MACD crossover with its
+        # signal line (9-period EMA of MACD) gives the classic MACD signal.
+        # When MACD is above the signal line -> bullish (BUY)
+        # When MACD is below the signal line -> bearish (SELL)
         macd = row.get('macd', 0)
-        # Guard against None / non-numeric MACD
+        macd_signal = row.get('macd_signal', None)
+        # Guard against None / non-numeric values
         if macd is None:
             macd = 0
-        # Use MACD crossing zero = EMA crossover
+        if macd_signal is not None:
+            # Primary: MACD vs signal line crossover (more responsive)
+            if macd > macd_signal:
+                return 1.0
+            elif macd < macd_signal:
+                return -1.0
+            return 0.0
+        # Fallback if no signal line: MACD crossing zero = EMA crossover
         if macd > 0:
             return 1.0
         elif macd < 0:
