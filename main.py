@@ -1926,8 +1926,8 @@ def get_status():
             "probability": orchestrator.probability_engine.last_evaluation.get("probability", 0) if (hasattr(orchestrator.probability_engine, "last_evaluation") and orchestrator.probability_engine.last_evaluation) else 0,
             "ev": orchestrator.probability_engine.last_evaluation.get("expected_value", 0) if (hasattr(orchestrator.probability_engine, "last_evaluation") and orchestrator.probability_engine.last_evaluation) else 0,
             "risk_reward": orchestrator.probability_engine.last_evaluation.get("risk_reward", 0) if (hasattr(orchestrator.probability_engine, "last_evaluation") and orchestrator.probability_engine.last_evaluation) else 0,
-            "kelly_fraction": orchestrator.probability_engine.kelly_fraction,
-            "viable": orchestrator.probability_engine.last_evaluation.get("is_viable", False) if (hasattr(orchestrator.probability_engine, "last_evaluation") and orchestrator.probability_engine.last_evaluation) else False,
+            "kelly_fraction": getattr(getattr(orchestrator, "probability_engine", None), "kelly_fraction", 0),
+            "viable": getattr(getattr(orchestrator, "probability_engine", None), "last_evaluation", {}) or {}.get("is_viable", False),
         },
         "trades": _recent_trades
     }
