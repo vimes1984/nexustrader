@@ -178,6 +178,16 @@ class PolicyNetwork:
         for i in range(len(dW)):
             _total_grad_sq += np.sum(dW[i] ** 2) + np.sum(db[i] ** 2)
         _grad_norm = np.sqrt(_total_grad_sq)
+        
+        # Early training diagnostics: trace first 5 gradient updates
+        if self.total_learning_steps <= 5:
+            logging.info(
+                f"[EARLY GRADIENT] step={self.total_learning_steps}: "
+                f"grad_norm={_grad_norm:.6f}, LR={self.lr:.6f}, "
+                f"W0_range=[{np.min(self.W[0]):.4f},{np.max(self.W[0]):.4f}], "
+                f"W_last_range=[{np.min(self.W[-1]):.4f},{np.max(self.W[-1]):.4f}]"
+            )
+        
         if self.total_learning_steps % 10 == 0:
             if _grad_norm > 10.0:
                 logging.warning(
