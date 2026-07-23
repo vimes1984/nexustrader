@@ -256,10 +256,10 @@ class MutationFreeze:
         )
         return suggestion
 
-    def apply(self, suggestion_index: int) -> tuple[bool, dict | None]:
+    def apply(self, suggestion_index: int):
         """Apply a specific pending suggestion (human approval gate).
 
-        Returns (success, suggestion_dict) where suggestion_dict contains
+        Returns tuple (success, suggestion_dict) where suggestion_dict contains
         the details needed for the caller to implement the mutation:
         {'parameter': str, 'new_value': str, 'old_value': str, ...}
         """
