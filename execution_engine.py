@@ -552,7 +552,7 @@ class ExecutionEngine:
         if position_value < 5.0:
             logging.warning(f"[MIN SIZE] Position value ${position_value:.2f} below $5 minimum. Skipping {symbol}.")
             return False
-        if entry_price <= 0:
+        if entry_price <= 0.000001:
             logging.error(f"[PRICE ERROR] Entry price {entry_price} <= 0 for {symbol}. Cannot compute quantity. Skipping.")
             return False
         quantity = position_value / entry_price
