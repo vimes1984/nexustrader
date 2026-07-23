@@ -118,9 +118,7 @@ class ProbabilityEngine:
                 # FUTURE INFO WARNING: history_df may contain all data up to present.
                 # We only use data that is strictly BEFORE the current row to avoid
                 # look-ahead bias when a full history dataframe is passed.
-                close_series = history_df['close'].copy()
-                # Identify the position of the current row in the history
-                current_idx = close_series.index[-1] if isinstance(close_series.index[-1], (int, np.integer)) else None
+                close_series = history_df['close']
                 # Forward return: close 5 periods ahead (only valid for historical data)
                 forward_close = close_series.shift(-5)
                 valid_idx = close_series.notna() & forward_close.notna()
@@ -128,16 +126,14 @@ class ProbabilityEngine:
                 # Find historical instances with similar RSI — EXCLUDING current position
                 rsi_series = history_df['rsi']
                 similar_mask = rsi_series.between(rsi - 10, rsi + 10) & valid_idx
-                if current_idx is not None:
-                    # Prevent look-ahead: only use rows up to 5 before current index
-                    similar_mask = similar_mask & (rsi_series.index < current_idx - 5)
-                else:
-                    # Fallback: use all data except last 5 rows
-                    similar_mask = similar_mask & (close_series.index < len(close_series) - 5)
+                # Exclude last 5 rows to avoid look-ahead from shift(-5) NaN values
+                # shift(-5) creates NaN for the 5 most recent rows
+                similar_mask = similar_mask & (close_series.index < len(close_series) - 5)
                 similar_count = similar_mask.sum()
                 
                 if similar_count > 10:
-                    hist_win_rate = (forward_close[similar_mask] > close_series[similar_mask]).mean()
+                    # Mean of boolean True=1, False=0 gives win rate
+                    hist_win_rate = float(forward_close[similar_mask].gt(close_series[similar_mask]).mean())
                     # Blend 70% model / 30% empirical historical win rate
                     p_win = 0.7 * p_win + 0.3 * hist_win_rate
             except Exception as e:
