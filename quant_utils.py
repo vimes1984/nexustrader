@@ -130,7 +130,6 @@ def detect_psychological_sweep(df, lookback=24, round_number_base=5.0):
     current_close = float(df['close'].iloc[-1])
     current_low = float(df['low'].iloc[-1])
     current_high = float(df['high'].iloc[-1])
-    current_open = float(df['open'].iloc[-1])
 
     # Detect Support Sweep (Stop Hunt on Buyers)
     # Price dropped below support (triggering stop-loss selling), but closed back above
