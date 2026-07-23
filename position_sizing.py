@@ -182,13 +182,14 @@ def compute_safe_fraction(
     # Hard cap (upper bound)
     safe_fraction = min(safe_fraction, ABSOLUTE_MAX_FRACTION)
     # Minimum floor: only apply when outside drawdown taper zone
-    # When drawdown_penalty < 1.0, the system is actively reducing risk —
-    # don't override that reduction with an artificial floor.
     if drawdown_penalty >= 1.0 and current_drawdown_pct <= 0.0:
-        min_safe_fraction = 0.02  # 2% minimum when no drawdown
+        min_safe_fraction = max(0.02, exchange_min_order_pct)  # At least 2% or exchange min
         safe_fraction = max(safe_fraction, min_safe_fraction)
+    elif exchange_min_order_pct > 0 and safe_fraction > 0 and safe_fraction < exchange_min_order_pct:
+        # Below exchange minimum — signal as minimal but keep the fraction
+        signal = "below_exchange_min"
 
-    # Determine signal
+    # Determine signal (if not already set)
     if safe_fraction <= 0:
         signal = "halted_drawdown"
     elif safe_fraction < 0.01:
