@@ -127,17 +127,12 @@ def compute_multi_asset_kelly() -> dict:
                 "multi_asset_kelly": float(round(kelly_fractions[i], 4)),
                 "simple_kelly": float(round(simple_kelly.get(s, 0.0), 4)),
                 "mean_return_pct": float(round(mu[i], 4)),
-                "trade_count": len(ret_seqs[s]),
+                "trade_count": int(len(ret_seqs[s])),
             }
-            report_lines_log.append(f"📊 {s}: multi-Kelly={result[s]['multi_asset_kelly']:.4f}, "
-                                     f"simple-Kelly={result[s]['simple_kelly']:.4f}, "
-                                     f"mean ret={result[s]['mean_return_pct']:.4f}")
         return result
     except Exception as e:
         logging.error(f"Multi-asset Kelly computation failed: {e}")
         return {}
-
-report_lines_log = []  # global accumulator for in-function logging
 
 
 def load_performance_summary():
@@ -192,6 +187,15 @@ At the very end of your response, output a strict JSON block with your recommend
 ```"""
         save_setting("prompt_allocator_agent", db_prompt)
         
+    # Compute multi-asset Kelly fractions from covariance
+    multi_kelly = compute_multi_asset_kelly()
+    kelly_block = ""
+    if multi_kelly:
+        kelly_lines = ["\n### Multi-Asset Kelly Allocation (Covariance-Aware):", "Symbol    | Multi-Kelly | Simple-Kelly | Mean Ret | Trades", "-" * 60]
+        for sym, vals in multi_kelly.items():
+            kelly_lines.append(f"{sym:<10} | {vals['multi_asset_kelly']:<12.4f} | {vals['simple_kelly']:<13.4f} | {vals['mean_return_pct']:<9.4f} | {vals['trade_count']}")
+        kelly_block = "\n".join(kelly_lines)
+    
     prompt = f"""{db_prompt}
 
 Current Asset Configs:
@@ -199,9 +203,13 @@ Current Asset Configs:
 
 Recent Performance Summary (Last 100 Trades Grouped By Ticker):
 {json.dumps(perf_summary, indent=2)}
+
+{kelly_block}
 """
     
     report_lines = ["\n## ⚖️ Ensemble Asset Allocator Report"]
+    if kelly_block:
+        report_lines.append(kelly_block)
     
     try:
         logging.info("Requesting Allocation evaluation from LLM...")
