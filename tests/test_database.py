@@ -18,6 +18,13 @@ import database
 class TestDatabase(unittest.TestCase):
     def setUp(self):
         self.test_db = os.path.abspath("test_database_module.db")
+        # Clean up any stale WAL/SHM files from previous runs
+        for fpath in [self.test_db, self.test_db + "-wal", self.test_db + "-shm"]:
+            if os.path.exists(fpath):
+                try:
+                    os.remove(fpath)
+                except Exception:
+                    pass
         database.DB_PATH = self.test_db
         database.init_db()
 
@@ -28,11 +35,13 @@ class TestDatabase(unittest.TestCase):
             conn.close()
         except Exception:
             pass
-        if os.path.exists(self.test_db):
-            try:
-                os.remove(self.test_db)
-            except Exception:
-                pass
+        # Remove DB file and any WAL/SHM artifacts
+        for fpath in [self.test_db, self.test_db + "-wal", self.test_db + "-shm"]:
+            if os.path.exists(fpath):
+                try:
+                    os.remove(fpath)
+                except Exception:
+                    pass
 
     def test_settings_save_and_load(self):
         database.save_setting("test_key", "test_val")
