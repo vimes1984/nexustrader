@@ -974,7 +974,6 @@ class NexusTraderOrchestrator:
                 _ref_val = current_equity if current_equity > 0 else self.execution_engine.balance
                 _min_sig = max(0.15, min(0.45, 1.0 / (1.0 + _ref_val / 350.0)))
             
-<<<<<<< Updated upstream
             # STARVATION RELAXATION: If the bot has zero trades in >1 hour and no open positions,
             # progressively lower the signal threshold on each subsequent tick to let trades through.
             # This prevents the death spiral where high thresholds + tight risk = 0 trades forever.
@@ -993,35 +992,19 @@ class NexusTraderOrchestrator:
                             f"[STARVATION RELAX] {ticker}: {_minutes_without_trade:.0f}m no trades. "
                             f"Relaxing threshold from {old_threshold:.3f} to {_min_sig:.3f}"
                         )
-            # ── Ticker cooldown: skip re-evaluation if recently blocked ──
-            # After a blocked signal, don't evaluate that ticker for N seconds
-            # (default 30s) to avoid log spam and give the market time to change.
-            _blocked_cooldown_key = f"_blocked_cooldown_{ticker}"
-            _blocked_until = getattr(self, _blocked_cooldown_key, 0.0)
-            if time.time() < _blocked_until:
-                pass  # Skip this ticker entirely — it was recently blocked
-            else:
-                pass  # Normal flow continues below
             
             # ── Signal logging: log what signal was generated before any blocking ──
-            # This ensures pipeline visibility even when all signals get blocked.
-            # Strategy breakdown log: direction, strength, kelly, expected_value
             _sig_strength = abs(weighted_signal)
             _top_strats = sorted(strategy_breakdown.items(), key=lambda x: abs(x[1].get("signal",0)), reverse=True)[:3]
             _top_strat_info = ", ".join(f"{s}: {d['signal']:.3f}@{d['weight']:.1%}" for s, d in _top_strats)
             
-            # ── Signal batching: Buffer this signal for batch evaluation ──
-            # Instead of executing first-come-first-blocked, collect signals from
-            # all tickers and pick the BEST one (highest expected value) in a batch.
-            if time.time() >= _blocked_until and abs(weighted_signal) >= _min_sig:
+            # ── Signal batching: Buffer signals for batch evaluation ──
+            # Instead of executing first-come-first-blocked, collect all ticker signals
+            # and pick the BEST one (highest expected value) in a batch.
+            if abs(weighted_signal) >= _min_sig:
                 _dir = "BUY" if weighted_signal > 0 else "SELL"
                 logging.debug(f"[SIGNAL] {ticker} {_dir} sig={weighted_signal:.4f} str={_sig_strength:.4f} min_sig={_min_sig:.3f} top={_top_strat_info}")
                 
-                # Evaluate probability and risk
-=======
-            if abs(weighted_signal) >= _min_sig:
-                _dir = "BUY" if weighted_signal > 0 else "SELL"
->>>>>>> Stashed changes
                 _eval = self.probability_engine.evaluate_trade(
                     price=current_price,
                     atr=atr,
@@ -1036,42 +1019,24 @@ class NexusTraderOrchestrator:
                 _eval["_current_price"] = current_price
                 _eval["_weighted_signal"] = weighted_signal
                 _eval["_strategy_breakdown"] = strategy_breakdown
-<<<<<<< Updated upstream
-=======
-                
-                self._pending_signal_buffer[ticker] = _eval
-                evaluation = _eval  # Keep for broadcast
-            
-            # Only execute the best signal when we've collected all tickers
-            # (determine by checking if all tickers have reported this cycle)
-            if hasattr(self, '_signal_batch_cycle_start'):
-                if time.time() - self._signal_batch_cycle_start > 2.0:
-                    # Edge case: some tickers didn't report; flush what we have
-                    self._flush_signal_batch()
-            else:
-                # Reset cycle when a ticker first reports without a position
-                pass
-            
-            # Check if all tickers have reported (via a simple cooldown/reset mechanism)
-            # We use a cycle marker: batch_cycle tracks which tickers have reported
-            if not hasattr(self, '_signal_batch_reported'):
-                self._signal_batch_reported = set()
-            self._signal_batch_reported.add(ticker)
-            
-            # If all tickers have reported OR this cycle has been open too long, flush
-            _all_tickers_for_batch = [t for t in self.tickers if t not in self.execution_engine.active_positions]
-            if len(self._signal_batch_reported) >= len(_all_tickers_for_batch) or \
-               (len(self._pending_signal_buffer) > 0 and len(self._signal_batch_reported) >= len(self.tickers)):
-                self._flush_signal_batch()
-                self._signal_batch_reported = set()
->>>>>>> Stashed changes
                 
                 if not hasattr(self, '_pending_signal_buffer'):
                     self._pending_signal_buffer = {}
                 self._pending_signal_buffer[ticker] = _eval
-                
-                # Store last evaluation for API queries
                 evaluation = _eval
+                self.probability_engine.last_evaluation = _eval
+            
+            # Cycle tracking: mark ticker as reported, flush when batch is complete
+            if not hasattr(self, '_signal_batch_reported'):
+                self._signal_batch_reported = set()
+            self._signal_batch_reported.add(ticker)
+            
+            _tickers_without_pos = [t for t in self.tickers if t not in self.execution_engine.active_positions]
+            if len(self._signal_batch_reported) >= len(self.tickers) or \
+               (len(getattr(self, '_pending_signal_buffer', {})) > 0 and \
+                len(self._signal_batch_reported) >= len(_tickers_without_pos)):
+                self._flush_signal_batch()
+                self._signal_batch_reported = set()
                 self.probability_engine.last_evaluation = _eval
             
             # Cycle tracking: mark ticker as reported, flush when batch is complete

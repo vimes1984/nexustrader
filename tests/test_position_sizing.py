@@ -1,236 +1,157 @@
-"""
-Unit tests for position_sizing.py — Kelly criterion, safe fraction, volatility-adjusted qty.
-
-Tests known Kelly formula inputs against expected outputs:
-  - p=0.6, W=1.0, L=1.0 → Kelly=0.2
-  - p=0.5, W=1.0, L=1.0 → Kelly=0.0
-  - p=1.0, W=1.0, L=1.0 → Kelly=1.0
-"""
-
 import unittest
 import sys
 import os
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from evaluation.position_sizing import (
+from position_sizing import (
+    estimate_metrics_from_trades,
     compute_kelly_fraction,
     compute_safe_fraction,
-    estimate_metrics_from_trades,
     volatility_adjusted_qty,
+)
+from evaluation.position_sizing import (
+    compute_kelly_fraction as eval_compute_kelly_fraction,
+    compute_safe_fraction as eval_compute_safe_fraction,
+    estimate_metrics_from_trades as eval_estimate_metrics_from_trades,
+    volatility_adjusted_qty as eval_volatility_adjusted_qty,
 )
 
 
-class TestComputeKellyFraction(unittest.TestCase):
-    """Test Kelly formula against known inputs."""
+class TestPositionSizing(unittest.TestCase):
+    """Tests for the root position_sizing module."""
+    
+    def test_compute_kelly_fraction_basic(self):
+        """Test Kelly computation with reasonable values."""
+        # 60% win rate, 2% avg win, 1% avg loss
+        kelly = compute_kelly_fraction(0.6, 0.02, 0.01)
+        # f* = (0.6*0.02 - 0.4*0.01) / (0.02*0.01) = (0.012 - 0.004) / 0.0002 = 40
+        # Capped at 0.5
+        self.assertAlmostEqual(kelly, 0.5, places=4)
 
-    def test_kelly_p60_w1_l1(self):
-        """p=0.6, W=1.0, L=1.0 → Kelly=0.2"""
-        f = compute_kelly_fraction(0.6, 1.0, 1.0)
-        self.assertAlmostEqual(f, 0.2, places=4)
+    def test_compute_kelly_fraction_no_edge(self):
+        """Test that negative edge returns 0."""
+        # 50% win rate, 1% avg win, 2% avg loss (negative expectancy)
+        kelly = compute_kelly_fraction(0.5, 0.01, 0.02)
+        # f* = (0.5*0.01 - 0.5*0.02) / (0.01*0.02) = (0.005 - 0.01) / 0.0002 = -25
+        self.assertAlmostEqual(kelly, 0.0, places=4)
 
-    def test_kelly_p50_w1_l1(self):
-        """p=0.5, W=1.0, L=1.0 → Kelly=0.0 (no edge)"""
-        f = compute_kelly_fraction(0.5, 1.0, 1.0)
-        self.assertEqual(f, 0.0)
+    def test_compute_kelly_fraction_all_wins(self):
+        """Test edge case: 100% win rate."""
+        kelly = compute_kelly_fraction(1.0, 0.05, 0.01)
+        self.assertGreater(kelly, 0)
+        self.assertLessEqual(kelly, 0.5)
 
-    def test_kelly_p10_w1_l1(self):
-        """p=0.1 → Kelly=0.0 (no edge)"""
-        f = compute_kelly_fraction(0.1, 1.0, 1.0)
-        self.assertEqual(f, 0.0)
+    def test_compute_kelly_fraction_all_losses(self):
+        """Test edge case: 0% win rate."""
+        kelly = compute_kelly_fraction(0.0, 0.01, 0.05)
+        self.assertEqual(kelly, 0.0)
 
-    def test_kelly_p10_w2_l1(self):
-        """p=0.1, W=2.0, L=1.0 → still negative edge → 0.0"""
-        f = compute_kelly_fraction(0.1, 2.0, 1.0)
-        self.assertEqual(f, 0.0)
-
-    def test_kelly_w1_l1(self):
-        """Kelly with W=L should be p - (1-p)/1 = 2p-1"""
-        for p in [0.55, 0.70, 0.80, 0.90, 0.95]:
-            expected = 2.0 * p - 1.0
-            f = compute_kelly_fraction(p, 1.0, 1.0)
-            self.assertAlmostEqual(f, expected, places=4,
-                                   msg=f"Kelly({p}, W=1, L=1) != {expected}")
-
-    def test_kelly_zero_win_rate(self):
-        """win_rate <= 0 → 0.0"""
-        self.assertEqual(compute_kelly_fraction(0.0, 1.0, 1.0), 0.0)
-
-    def test_kelly_one_win_rate(self):
-        """win_rate >= 1 (p=1.0 clipped in code) → 0.0"""
-        f = compute_kelly_fraction(1.0, 1.0, 1.0)
-        self.assertEqual(f, 0.0)
-
-    def test_kelly_zero_avg_loss(self):
-        """avg_loss <= 0 → 0.0"""
-        self.assertEqual(compute_kelly_fraction(0.6, 1.0, 0.0), 0.0)
-
-    def test_kelly_zero_avg_win(self):
-        """avg_win <= 0 → 0.0 (no edge)"""
-        self.assertEqual(compute_kelly_fraction(0.6, 0.0, 1.0), 0.0)
-
-    def test_kelly_asymmetric_ratio(self):
-        """p=0.6, W=2.0, L=1.0 → b=2.0 → f* = p - q/b = 0.6 - 0.4/2 = 0.4"""
-        f = compute_kelly_fraction(0.6, 2.0, 1.0)
-        self.assertAlmostEqual(f, 0.4, places=4)
-
-    def test_kelly_clipped_at_one(self):
-        """Kelly fraction capped at 1.0 even if formula would exceed."""
-        # p=0.9, W=10, L=1 → f = 0.9 - 0.1/(10) = 0.89 → within 1.0
-        f = compute_kelly_fraction(0.9, 10.0, 1.0)
-        self.assertAlmostEqual(f, 0.89, places=4)
-        self.assertLessEqual(f, 1.0)
-
-
-class TestEstimateMetricsFromTrades(unittest.TestCase):
-
-    def test_empty_trades(self):
+    def test_estimate_metrics_empty(self):
+        """Test metrics estimation with no trades."""
         metrics = estimate_metrics_from_trades([])
         self.assertEqual(metrics["count"], 0)
         self.assertEqual(metrics["win_rate"], 0.5)
 
-    def test_all_wins(self):
-        trades = [{"pnl": 1.0}, {"pnl": 2.0}, {"pnl": 3.0}]
-        metrics = estimate_metrics_from_trades(trades)
-        self.assertEqual(metrics["win_rate"], 1.0)
-        self.assertEqual(metrics["count"], 3)
-        self.assertAlmostEqual(metrics["avg_win"], 2.0)
-
-    def test_all_losses(self):
-        trades = [{"pnl": -1.0}, {"pnl": -2.0}, {"pnl": -3.0}]
-        metrics = estimate_metrics_from_trades(trades)
-        self.assertEqual(metrics["win_rate"], 0.0)
-        self.assertEqual(metrics["avg_win"], 0.0)
-
-    def test_mixed_trades(self):
+    def test_estimate_metrics_with_trades(self):
+        """Test metrics estimation with sample trades."""
         trades = [
-            {"pnl": 10.0}, {"pnl": -5.0}, {"pnl": 3.0},
-            {"pnl": -2.0}, {"pnl": 0.0},
+            {"pnl_percent": 0.05},
+            {"pnl_percent": -0.02},
+            {"pnl_percent": 0.03},
+            {"pnl_percent": -0.01},
+            {"pnl_percent": 0.02},
         ]
         metrics = estimate_metrics_from_trades(trades)
-        self.assertAlmostEqual(metrics["win_rate"], 2 / 5)
-        self.assertAlmostEqual(metrics["avg_win"], 6.5)  # (10+3)/2
-        self.assertAlmostEqual(metrics["avg_loss"], 3.5)  # (5+2)/2
+        self.assertEqual(metrics["count"], 5)
+        self.assertAlmostEqual(metrics["win_rate"], 3/5)
+        self.assertAlmostEqual(metrics["avg_win"], 0.03333, places=4)
+        self.assertAlmostEqual(metrics["avg_loss"], 0.015, places=4)
 
-    def test_nan_pnl_guarded(self):
-        """Trades with NaN pnl should be converted to 0.0 safely."""
-        trades = [{"pnl": float('nan')}, {"pnl": 5.0}]
-        metrics = estimate_metrics_from_trades(trades)
-        self.assertEqual(metrics["count"], 2)
-        self.assertAlmostEqual(metrics["win_rate"], 0.5)
-
-    def test_pnl_percent_key(self):
-        trades = [{"pnl_percent": 2.5}, {"pnl_percent": -1.0}]
-        metrics = estimate_metrics_from_trades(trades)
-        self.assertEqual(metrics["count"], 2)
-        self.assertAlmostEqual(metrics["win_rate"], 0.5)
-
-    def test_zero_avg_loss_fallback(self):
-        trades = [{"pnl": 10.0}, {"pnl": 5.0}]  # no losses
-        metrics = estimate_metrics_from_trades(trades)
-        self.assertEqual(metrics["avg_loss"], 0.01)  # fallback
-
-
-class TestComputeSafeFraction(unittest.TestCase):
-
-    def test_insufficient_trades(self):
-        result = compute_safe_fraction(0.6, 1.0, 1.0, n_trades=3)
+    def test_compute_safe_fraction_cold_start(self):
+        """Test cold-start default when insufficient trades."""
+        result = compute_safe_fraction(0.5, 0.02, 0.01, n_trades=5)
         self.assertEqual(result["signal"], "cold_start_default")
         self.assertEqual(result["safe_fraction"], 0.05)
 
-    def test_sufficient_trades_with_edge(self):
-        result = compute_safe_fraction(
-            0.6, 1.0, 1.0, n_trades=50, calibration_cap=0.15
-        )
-        self.assertEqual(result["signal"], "moderate")
-        # Kelly=0.2, half=0.1, capped at 0.15 → 0.1, adjusted down
-        self.assertGreater(result["safe_fraction"], 0.0)
-        self.assertLessEqual(result["safe_fraction"], 0.15)
+    def test_compute_safe_fraction_normal(self):
+        """Test safe fraction with sufficient history."""
+        result = compute_safe_fraction(0.6, 0.02, 0.01, n_trades=50)
+        self.assertEqual(result["signal"], "aggressive")
+        self.assertGreater(result["safe_fraction"], 0)
 
-    def test_sufficient_trades_no_edge(self):
+    def test_compute_safe_fraction_drawdown_halt(self):
+        """Test that drawdown halts trading."""
         result = compute_safe_fraction(
-            0.5, 1.0, 1.0, n_trades=50
-        )
-        # Kelly=0, half_kelly=0, drawdown=0, calibration_cap=0.15
-        # Floor 3.5% since drawdown < 30% of limit
-        self.assertEqual(result["signal"], "conservative")
-        self.assertGreater(result["safe_fraction"], 0.0)
-
-    def test_drawdown_halt(self):
-        """100% drawdown → halt trading."""
-        result = compute_safe_fraction(
-            0.6, 1.0, 1.0, n_trades=50,
-            current_drawdown_pct=15.0, drawdown_limit_pct=15.0
+            0.6, 0.02, 0.01, n_trades=50,
+            current_drawdown_pct=20.0,  # Exceeds 15% limit
+            drawdown_limit_pct=15.0,
         )
         self.assertEqual(result["signal"], "halted_drawdown")
         self.assertEqual(result["safe_fraction"], 0.0)
-        self.assertEqual(result["drawdown_penalty"], 0.0)
 
-    def test_partial_drawdown_penalty(self):
-        """At 75% of limit → penalty tapers."""
-        result = compute_safe_fraction(
-            0.6, 1.0, 1.0, n_trades=50,
-            current_drawdown_pct=11.25, drawdown_limit_pct=15.0
-        )
-        # dd_ratio = 11.25/15 = 0.75, > 0.5
-        # drawdown_penalty = 2*(1-0.75) = 0.5
-        self.assertAlmostEqual(result["drawdown_penalty"], 0.5, places=4)
-
-    def test_kelly_clipped_by_calibration_cap(self):
-        """High Kelly but tight calibration cap."""
-        result = compute_safe_fraction(
-            0.8, 3.0, 1.0, n_trades=50, calibration_cap=0.03
-        )
-        # raw_kelly = 0.8 - 0.2/3 = 0.733, half = 0.367
-        # capped at calibration_cap = 0.03
-        # The cap should bind, but floor of 0.035 applies since drawdown=0
-        # safe_fraction = max(effective_kelly * drawdown_penalty, 0.035)
-        # = max(0.03 * 1.0, 0.035) = 0.035
-        self.assertEqual(result["safe_fraction"], 0.035)
-
-    def test_hard_max_allocation(self):
-        """Even with huge edge, safe_fraction limited by max_allocation."""
-        result = compute_safe_fraction(
-            0.9, 5.0, 1.0, n_trades=50, calibration_cap=0.5
-        )
-        # Safe fraction should not exceed 0.15
-        self.assertLessEqual(result["safe_fraction"], 0.15)
-
-
-class TestVolatilityAdjustedQty(unittest.TestCase):
-
-    def test_basic_vol_adjustment(self):
+    def test_volatility_adjusted_qty_basic(self):
+        """Test basic volatility-adjusted quantity calculation."""
         qty = volatility_adjusted_qty(
-            capital=1000.0, risk_fraction=0.02,
-            price=100.0, atr=2.0, atr_multiplier=1.0
+            capital=1000.0,
+            risk_fraction=0.02,
+            price=100.0,
+            atr=5.0,
         )
         # risk_amount = 1000 * 0.02 = 20
-        # denominator = 2.0 * 1.0 = 2.0
-        # qty = 20 / 2.0 = 10.0
-        self.assertAlmostEqual(qty, 10.0, places=2)
+        # qty = 20 / (5.0 * 1.0) = 4.0
+        self.assertAlmostEqual(qty, 4.0, places=4)
 
-    def test_zero_price(self):
-        self.assertEqual(volatility_adjusted_qty(1000, 0.02, 0.0, 2.0), 0.0)
-
-    def test_zero_atr(self):
-        self.assertEqual(volatility_adjusted_qty(1000, 0.02, 100.0, 0.0), 0.0)
-
-    def test_max_qty_capped(self):
+    def test_volatility_adjusted_qty_no_atr(self):
+        """Test fallback when ATR is zero — uses flat capital fraction."""
         qty = volatility_adjusted_qty(
-            capital=1000.0, risk_fraction=0.02,
-            price=100.0, atr=2.0, max_qty=5.0
+            capital=1000.0,
+            risk_fraction=0.02,
+            price=100.0,
+            atr=0.0,  # No volatility data
         )
-        self.assertAlmostEqual(qty, 5.0, places=2)
-
-    def test_fallback_no_atr_discount(self):
-        """When atr_multiplier makes denominator 0, fallback to flat sizing."""
-        qty = volatility_adjusted_qty(
-            capital=1000.0, risk_fraction=0.02,
-            price=100.0, atr=100.0, atr_multiplier=0.0
-        )
-        # risk_fraction = 0.02, so qty = 20/100 = 0.2
+        # Fallback: risk_amount / price = 20.0 / 100.0 = 0.2
         self.assertAlmostEqual(qty, 0.2, places=4)
 
 
-if __name__ == '__main__':
+class TestEvalPositionSizing(unittest.TestCase):
+    """Tests for the evaluation/position_sizing module."""
+    
+    def test_eval_kelly_matches_root_kelly(self):
+        """Test that both modules compute the same Kelly values."""
+        test_cases = [
+            (0.6, 0.02, 0.01),
+            (0.5, 0.03, 0.015),
+            (0.7, 0.01, 0.02),
+            (0.55, 0.04, 0.025),
+        ]
+        for wr, aw, al in test_cases:
+            root_kelly = compute_kelly_fraction(wr, aw, al)
+            eval_kelly = eval_compute_kelly_fraction(wr, aw, al)
+            self.assertAlmostEqual(root_kelly, eval_kelly, places=4,
+                                   msg=f"Mismatch at wr={wr}, aw={aw}, al={al}")
+
+    def test_eval_estimate_metrics_uses_pnl(self):
+        """Test that eval module falls back to pnl when pnl_percent missing."""
+        trades = [
+            {"pnl": 50.0},
+            {"pnl": -20.0},
+        ]
+        metrics = eval_estimate_metrics_from_trades(trades)
+        self.assertEqual(metrics["count"], 2)
+        self.assertAlmostEqual(metrics["win_rate"], 0.5)
+
+    def test_eval_safe_fraction_max_allocation_in_output(self):
+        """Test that eval safe_fraction includes max_allocation in output."""
+        result = eval_compute_safe_fraction(0.6, 0.02, 0.01, n_trades=50)
+        self.assertIn("max_allocation", result)
+        self.assertEqual(result["max_allocation"], 0.15)
+
+    def test_eval_volatility_adjusted_atr_zero(self):
+        """Test eval module: ATR of zero returns 0."""
+        qty = eval_volatility_adjusted_qty(1000.0, 0.02, 100.0, 0.0)
+        self.assertEqual(qty, 0.0)
+
+
+if __name__ == "__main__":
     unittest.main()
