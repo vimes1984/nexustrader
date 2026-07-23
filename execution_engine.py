@@ -758,7 +758,7 @@ class ExecutionEngine:
             if self.trading_mode == "live":
                 self.sync_live_balance()
             
-            pnl_percent = (pnl_after_fee) / (original_value + 1e-9) if original_value != 0 else 0.0
+            pnl_percent = (pnl_after_fee) / (cost_basis + 1e-9) if cost_basis != 0 else 0.0
 
             # Get active brain for symbol from DB settings
             active_brain_name = database.load_setting(f"active_policy_brain_{symbol}", "Default Brain")
