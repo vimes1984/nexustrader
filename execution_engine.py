@@ -4,6 +4,7 @@ import json
 import os
 import threading
 import math
+import decimal
 import database
 
 # Global lock protecting shared execution state (active_positions, balance)

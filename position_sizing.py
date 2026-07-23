@@ -11,6 +11,7 @@ All functions are stateless and safe to call from any context.
 """
 
 import math
+import decimal
 import numpy as np
 from typing import List, Optional
 
