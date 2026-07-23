@@ -75,14 +75,14 @@ def finbert_sentiment_llama(headline: str, timeout: float = 8.0) -> Optional[Tup
         logging.debug("[FinBERT-LLaMA] LLaMA server unreachable — falling back to lexical")
         return None
     except json.JSONDecodeError:
-        logging.debug(f"[FinBERT-LLaMA] Failed to parse model output: {content[:200] if 'content' in dir() else 'N/A'}")
+        logging.debug(f"[FinBERT-LLaMA] Failed to parse model output")
         return None
     except Exception as e:
         logging.warning(f"[FinBERT-LLaMA] Error: {e}")
         return None
 
 
-def batch_sentiment_llama(headlines: list[str], max_headlines: int = 5, timeout: float = 30.0) -> dict:
+def batch_sentiment_llama(headlines, max_headlines: int = 5, timeout: float = 30.0) -> dict:
     """Batch sentiment analysis of multiple headlines via LLaMA.
 
     Returns dict with:
