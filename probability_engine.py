@@ -69,6 +69,14 @@ class ProbabilityEngine:
         Uses signal strength and current market regime indicators (like RSI and ATR).
         If history_df is provided, performs a localized statistical check.
         """
+        # Guard against NaN/None signals
+        if weighted_signal is None or (isinstance(weighted_signal, float) and (weighted_signal != weighted_signal)):
+            weighted_signal = 0.0
+        
+        # Guard against None row
+        if row is None:
+            row = {}
+        
         # Base probability mapping from weighted signal magnitude [0.0, 1.0]
         signal_magnitude = abs(weighted_signal)
         
