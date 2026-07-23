@@ -109,10 +109,14 @@ class PPOCritic:
         self._apply_gradients(dW, db)
 
     def update_batch(self, states, targets):
-        """Batch MSE update."""
+        """Batch MSE update with loss monitoring."""
         n = len(states)
         dW_acc = [np.zeros_like(w) for w in self.W]
         db_acc = [np.zeros_like(b) for b in self.b]
+        
+        # Compute pre-update MSE
+        pre_values = [self.forward(s) for s in states]
+        pre_mse = np.mean([(v - t) ** 2 for v, t in zip(pre_values, targets)])
 
         for s, t in zip(states, targets):
             dW_s, db_s = self._gradients(s, t)
@@ -124,6 +128,15 @@ class PPOCritic:
             dW_acc[i] /= n
             db_acc[i] /= n
         self._apply_gradients(dW_acc, db_acc)
+        
+        # Compute post-update MSE and check for divergence
+        post_values = [self.forward(s) for s in states]
+        post_mse = np.mean([(v - t) ** 2 for v, t in zip(post_values, targets)])
+        if post_mse > pre_mse * 1.5 and pre_mse > 0:
+            logger.warning(
+                f"[CRITIC DIVERGENCE] MSE increased from {pre_mse:.6f} to {post_mse:.6f} "
+                f"after batch update (n={n}). Value function may be unstable."
+            )
 
     # ----------------------------------------------------------------
     # Optimizer  (Adam / RMSprop / SGD)
