@@ -506,15 +506,24 @@ class ExecutionEngine:
         # For SELL orders, cap position value by actual base asset holdings
         if direction == "SELL":
             base_asset = symbol.split('-')[0] if '-' in symbol else symbol
+            # Check if we have already sold this asset synthetically (paper) or hold it (live)
+            existing_short_notional = 0.0
+            for sym, pos in self.active_positions.items():
+                if pos["direction"] == "SELL":
+                    pos_base = sym.split('-')[0] if '-' in sym else sym
+                    if pos_base == base_asset:
+                        existing_short_notional += pos["quantity"] * pos["entry_price"]
+            
             try:
                 base_bal = self._get_asset_balance(base_asset)
-                # BUGFIX: In paper mode _last_raw_balances is None, so _get_asset_balance returns 0.
-                # This caused ALL SELL signals to silently return None (max_sell_value = 0 < $5).
-                # Paper mode should not require exchange balance — assume the position's notional value.
                 if self.trading_mode != "live" or base_bal <= 0:
-                    # Paper mode: SELL position is opened assuming we hold the asset synthetically.
-                    max_sell_qty = position_value / entry_price if entry_price > 0 else 0
+                    # Paper mode: no actual holdings, but track synthetic short exposure
+                    # to prevent over-selling the same asset multiple times
                     max_sell_value = position_value
+                    # Reduce by existing shorts on same base asset
+                    if existing_short_notional > 0:
+                        max_sell_value = max(0.0, max_sell_value - existing_short_notional)
+                        logging.info("[SIZE CAP] SELL %s: reduced by $%.2f existing shorts" % (symbol, existing_short_notional))
                 else:
                     max_sell_qty = base_bal * 0.995  # Reserve 0.5% for fees/slippage
                     max_sell_value = max_sell_qty * entry_price
@@ -522,7 +531,6 @@ class ExecutionEngine:
                     return None  # skip — cannot meet $5 minimum
                 if position_value > max_sell_value:
                     position_value = max_sell_value
-                    logging.info("[SIZE CAP] SELL %s capped to $%.2f (hold %.6f %s)" % (symbol, max_sell_value, base_bal, base_asset))
             except Exception as e:
                 logging.warning("[SIZE CAP] Could not cap SELL size: %s" % str(e))
         

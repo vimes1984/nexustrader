@@ -250,7 +250,10 @@ class SimulatedTrader:
                     h, l = c['high'], c['low']
                 else:
                     h, l = close, close
-                prev_c = self.price_history[i-1] if abs(i-1) < len(self.price_history) else close
+                # prev_c is the close BEFORE this candle; price_history[-2] is close before current
+                # For i=0 (current), prev_i=-2; for i=-13, prev_i=-14
+                prev_idx = i - 1  # candle before candle i
+                prev_c = self.price_history[prev_idx] if abs(prev_idx) <= len(self.price_history) else close
                 tr = max(h - l, abs(h - prev_c), abs(l - prev_c))
                 tr_values.append(tr)
             atr = sum(tr_values) / len(tr_values) if tr_values else close * 0.01

@@ -59,12 +59,10 @@ def calmar_ratio(returns: Sequence[float], max_drawdown: float, periods_per_year
     
     Uses proper CAGR: (1 + total_return)^(periods_per_year / n) - 1
     """
-    if len(returns) < 1 or max_drawdown <= 0:
+    if len(returns) < 1 or max_drawdown <= 0 or periods_per_year <= 0:
         return 0.0
     n = len(returns)
     years = n / periods_per_year
-    if years <= 0:
-        return 0.0
     total_return = sum(returns)
     base = max(1.0 + total_return, 1e-10)
     try:
