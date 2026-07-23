@@ -114,11 +114,18 @@ class KillSwitch:
         # For a $200 account: 10% daily loss ($20), 25% per-position ($50), 75% total ($150)
         # The config max values are the ABSOLUTE ceiling — never exceed them.
         # The percentage-based floor ensures tiny accounts have appropriately tight limits.
-        if current_equity is not None and current_equity > 0:
+        scaling_equity = current_equity
+        if scaling_equity is None or scaling_equity <= 0:
+            if self._base_equity > 0:
+                scaling_equity = self._base_equity
+            else:
+                scaling_equity = None
+        
+        if scaling_equity is not None and scaling_equity > 0:
             # Percentage-based floor (lines scale with account, never exceed config)
-            max_daily = min(self.max_daily_loss, max(current_equity * 0.10, 5.0))
-            max_per_pos = min(self.max_position_per_symbol, max(current_equity * 0.25, 10.0))
-            max_exposure = min(self.max_total_exposure, max(current_equity * 0.75, 30.0))
+            max_daily = min(self.max_daily_loss, max(scaling_equity * 0.10, 5.0))
+            max_per_pos = min(self.max_position_per_symbol, max(scaling_equity * 0.25, 10.0))
+            max_exposure = min(self.max_total_exposure, max(scaling_equity * 0.75, 30.0))
         else:
             max_daily = self.max_daily_loss
             max_per_pos = self.max_position_per_symbol
