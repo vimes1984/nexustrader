@@ -457,7 +457,7 @@ const Dashboard = {
   },
 
   renderProbability(prob) {
-    if (!prob) return;
+    if (!prob || typeof prob !== 'object') return;
     if (prob.probability != null) {
       const p = Number(prob.probability);
       byId('prob-value').textContent = (p*100).toFixed(1)+'%';
