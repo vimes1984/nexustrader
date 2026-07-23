@@ -54,10 +54,20 @@ class RSIStrategy(TradingStrategy):
         self.regime = "mean_reversion"
         self.default_oversold = oversold
         self.default_overbought = overbought
+        # Cache optimized thresholds to avoid DB query per signal
+        self._cached_oversold = None
+        self._cached_overbought = None
+
+    def _refresh_cache(self):
+        """Called externally when optimization settings change."""
+        self._cached_oversold = float(database.load_setting("opt_rsi_oversold", str(self.default_oversold)))
+        self._cached_overbought = float(database.load_setting("opt_rsi_overbought", str(self.default_overbought)))
 
     def generate_signal(self, row, history=None):
-        oversold = float(database.load_setting("opt_rsi_oversold", str(self.default_oversold)))
-        overbought = float(database.load_setting("opt_rsi_overbought", str(self.default_overbought)))
+        if self._cached_oversold is None:
+            self._refresh_cache()
+        oversold = self._cached_oversold
+        overbought = self._cached_overbought
         rsi = row.get('rsi', 50)
         if rsi is None:
             rsi = 50
