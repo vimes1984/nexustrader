@@ -771,7 +771,14 @@ class NexusTraderOrchestrator:
                 # making the threshold skyrocket to 0.387, blocking all new signals.
                 # Equity stays representative of true portfolio size (~$990).
                 _ref_val = current_equity if current_equity > 0 else self.execution_engine.balance
-                _min_sig = max(0.20, min(0.45, 1.0 / (1.0 + _ref_val / 500.0)))
+                # BUGFIX: Lower scaling denominator from 500 to 350 so threshold decays faster.
+                # At $200 equity: 1/(1+200/350) = 0.636 → clamped to 0.45
+                # At $500 equity: 1/(1+500/350) = 0.412 → 0.41 (was 0.50 → 0.45)
+                # At $1K equity: 1/(1+1000/350) = 0.259 → 0.26 (was 0.33)
+                # This allows more signals through as the account grows, preventing
+                # the starvation issue where most ensemble signals (0.10-0.25) are
+                # blocked despite being valid trading opportunities.
+                _min_sig = max(0.15, min(0.45, 1.0 / (1.0 + _ref_val / 350.0)))
             if abs(weighted_signal) >= _min_sig:
                 direction = "BUY" if weighted_signal > 0 else "SELL"
                 

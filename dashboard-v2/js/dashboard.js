@@ -367,8 +367,11 @@ const Dashboard = {
     if (data.positions) this.renderPositions(data.positions);
     if (data.weights) this.renderWeights(data.weights);
     if (data.probability) this.renderProbability(data.probability);
-    // Only fetch weights if not already present in data
-    if (!data.weights) this.fetchWeights();
+    // Only fetch weights if not already present in data and not recently fetched
+    if (!data.weights && (!this._lastWeightsFetch || Date.now() - this._lastWeightsFetch > 30000)) {
+      this._lastWeightsFetch = Date.now();
+      this.fetchWeights();
+    }
   },
 
   renderTrades(trades) {
