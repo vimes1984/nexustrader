@@ -1099,7 +1099,7 @@ class NexusTraderOrchestrator:
                 _all_closed = getattr(self.execution_engine, 'closed_trades', [])
                 if len(_all_closed) >= 10:
                     logging.info(f"[TRADE REPLAY] Running catch-up learning pass on {len(_all_closed)} closed trades...")
-                    for _t in _tickers_for_replay:
+                    for _t in self.tickers:
                         _learner = self.learning_engines.get(_t)
                         _ens = self.strategy_ensembles.get(_t)
                         if not _learner or not _ens:
