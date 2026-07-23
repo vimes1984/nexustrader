@@ -340,6 +340,8 @@ class PolicyNetwork:
         loss_after = _compute_loss_for_state(state, alignment, advantage)
         
         # Verify loss decreased (gradient descent should reduce loss)
+        # Use training=False for deterministic loss comparison
+        loss_after = _compute_loss_for_state(state, alignment, advantage, training_=False)
         if loss_after > loss_before * 1.01:  # >1% increase
             logging.warning(
                 f"[LOSS VERIFICATION] Loss increased from {loss_before:.4f} to {loss_after:.4f} "
@@ -351,8 +353,8 @@ class PolicyNetwork:
             self.t % self.replay_train_interval == 0
         ):
             batch = self.replay.sample(self.replay_batch_size)
-            # Compute loss before batch update
-            batch_loss_before = sum(_compute_loss_for_state(s, al, adv) for s, al, adv in batch) / len(batch)
+            # Compute loss before batch update (no dropout)
+            batch_loss_before = sum(_compute_loss_for_state(s, al, adv, training_=False) for s, al, adv in batch) / len(batch)
             
             # Accumulate gradients across batch
             dW_acc = [np.zeros_like(w) for w in self.W]
@@ -369,8 +371,8 @@ class PolicyNetwork:
                 db_acc[i] /= n
             self._apply_gradients(dW_acc, db_acc)
             
-            # Compute loss after batch update
-            batch_loss_after = sum(_compute_loss_for_state(s, al, adv) for s, al, adv in batch) / len(batch)
+            # Compute loss after batch update (no dropout)
+            batch_loss_after = sum(_compute_loss_for_state(s, al, adv, training_=False) for s, al, adv in batch) / len(batch)
             if batch_loss_after > batch_loss_before * 1.01:
                 logging.warning(
                     f"[LOSS VERIFICATION] Batch replay loss increased from {batch_loss_before:.4f} "
