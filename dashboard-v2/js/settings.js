@@ -160,4 +160,4 @@ const Settings = {
   },
 };
 
-document.addEventListener('DOMContentLoaded', () => Settings.init());
+(function() { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function() { Settings.init(); }); else Settings.init(); })();

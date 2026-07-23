@@ -49,4 +49,4 @@ const Strategy = {
   },
 };
 
-document.addEventListener('DOMContentLoaded', () => Strategy.init());
+(function() { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function() { Strategy.init(); }); else Strategy.init(); })();

@@ -129,4 +129,4 @@ const Neural = {
   },
 };
 
-document.addEventListener('DOMContentLoaded', () => { Neural.init(); try { if (typeof lucide !== 'undefined' && lucide?.createIcons) lucide.createIcons(); } catch(e) {} });
+(function() { var fn = function() { Neural.init(); try { if (typeof lucide !== 'undefined' && lucide?.createIcons) lucide.createIcons(); } catch(e) {} }; if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn); else fn(); })();

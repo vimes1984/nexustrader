@@ -153,4 +153,4 @@ const Agents = {
   },
 };
 
-document.addEventListener('DOMContentLoaded', () => { Agents.init(); lucide?.createIcons(); });
+(function() { var fn = function() { Agents.init(); try { if (typeof lucide !== 'undefined' && lucide?.createIcons) lucide.createIcons(); } catch(e) {} }; if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn); else fn(); })();

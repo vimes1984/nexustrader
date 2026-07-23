@@ -113,4 +113,4 @@ const Assets = {
   },
 };
 
-document.addEventListener('DOMContentLoaded', () => Assets.init());
+(function() { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function() { Assets.init(); }); else Assets.init(); })();

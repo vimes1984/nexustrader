@@ -84,4 +84,4 @@ const Logs = {
   },
 };
 
-document.addEventListener('DOMContentLoaded', () => Logs.init());
+(function() { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function() { Logs.init(); }); else Logs.init(); })();

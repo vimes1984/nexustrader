@@ -705,4 +705,11 @@ function showSkeleton(container, count = 3) {
   }
 }
 
-document.addEventListener('DOMContentLoaded', () => App.init());
+(function bootApp() {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() { App.init(); });
+  } else {
+    // If already loaded (dynamic script injection), init immediately
+    App.init();
+  }
+})();

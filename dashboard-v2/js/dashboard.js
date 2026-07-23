@@ -560,4 +560,11 @@ const Dashboard = {
   },
 };
 
-document.addEventListener('DOMContentLoaded', () => { Dashboard.init(); try { if (typeof lucide !== 'undefined' && lucide?.createIcons) lucide.createIcons(); } catch(e) {} });
+(function bootDashboard() {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() { Dashboard.init(); try { if (typeof lucide !== 'undefined' && lucide?.createIcons) lucide.createIcons(); } catch(e) {} });
+  } else {
+    Dashboard.init();
+    try { if (typeof lucide !== 'undefined' && lucide?.createIcons) lucide.createIcons(); } catch(e) {}
+  }
+})();

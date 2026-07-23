@@ -432,15 +432,48 @@ class TransformerPolicyNetwork:
         entropy_grad = probs * (entropy - log_p)  # dH/dz
         d_logits -= entropy_beta * entropy_grad
 
-        # Override _cache['probs'] for the low-level backward call to use
-        # the REINFORCE-adjusted gradient
-        old_probs = cache['probs']
-
-        # Call the low-level backward with this gradient
-        self.backward(d_logits)
+        # Call the low-level backward (not self.backward which aliases back here)
+        TransformerPolicyNetwork._backward_pass(self, d_logits)
 
         # Apply gradients
         self.apply_gradients()
+
+    def _backward_pass(self, d_out):
+        """Low-level backward through the transformer (called by reinforce_backward)."""
+        self.__class__._backward_impl(self, d_out)
+
+    @staticmethod
+    def _backward_impl(instance, d_out):
+        """Low-level backward implementation."""
+        cache = instance._cache
+        if 'probs' not in cache:
+            return np.zeros_like(d_out) if hasattr(d_out, 'shape') else np.array([])
+        batch_size = d_out.shape[0]
+        
+        d_logits = cache['probs'] * (d_out - np.sum(d_out * cache['probs'], axis=-1, keepdims=True))
+        
+        instance.d_policy_b2 = np.sum(d_logits, axis=0)
+        instance.d_policy_W2 = np.einsum('bh,ba->ha', cache['hidden'], d_logits)
+        d_hidden = np.einsum('ba,ha->bh', d_logits, instance.policy_W2)
+        d_hidden = d_hidden * (cache['hidden'] > 0)
+        
+        instance.d_policy_b1 = np.sum(d_hidden, axis=0)
+        instance.d_policy_W1 = np.einsum('bd,bh->dh', cache['pooled'], d_hidden)
+        d_pooled = np.einsum('bh,dh->bd', d_hidden, instance.policy_W1)
+        
+        seq_len = instance.max_seq_len
+        first_layer_cache = getattr(instance.encoder_layers[0], '_cache', None)
+        if isinstance(first_layer_cache, dict):
+            x_cache = first_layer_cache.get('x', None)
+            if x_cache is not None and hasattr(x_cache, 'shape') and len(x_cache.shape) >= 2:
+                seq_len = x_cache.shape[1]
+        d_x = np.broadcast_to(d_pooled[:, np.newaxis, :], (batch_size, seq_len, instance.d_model)) / seq_len
+        for layer in reversed(instance.encoder_layers):
+            try:
+                d_x = layer.backward(d_x)
+            except Exception:
+                pass
+        return d_x
 
     backward = reinforce_backward
     
@@ -618,8 +651,6 @@ class TransformerPolicyNetwork:
             'num_layers': len(self.encoder_layers),
             'max_seq_len': self.max_seq_len,
             'learning_rate': self.learning_rate,
-            'pos_encoding': json.loads(self.pos_encoding.to_json()),
-            'encoder_layers': [json.loads(layer.to_json()) for layer in self.encoder_layers],
             'vocab_size': self.vocab_size,
             'pos_encoding': json.loads(self.pos_encoding.to_json()),
             'encoder_layers': [json.loads(layer.to_json()) for layer in self.encoder_layers],

@@ -91,4 +91,4 @@ const Architecture = {
   },
 };
 
-document.addEventListener('DOMContentLoaded', () => { Architecture.init(); try { if (typeof lucide !== 'undefined' && lucide?.createIcons) lucide.createIcons(); } catch(e) {} });
+(function() { var fn = function() { Architecture.init(); try { if (typeof lucide !== 'undefined' && lucide?.createIcons) lucide.createIcons(); } catch(e) {} }; if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn); else fn(); })();

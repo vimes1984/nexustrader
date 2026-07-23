@@ -114,4 +114,4 @@ const Optimizations = {
   },
 };
 
-document.addEventListener('DOMContentLoaded', () => { Optimizations.init(); try { if (typeof lucide !== 'undefined' && lucide?.createIcons) lucide.createIcons(); } catch(e) {} });
+(function() { var fn = function() { Optimizations.init(); try { if (typeof lucide !== 'undefined' && lucide?.createIcons) lucide.createIcons(); } catch(e) {} }; if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn); else fn(); })();
