@@ -434,7 +434,7 @@ const Dashboard = {
     const text = el.querySelector('.freshness-text');
     if (!timestamp) {
       el.className = 'data-freshness loading';
-      if (text) text.textContent = 'Waiting...';
+      if (text) text.textContent = 'Waiting for data';
       return;
     }
     const age = Date.now() - (timestamp < 1e12 ? timestamp * 1000 : timestamp);
