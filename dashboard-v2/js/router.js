@@ -447,7 +447,12 @@ const App = {
         this.state.reconnectAttempts++;
         const delay = Math.min(30000, Math.pow(2, this.state.reconnectAttempts) * 1000) + Math.random() * 1000;
         this.debug('WS closed, reconnecting in ' + Math.round(delay) + 'ms (attempt ' + this.state.reconnectAttempts + ')');
-        this.state.reconnectTimer = setTimeout(() => this.connectWS(), delay);
+        this.state.reconnectTimer = setTimeout(() => {
+          // Clear stale polling timers if any
+          if (this._safetyTimer) clearTimeout(this._safetyTimer);
+          if (this._statusTimer) clearTimeout(this._statusTimer);
+          this.connectWS();
+        }, delay);
       };
 
       ws.onerror = (err) => {
@@ -463,8 +468,16 @@ const App = {
   },
 
   startPolling() {
-    setInterval(() => this.pollSafety(), 5000);
-    setInterval(() => this.pollStatus(), 10000);
+    const safetyLoop = async () => {
+      await this.pollSafety();
+      this._safetyTimer = setTimeout(safetyLoop, 5000);
+    };
+    const statusLoop = async () => {
+      await this.pollStatus();
+      this._statusTimer = setTimeout(statusLoop, 10000);
+    };
+    safetyLoop();
+    statusLoop();
   },
 
   async pollSafety() {
