@@ -36,7 +36,9 @@ def finbert_sentiment(text: str) -> Optional[Tuple[float, float]]:
         inputs = _FINBERT_TOKENIZER(text, return_tensors="pt", truncation=True, max_length=512)
         with torch.no_grad():
             outputs = _FINBERT_MODEL(**inputs)
-        probs = torch.nn.functional.softmax(outputs.logits, dim=-1).squeeze()
+        # Take first (and only) batch element — squeeze() can flatten batch dim
+        # incorrectly if the logits tensor has non-standard shape
+        probs = torch.nn.functional.softmax(outputs.logits, dim=-1)[0]
         # FinBERT model outputs: [negative, neutral, positive] logits
         # (ProsusAI/finbert uses the original FinBERT label order)
         neg, neu, pos = probs[0].item(), probs[1].item(), probs[2].item()
