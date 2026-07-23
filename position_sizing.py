@@ -203,8 +203,15 @@ def volatility_adjusted_qty(
     """
     Computes position quantity adjusted for volatility (ATR).
 
-    The idea: risk a fixed fraction of capital, but convert that to
-    position size based on ATR as a fraction of price.
+    Converts a risk budget (capital * risk_fraction) into a position size
+    such that a move of atr_multiplier * ATR represents the full risk amount.
+
+    Formula: qty = risk_amount / (ATR * atr_multiplier)
+
+    ATR/price ratio sanity checks:
+    - If ATR is near-zero (< 0.001% of price), use price-based fallback
+      to avoid unrealistically large positions.
+    - Position is capped at capital * 3 / price (3x leverage-like max).
 
     Args:
         capital: Available capital
@@ -217,19 +224,31 @@ def volatility_adjusted_qty(
     Returns:
         Number of units to trade (float)
     """
-    if price <= 0 or atr <= 0 or risk_fraction <= 0:
+    if price <= 0 or risk_fraction <= 0:
         return 0.0
 
     risk_amount = capital * risk_fraction
 
-    # Scale position so that an ATR * atr_multiplier move represents the risk amount
-    # qty = risk_amount / (atr * atr_multiplier)
-    denominator = atr * atr_multiplier
-    qty = risk_amount / denominator if denominator > 0 else 0.0
+    # Cap risk_amount to prevent degenerate positions
+    risk_amount = min(risk_amount, capital * 0.5)  # Never risk > 50% of capital
 
-    # Alternative: flat qty based on risk fraction / price (if ATR not helpful)
-    if qty <= 0:
-        qty = (capital * risk_fraction) / price
+    if atr > 0 and price > 0:
+        atr_ratio = atr / price
+        if atr_ratio >= 0.00001:
+            # Sufficient ATR/price ratio: use volatility-based sizing
+            denominator = atr * atr_multiplier
+            qty = risk_amount / denominator if denominator > 0 else 0.0
+        else:
+            # Near-zero ATR (e.g., stablecoin): use flat capital fraction
+            qty = risk_amount / price
+    else:
+        # No ATR data: use flat capital fraction
+        qty = risk_amount / price
+
+    # Hard cap to prevent excessive leverage: max 3x notional vs capital
+    max_notional = capital * 3.0
+    max_leverage_qty = max_notional / price if price > 0 else float('inf')
+    qty = min(qty, max_leverage_qty)
 
     if max_qty is not None:
         qty = min(qty, max_qty)
