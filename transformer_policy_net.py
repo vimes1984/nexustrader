@@ -245,18 +245,21 @@ class TransformerPolicyNetwork:
         self.learning_rate = learning_rate
         
         # Token embedder for raw token ID input (same architecture as LSTM path)
+        # Default vocab_size uses the tokenizer vocabulary if not specified
+        if vocab_size is None:
+            try:
+                from tokenizer import VOCAB_SIZE as _VS_DEFAULT
+                vocab_size = _VS_DEFAULT
+            except ImportError:
+                vocab_size = 128
         self.vocab_size = vocab_size
-        if vocab_size is not None:
-            from token_embedder import TokenEmbedder as _TE
-            from tokenizer import VOCAB_SIZE as _VS
-            self.embedder = _TE(
-                vocab_size=vocab_size,
-                embedding_dim=d_model,
-                max_seq_len=max_seq_len,
-                seed=seed,
-            )
-        else:
-            self.embedder = None
+        from token_embedder import TokenEmbedder as _TE
+        self.embedder = _TE(
+            vocab_size=vocab_size,
+            embedding_dim=d_model,
+            max_seq_len=max_seq_len,
+            seed=seed,
+        )
         
         # Layers
         self.pos_encoding = PositionalEncoding(max_seq_len, d_model)
@@ -346,12 +349,13 @@ class TransformerPolicyNetwork:
         """Policy gradient backward pass compatible with LearningEngine.learn_from_trade.
 
         Uses REINFORCE (Williams, 1992) with entropy bonus.
-        This assumes self.forward() was already called with training=True.
+        Runs forward(training=True) if not already cached.
         """
         cache = self._cache
         if 'probs' not in cache:
-            logging.warning("[Transformer] reinforce_backward() called without prior forward(training=True) — skipping")
-            return
+            logging.debug("[Transformer] reinforce_backward() — forwarding with training=True first")
+            self.forward(state, training=True)
+            cache = self._cache
 
         dir_val = 1.0 if trade_direction == "BUY" else -1.0
         alignment = np.array(strategy_signals) * dir_val
@@ -636,7 +640,13 @@ class TransformerPolicyNetwork:
         )
         if net.embedder is not None and 'embedder' in data:
             from token_embedder import TokenEmbedder as _TE
-            net.embedder = _TE.from_json(json.dumps(data['embedder']))
+            emb = _TE(
+                vocab_size=data.get('vocab_size', 128),
+                embedding_dim=net.d_model,
+                max_seq_len=net.max_seq_len,
+            )
+            emb.from_json(json.dumps(data['embedder']))
+            net.embedder = emb
         net.pos_encoding = PositionalEncoding.from_json(json.dumps(data['pos_encoding']))
         for i, layer_data in enumerate(data['encoder_layers']):
             net.encoder_layers[i] = TransformerEncoderLayer.from_json(json.dumps(layer_data))
