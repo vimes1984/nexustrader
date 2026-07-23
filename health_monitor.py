@@ -16,7 +16,7 @@ async def health_monitor_loop(orchestrator, kill_switch, drawdown_tracker):
     # Auto-resolve orphaned alerts from previous run
     notification_manager.resolve_alerts_by_category("system", "Trading Stream Orphaned")
     notification_manager.resolve_alerts_by_category("system", "API Server Unreachable")
-    notification_manager.resolve_alerts_by_category("system", "Loop Watchdog
+    notification_manager.resolve_alerts_by_category("system", "Loop Watchdog")
     
     while True:
         try:
@@ -94,7 +94,24 @@ async def health_monitor_loop(orchestrator, kill_switch, drawdown_tracker):
             else:
                 notification_manager.set_health_state('drawdown_alerted', '0')
             
-            # 6. Self-probe: check API server is responding on its own port
+            # 6. Track tick freshness: find most recent tick across any ticker
+            _latest_tick_ts = 0.0
+            _tickers = getattr(orchestrator, "tickers", []) or []
+            for _t in _tickers:
+                _tick = getattr(orchestrator, "latest_ticks", {}).get(_t, None) or {}
+                _ts = _tick.get("timestamp", 0) if isinstance(_tick, dict) else 0
+                if hasattr(_ts, "timestamp"):
+                    _ts = _ts.timestamp()
+                try:
+                    _ts = float(_ts)
+                except (ValueError, TypeError):
+                    _ts = 0.0
+                if _ts > _latest_tick_ts:
+                    _latest_tick_ts = _ts
+            
+            _tick_idle_sec = int(now - _latest_tick_ts) if _latest_tick_ts > 0 else -1
+            
+            # 7. Self-probe: check API server is responding on its own port
             try:
                 import urllib.request, json as _json
                 _url = "http://127.0.0.1:8000/api/health"
@@ -115,15 +132,18 @@ async def health_monitor_loop(orchestrator, kill_switch, drawdown_tracker):
                         f"Self-probe on http://127.0.0.1:8000/api/health failed: {_http_err}. Dashboard will be disconnected.")
                     last_http_warn = now
             
-            # 7. Watchdog: check if main loop processed a tick recently
-            _last_tick_time = getattr(orchestrator.execution_engine, '_last_trade_time', 0) if hasattr(orchestrator, 'execution_engine') else 0
-            if _last_tick_time > 0 and (now - _last_tick_time) > 60:
+            # 8. Watchdog: check if main loop processed data recently (trade-based + tick-based)
+            _last_trade_time = getattr(ee, '_last_trade_time', 0) if ee else 0
+            _watchdog_ref = max(_last_trade_time, _latest_tick_ts)
+            if _watchdog_ref > 0 and (now - _watchdog_ref) > 60:
                 if last_watchdog_warn == 0 or (now - last_watchdog_warn) > 600:
-                    _idle_sec = int(now - _last_tick_time)
-                    logging.warning(f"[HEALTH] Loop watchdog: no tick/trade for {_idle_sec}s (>60s threshold)")
+                    _idle_sec = int(now - _watchdog_ref)
+                    _tick_idle_str = f"{_tick_idle_sec}s" if _tick_idle_sec >= 0 else "N/A (no ticks yet)"
+                    _trade_idle_str = f"{int(now-_last_trade_time)}s" if _last_trade_time > 0 else "N/A"
+                    logging.warning(f"[HEALTH] Loop watchdog: idle for {_idle_sec}s (tick_age={_tick_idle_str}, trade_age={_trade_idle_str})")
                     notification_manager.push_alert("warning", "trading",
                         "Main Loop Stalled",
-                        f"No market data tick or trade closed in {_idle_sec} seconds. Main loop may be hung.")
+                        f"No market data tick or trade for {_idle_sec}s. tick_age={_tick_idle_str}, trade_age={_trade_idle_str}")
                     last_watchdog_warn = now
             else:
                 last_watchdog_warn = 0

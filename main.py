@@ -530,13 +530,17 @@ class NexusTraderOrchestrator:
                 [t for t in self.execution_engine.closed_trades if t['symbol'] == ticker]
             )
             
-            # The action is the strategy signal ensemble that was used
+            # The action is the strategy signal ensemble that was used.
+            # PPO expects discrete action indices. Use the strategy with the
+            # strongest signal magnitude (absolute value) as the discrete action.
             action_vec = strategy_signals if strategy_signals else [0.0] * len(ensemble.strategies)
-            # Use weighted sum of signals as scalar action for replay
-            action_scalar = sum(action_vec) / (len(action_vec) + 1e-9)
+            if action_vec:
+                action_idx = int(np.argmax([abs(s) for s in action_vec]))
+            else:
+                action_idx = 0
             
             # Push experience with TD-error = |PnL| as initial priority
-            replay.add(state, action_scalar, pnl_percent, next_state, done=True, error=abs(pnl_percent))
+            replay.add(state, action_idx, pnl_percent, next_state, done=True, error=abs(pnl_percent))
             
             # Periodically sample and perform PPO update
             if len(replay) >= self.ppo_batch_size and (
