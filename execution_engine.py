@@ -445,10 +445,11 @@ class ExecutionEngine:
         for pos in self.active_positions.values():
             existing_exposure += pos.get('quantity', 0) * pos.get('entry_price', 0)
         
-        # Available capital for new positions = total equity minus existing exposure
-        # For BUY: balance already reflects deduction, so this is conservative
-        # For SELL: balance is full, but exposure is notional — cap by total equity
-        available_capital = max(0.0, total_equity - existing_exposure) if total_equity > 0 else max(0.0, self.balance)
+        # Available capital for new positions = cash balance
+        # For BUY positions: balance was reduced by position_cost at entry
+        # For SELL positions: only fee was deducted, but notional exposure is tracked
+        # Using balance directly avoids double-counting SELL exposure
+        available_capital = max(0.0, self.balance)
         
         # Multi-asset Kelly: fraction of available capital, not total balance
         # This prevents over-betting when multiple concurrent positions exist.
