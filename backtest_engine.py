@@ -95,6 +95,145 @@ class BacktestEngine:
         }
 
     # ------------------------------------------------------------------
+    # Monte Carlo / Bootstrap
+    # ------------------------------------------------------------------
+
+    def run_monte_carlo(self, candles: list, n_simulations: int = 1000,
+                        entry_threshold: float = 0.30,
+                        exit_threshold: float = 0.10) -> dict:
+        """Bootstrap resampling of trade returns for strategy robustness.
+
+        Performs:
+        1. Standard bootstrap (resample trades with replacement)
+        2. Block bootstrap (preserves autocorrelation structure)
+        3. Convergence diagnostics
+        """
+        # Get the ensemble's trade list from one full pass
+        base = self._run_nexus_ensemble(
+            candles, entry_threshold=entry_threshold,
+            exit_threshold=exit_threshold)
+        base_return = base.get("total_return", 0.0)
+        base_dd = base.get("max_drawdown", 0.0)
+        
+        # Re-run to collect raw trade-level PnL list
+        trades_pnl = self._collect_trade_pnls(
+            candles, entry_threshold, exit_threshold)
+        n_trades = len(trades_pnl)
+        if n_trades < 5:
+            return {
+                "n_simulations": 0,
+                "mean_return": float(base_return),
+                "std_return": 0.0,
+                "sharpe_bootstrap": 0.0,
+                "var_95": 0.0,
+                "cvar_95": 0.0,
+                "prob_positive": 1.0 if base_return > 0 else 0.0,
+                "block_bootstrap_mean": float(base_return),
+                "converged": True,
+                "note": "Too few trades for bootstrap"
+            }
+        
+        pnl_array = np.array(trades_pnl, dtype=np.float64)
+        
+        # --- Standard bootstrap (i.i.d. resampling) ---
+        boot_returns = []
+        for _ in range(n_simulations):
+            indices = np.random.randint(0, n_trades, size=n_trades)
+            sampled = pnl_array[indices]
+            boot_ret = np.sum(sampled)
+            boot_returns.append(boot_ret)
+        
+        boot_arr = np.array(boot_returns)
+        mean_ret = float(np.mean(boot_arr))
+        std_ret = float(np.std(boot_arr))
+        
+        # VaR and CVaR at 95%
+        sorted_ret = np.sort(boot_arr)
+        var_idx = int(0.05 * n_simulations)
+        var_95 = float(sorted_ret[var_idx])
+        cvar_95 = float(np.mean(sorted_ret[:var_idx + 1])) if var_idx > 0 else var_95
+        
+        prob_positive = float(np.mean(boot_arr > 0))
+        
+        # Bootstrap Sharpe (annualized proxy: mean / std of trade-returns)
+        boot_sharpe = (mean_ret / std_ret * math.sqrt(252)) if std_ret > 1e-10 else 0.0
+        
+        # --- Block bootstrap (for autocorrelated returns) ---
+        block_size = max(1, int(math.sqrt(n_trades)))
+        n_blocks = int(math.ceil(n_trades / block_size))
+        block_returns = []
+        for _ in range(n_simulations):
+            sampled_blocks = []
+            for _ in range(n_blocks):
+                start = np.random.randint(0, n_trades - block_size + 1)
+                sampled_blocks.extend(pnl_array[start:start + block_size].tolist())
+            sampled_blocks = sampled_blocks[:n_trades]
+            block_ret = np.sum(sampled_blocks)
+            block_returns.append(block_ret)
+        
+        block_mean = float(np.mean(block_returns))
+        block_std = float(np.std(block_returns))
+        block_sharpe = (block_mean / block_std * math.sqrt(252)) if block_std > 1e-10 else 0.0
+        
+        # --- Convergence diagnostic: running mean vs simulation count ---
+        cumulative = np.cumsum(boot_arr) / (np.arange(n_simulations) + 1)
+        # Converged if last 10% of running mean is within 5% of final mean
+        tail = cumulative[int(0.9 * n_simulations):]
+        convergence_error = float(np.std(tail) / max(abs(mean_ret), 1e-6))
+        converged = convergence_error < 0.05
+        
+        return {
+            "n_simulations": n_simulations,
+            "n_trades": n_trades,
+            "base_return": float(base_return),
+            "base_max_drawdown": float(base_dd),
+            "mean_return": round(mean_ret, 6),
+            "std_return": round(std_ret, 6),
+            "sharpe_bootstrap": round(boot_sharpe, 4),
+            "sharpe_block_bootstrap": round(block_sharpe, 4),
+            "var_95": round(var_95, 6),
+            "cvar_95": round(cvar_95, 6),
+            "prob_positive": round(prob_positive, 4),
+            "block_bootstrap_mean": round(block_mean, 6),
+            "block_bootstrap_std": round(block_std, 6),
+            "converged": bool(converged),
+            "convergence_error": round(convergence_error, 6),
+        }
+
+    def _collect_trade_pnls(self, candles, entry_threshold=0.30, exit_threshold=0.10):
+        """Run ensemble once and return list of individual trade PnL values."""
+        try:
+            ensemble = StrategyEnsemble()
+        except Exception:
+            return []
+        trades_pnl = []
+        position = None
+        for i, row in enumerate(candles):
+            history = candles[max(0, i - 100):i]
+            try:
+                signal, _ = ensemble.get_weighted_signal(row, history_df=history)
+            except Exception:
+                signal = 0.0
+            close = row.get("close", 0)
+            if position is None and signal > 0.3:
+                entry = apply_entry_cost(close, "BUY", self.cost_model)
+                position = {"entry": entry, "side": "BUY"}
+            elif position is None and signal < -0.3:
+                entry = apply_entry_cost(close, "SELL", self.cost_model)
+                position = {"entry": entry, "side": "SELL"}
+            elif position is not None and abs(signal) < 0.1:
+                exit_p = apply_exit_cost(close, position["side"], self.cost_model)
+                pnl = (exit_p - position["entry"]) if position["side"] == "BUY" else (position["entry"] - exit_p)
+                trades_pnl.append(pnl)
+                position = None
+        if position is not None and candles:
+            close = candles[-1].get("close", 0)
+            exit_p = apply_exit_cost(close, position["side"], self.cost_model)
+            pnl = (exit_p - position["entry"]) if position["side"] == "BUY" else (position["entry"] - exit_p)
+            trades_pnl.append(pnl)
+        return trades_pnl
+
+    # ------------------------------------------------------------------
     # PPO policy replay
     # ------------------------------------------------------------------
 
