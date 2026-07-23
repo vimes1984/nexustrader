@@ -5,7 +5,7 @@ import os
 import threading
 import database
 
-# Global lock protecting shared execution state (active_positions, balance, pending_limit_orders)
+# Global lock protecting shared execution state (active_positions, balance)
 _exec_lock = threading.RLock()
 
 def normalize_kraken_asset(asset: str) -> str:
@@ -148,7 +148,6 @@ class ExecutionEngine:
                 logging.info(f"[RESTART RECOVERY] Restored balance from ${self.balance - diff:.2f} to ${self.balance:.2f} (orphaned position costs recovered)")
         
         self.learning_callback = None
-        self.pending_limit_orders = {}  # symbol -> pending order dict
 
     def _get_asset_balance(self, asset):
         """Get the balance of a specific asset from latest Kraken sync.
@@ -494,8 +493,8 @@ class ExecutionEngine:
                 logging.warning(f"[PORTFOLIO RISK] Single position {single_exposure:.1%} exceeds {self.max_concentration:.1%}. Skipping {symbol}.")
                 return False
         
-        if symbol in self.active_positions or symbol in self.pending_limit_orders:
-            logging.warning(f"Position or pending order already exists for {symbol}. Skipping.")
+        if symbol in self.active_positions:
+            logging.warning(f"Position already exists for {symbol}. Skipping.")
             return False
 
         direction = evaluation["direction"]
