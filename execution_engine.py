@@ -531,6 +531,7 @@ class ExecutionEngine:
                     return None  # skip — cannot meet $5 minimum
                 if position_value > max_sell_value:
                     position_value = max_sell_value
+                    logging.info("[SIZE CAP] SELL %s capped to $%.2f" % (symbol, max_sell_value))
             except Exception as e:
                 logging.warning("[SIZE CAP] Could not cap SELL size: %s" % str(e))
         
