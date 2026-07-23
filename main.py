@@ -3946,7 +3946,7 @@ async def websocket_endpoint(websocket: WebSocket):
         _total_pnl_ws = sum(float(t.get("pnl", 0.0) or 0.0) for t in trades_to_send)
         _win_count_ws = sum(1 for t in trades_to_send if float(t.get("pnl", 0) or 0) > 0)
         _loss_count_ws = sum(1 for t in trades_to_send if float(t.get("pnl", 0) or 0) < 0)
-        _winrate_ws = (_win_count_ws / (_win_count_ws + _loss_count_ws)) if (_win_count_ws + _loss_count_ws) > 0 else 0.0
+        _winrate_ws = (_win_count_ws / (_win_count_ws + _loss_count_ws) * 100) if (_win_count_ws + _loss_count_ws) > 0 else 0.0
         _init_bal_ws = orchestrator.execution_engine.initial_balance
         _total_pnl_pct_ws = (_total_pnl_ws / _init_bal_ws * 100) if _init_bal_ws > 0 else 0.0
         init_state = {
