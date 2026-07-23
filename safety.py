@@ -129,11 +129,10 @@ class KillSwitch:
             max_per_pos = min(self.max_position_per_symbol, max(scaling_equity * 0.25, 10.0))
             max_exposure = min(self.max_total_exposure, max(scaling_equity * 0.75, 30.0))
         else:
-            # Fall back to config defaults scaled from reference account size
-            scale_to_ref = self._account_size_reference / 200.0 if self._account_size_reference > 0 else 1.0
-            max_daily = min(self.max_daily_loss, max(20.0 * scale_to_ref, 20.0))
-            max_per_pos = min(self.max_position_per_symbol, max(50.0 * scale_to_ref, 50.0))
-            max_exposure = min(self.max_total_exposure, max(150.0 * scale_to_ref, 150.0))
+            # Fall back: use config defaults directly (no equity info to scale from)
+            max_daily = min(self.max_daily_loss, max(self._account_size_reference * 0.10, 5.0))
+            max_per_pos = min(self.max_position_per_symbol, max(self._account_size_reference * 0.25, 10.0))
+            max_exposure = min(self.max_total_exposure, max(self._account_size_reference * 0.75, 30.0))
 
         # Daily reset every 24h
         if time.time() - self.daily_reset_time > 86400:
