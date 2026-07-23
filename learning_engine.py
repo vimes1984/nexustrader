@@ -67,6 +67,16 @@ class PolicyNetwork:
     avoiding weight collapse from single-trade noise.
     """
     def __init__(self, state_dim=8, hidden_dim=12, action_dim=6, learning_rate=0.05, hidden_layers=1, dropout=0.0, optimizer="Adam"):
+        # Validate configuration — warn on degenerate settings
+        if hidden_dim < 4:
+            logging.warning(f"[NET CONFIG] hidden_dim={hidden_dim} < 4 — network may lack representational capacity")
+        if hidden_layers < 1:
+            logging.warning(f"[NET CONFIG] hidden_layers={hidden_layers} < 1 — no hidden layers creates linear-only policy")
+            hidden_layers = 1
+        if learning_rate <= 0 or learning_rate > 1.0:
+            logging.warning(f"[NET CONFIG] learning_rate={learning_rate} outside [0, 1] — clamping to 0.05")
+            learning_rate = 0.05
+            
         self.state_dim = state_dim
         self.hidden_dim = hidden_dim
         self.action_dim = action_dim
