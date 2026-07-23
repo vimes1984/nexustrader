@@ -26,8 +26,12 @@ const Assets = {
     tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text-muted)">Loading...</td></tr>';
     try {
       const data = await API.assetList();
-      const tickers = Array.isArray(data) ? data : (data?.tickers || data?.assets || []);
-      if (!tickers.length) {
+      let tickers = Array.isArray(data) ? data : (data?.tickers || data?.assets || []);
+      // Handle string (space/comma separated) ticker list
+      if (typeof tickers === 'string') {
+        tickers = tickers.split(/[,\s]+/).filter(Boolean);
+      }
+      if (!tickers || !tickers.length) {
         tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><div class="empty-state-icon" aria-hidden="true">📦</div><div class="empty-state-title">No tracked assets</div><div class="empty-state-desc">Add your first ticker symbol to start tracking assets.</div></div></td></tr>';
         return;
       }

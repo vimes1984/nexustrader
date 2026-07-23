@@ -907,10 +907,13 @@ class NexusTraderOrchestrator:
                                     "llm_explanation": llm_explanation or "LLaMA analysis pending..."
                                 }))
                             else:
+                                # BUGFIX: pending_limit_orders dict is never populated by open_position.
+                                # Use the active position instead to avoid KeyError crash.
+                                _limit_order = self.execution_engine.pending_limit_orders.get(ticker, self.execution_engine.active_positions.get(ticker, {}))
                                 self._run_async(self.broadcast_message({
                                     "type": "limit_order_placed",
                                     "ticker": ticker,
-                                    "order": self.execution_engine.pending_limit_orders[ticker],
+                                    "order": _limit_order,
                                     "balance": self.execution_engine.balance,
                                     "equity": current_equity
                                 }))
