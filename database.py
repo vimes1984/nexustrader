@@ -435,34 +435,36 @@ def save_trade(trade):
             sources_val = sources_val.tolist()
         sources_str = json.dumps(sources_val)
         # Ensure calibration columns exist (load_calibration_from_trades has ALTER TABLE fallbacks)
+        # Use .get() with defaults for all trade fields to prevent KeyError crashes
+        # when callers pass incomplete trade dicts
+        symbol = trade.get('symbol', 'UNKNOWN')
+        direction = trade.get('direction', 'long')
+        quantity = float(trade.get('quantity', 0))
+        entry_price = float(trade.get('entry_price', 0))
+        exit_price = float(trade.get('exit_price', 0))
+        pnl = float(trade.get('pnl', 0))
+        pnl_percent = float(trade.get('pnl_percent', 0))
+        exit_reason = trade.get('exit_reason', '')
+        entry_time = float(trade.get('entry_time', time.time()))
+        exit_time = float(trade.get('exit_time', time.time()))
+        brain_name = trade.get('policy_brain', 'Default Brain')
+        trading_mode = trade.get('trading_mode', 'paper')
+        pred_win = trade.get('predicted_win_probability')
+        exp_val = trade.get('expected_value')
+        rr_ratio = trade.get('risk_reward_ratio')
+        kelly_frac = trade.get('kelly_fraction')
+        
         cursor.execute("""
         INSERT INTO trades (symbol, direction, quantity, entry_price, exit_price, pnl, pnl_percent, exit_reason, entry_time, exit_time, strategy_signals, sentiment_sources, policy_brain, trading_mode, predicted_win_probability, expected_value, risk_reward_ratio, kelly_fraction)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
-            trade['symbol'],
-            trade['direction'],
-            float(trade['quantity']),
-            float(trade['entry_price']),
-            float(trade['exit_price']),
-            float(trade['pnl']),
-            float(trade['pnl_percent']),
-            trade['exit_reason'],
-            float(trade['entry_time']),
-            float(trade['exit_time']),
-            signals_str,
-            sources_str,
-            trade.get('policy_brain', 'Default Brain'),
-            trade.get('trading_mode', 'paper'),
-            trade.get('predicted_win_probability'),
-            trade.get('expected_value'),
-            trade.get('risk_reward_ratio'),
-            trade.get('kelly_fraction')
+            symbol, direction, quantity, entry_price, exit_price,
+            pnl, pnl_percent, exit_reason, entry_time, exit_time,
+            signals_str, sources_str, brain_name, trading_mode,
+            pred_win, exp_val, rr_ratio, kelly_frac
         ))
         
         # Update policy_brain's accumulated efficacy metrics
-        brain_name = trade.get('policy_brain', 'Default Brain')
-        pnl = float(trade['pnl'])
-        pnl_percent = float(trade['pnl_percent'])
         is_win = 1 if pnl > 0 else 0
         cursor.execute(
             """
@@ -473,7 +475,7 @@ def save_trade(trade):
                 accumulated_wins = accumulated_wins + ?
             WHERE name = ? AND ticker = ?
             """,
-            (pnl, pnl_percent, is_win, brain_name, trade['symbol'])
+            (pnl, pnl_percent, is_win, brain_name, symbol)
         )
         conn.commit()
     except Exception as e:
@@ -499,7 +501,7 @@ def load_trades(trading_mode=None):
             for k in list(trade.keys()):
                 if k in numeric_fields:
                     try:
-                        trade[k] = float(trade[k]) if k != "entry_time" and k != "exit_time" else float(trade[k])
+                        trade[k] = float(trade[k])
                     except (ValueError, TypeError):
                         trade[k] = 0.0
             if "strategy_signals" in trade and trade["strategy_signals"]:

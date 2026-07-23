@@ -15,6 +15,9 @@ class PerformanceMetrics:
     avg_winner: float = 0.0
     avg_loser: float = 0.0
     expectancy: float = 0.0
+    total_fees: float = 0.0
+    total_slippage: float = 0.0
+    calmar_ratio: float = 0.0
 
 def _infer_periods_per_year(curve_len: int) -> int:
     """Infer the number of bars per year from the length of the equity curve.
@@ -75,6 +78,10 @@ def calculate_metrics(equity_curve: List[float], trades: List[dict], periods_per
             if dd > max_dd:
                 max_dd = dd
         m.max_drawdown = max_dd
+        # Calmar ratio: total return / max drawdown (capped at 100 for JSON safety)
+        m.calmar_ratio = m.total_return / max_dd if max_dd > 0 else 0.0
+        if m.calmar_ratio > 100.0:
+            m.calmar_ratio = 100.0
         start_equity = cleaned_curve[0]
         end_equity = cleaned_curve[-1]
         if start_equity > 0:
@@ -132,6 +139,12 @@ def calculate_metrics(equity_curve: List[float], trades: List[dict], periods_per
     m.avg_winner = sum(winners) / len(winners) if winners else 0.0
     m.avg_loser = sum(losers) / len(losers) if losers else 0.0
 
+    # Track fees and slippage from trade records
+    fees = [float(t.get("fee", 0.0) or 0.0) for t in trades]
+    slippages = [float(t.get("slippage_paid", 0.0) or 0.0) for t in trades]
+    m.total_fees = sum(fees)
+    m.total_slippage = sum(slippages)
+
     gross_profit = sum(winners)
     gross_loss = abs(sum(losers))
     # Cap profit factor at 100 for JSON-safety (inf breaks serialization)
@@ -147,5 +160,10 @@ def calculate_metrics(equity_curve: List[float], trades: List[dict], periods_per
     m.expectancy = (m.win_rate * m.avg_winner) + ((1.0 - m.win_rate) * m.avg_loser)
     if decision_count == 0:
         m.expectancy = 0.0
+
+    # Recompute Calmar with total_return now set (was based on start_equity which may be 0)
+    if m.max_drawdown > 0 and m.total_return != 0.0:
+        m.calmar_ratio = m.total_return / m.max_drawdown
+        m.calmar_ratio = min(m.calmar_ratio, 100.0)
 
     return m

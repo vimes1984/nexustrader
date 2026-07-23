@@ -562,7 +562,7 @@ class OfflineTrainer:
             'loss_reduction_pct': (first.avg_loss - last.avg_loss) / max(first.avg_loss, 1e-8) * 100,
             'final_entropy': last.policy_entropy,
             'final_reward': last.avg_reward,
-            'total_samples': last.samples * len(self.history),
+            'total_unique_samples': last.samples,
             'total_time_sec': sum(e.elapsed_sec for e in self.history),
         }
 
