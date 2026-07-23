@@ -93,7 +93,7 @@ async def api_auth_middleware(request: Request, call_next):
         "/api/trades", "/api/trades/all", "/api/history",
         "/api/portfolio/history", "/api/assets", "/api/positions",
         "/api/trading/signals", "/api/trading/reasoning",
-        "/api/weights", "/api/weights/history",
+        "/api/weights", "/api/weights/history", "/api/probability",
         "/api/safety/status", "/api/quant/status", "/api/quant/prompt",
         "/api/system/config", "/api/system/logs", "/api/system/daily_goal",
         "/api/system/shadow_trades", "/api/system/shadow_performance",
@@ -1947,6 +1947,24 @@ def get_weights(ticker: str = "ETH-USD"):
         "lifetime_steps": steps,
         "model_dna": model_dna
     }
+
+@app.get("/api/probability")
+def get_probability():
+    """Latest probability engine evaluation data."""
+    try:
+        pe = orchestrator.probability_engine
+        last_eval = getattr(pe, "last_evaluation", {}) or {}
+        return {
+            "probability": last_eval.get("probability", 0),
+            "ev": last_eval.get("expected_value", 0),
+            "risk_reward": last_eval.get("risk_reward", 0),
+            "kelly_fraction": pe.kelly_fraction,
+            "signal_strength": last_eval.get("signal_strength", 0),
+            "viable": last_eval.get("is_viable", False),
+            "risk_mode": getattr(pe, "risk_mode", "conservative"),
+        }
+    except Exception:
+        return {"probability": 0, "ev": 0, "risk_reward": 0, "kelly_fraction": 0, "viable": False}
 
 @app.get("/api/weights/history")
 def get_weights_history(ticker: str = "ETH-USD"):

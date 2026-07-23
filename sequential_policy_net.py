@@ -306,6 +306,11 @@ class SequentialPolicyNetwork:
             reward: trade PnL percentage (e.g. 0.024 for +2.4%)
             weight_floor: minimum strategy weight (for exploration)
         """
+        # Guard: must call forward() before backward()
+        if self.cache_probs is None:
+            logging.warning("[LSTM] backward() called without prior forward() — skipping gradient update")
+            return
+
         self.t += 1
 
         dir_val = 1.0 if trade_direction == "BUY" else -1.0
