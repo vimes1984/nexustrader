@@ -41,8 +41,7 @@ def run_nn_self_improvement(trigger_deploy: bool = False):
     # Read recent trades from DB
     recent_trades = []
     try:
-        conn = sqlite3.connect(DB_PATH)
-        conn.row_factory = sqlite3.Row
+        conn = _db.get_db_connection()
         c = conn.cursor()
         c.execute("SELECT id, symbol, direction, entry_price, exit_price, pnl, exit_reason FROM trades ORDER BY id DESC LIMIT 15")
         recent_trades = [dict(r) for r in c.fetchall()]
