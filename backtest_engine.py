@@ -95,6 +95,120 @@ class BacktestEngine:
         }
 
     # ------------------------------------------------------------------
+    # Walk-forward optimization with purging & embargo
+    # ------------------------------------------------------------------
+
+    def run_walk_forward(self, candles: list, n_splits: int = 5,
+                          purge_bars: int = 10, embargo_bars: int = 5,
+                          entry_threshold: float = 0.30,
+                          exit_threshold: float = 0.10) -> dict:
+        """Walk-forward optimization with proper purging and embargo.
+
+        Splits the candle series into n_splits sequential train/test folds.
+        Each fold: train on fold_N-1, test on fold_N.
+        - **Purging**: removes purge_bars from the start of each test set to
+          avoid stale indicator lookback contamination.
+        - **Embargo**: removes embargo_bars from the end of each training set
+          to prevent test data leaking into the next training window.
+
+        Returns per-fold metrics plus an out-of-sample (OOS) composite.
+        """
+        total = len(candles)
+        if total < 100:
+            return {"error": f"Not enough data ({total} candles, need >= 100)"}
+
+        fold_size = total // n_splits
+        if fold_size < 50:
+            n_splits = max(2, total // 50)
+            fold_size = total // n_splits
+
+        fold_results = []
+        oos_equity = [1.0]
+        oos_nav = 1.0
+        oos_trades = []
+
+        for fold in range(1, n_splits):
+            # Training set: fold_N-1
+            train_start = (fold - 1) * fold_size
+            train_end = fold * fold_size
+
+            # Test set: fold_N with purging
+            test_start_raw = fold * fold_size
+            test_start = test_start_raw + purge_bars
+            test_end = total if fold == n_splits - 1 else (fold + 1) * fold_size
+
+            # Apply embargo: remove embargo_bars from end of training
+            effective_train_end = train_end - embargo_bars
+            if effective_train_end <= train_start:
+                continue  # skip if embargo collapses training
+
+            train_candles = candles[train_start:effective_train_end]
+            test_candles = candles[test_start:test_end]
+
+            if len(train_candles) < 30 or len(test_candles) < 10:
+                continue
+
+            # Train ensemble on this fold
+            try:
+                ensemble = StrategyEnsemble(history_df=train_candles)
+            except Exception:
+                continue
+
+            # Run on test set
+            fold_nav = 1.0
+            fold_trades = []
+            for i, row in enumerate(test_candles):
+                history = candles[max(0, test_start + i - 100):test_start + i]
+                try:
+                    signal, _ = ensemble.get_weighted_signal(row, history_df=history)
+                except Exception:
+                    signal = 0.0
+                close = row.get("close", 0)
+
+                # Simpler entry logic for walk-forward
+                if close > 0 and signal > entry_threshold:
+                    entry_p = close * 1.0026
+                    fold_nav *= (close / entry_p)
+                elif close > 0 and signal < -entry_threshold:
+                    entry_p = close * 0.9974
+                    fold_nav *= (entry_p / close)
+
+            fold_ret = fold_nav - 1.0
+            fold_results.append({
+                "fold": fold,
+                "train": f"{train_start}-{effective_train_end}",
+                "test": f"{test_start}-{test_end}",
+                "train_size": len(train_candles),
+                "test_size": len(test_candles),
+                "return": round(fold_ret, 6),
+            })
+
+            # Accumulate OOS equity (re-sample fold returns)
+            oos_nav *= fold_nav
+            oos_equity.append(oos_nav)
+
+        if not fold_results:
+            return {"error": "No valid folds"}
+
+        # OOS composite
+        oos_return = round(oos_nav - 1.0, 6)
+        fold_returns = [f["return"] for f in fold_results]
+        mean_oos = float(np.mean(fold_returns))
+        std_oos = float(np.std(fold_returns)) if len(fold_returns) > 1 else 0.0
+        oos_sharpe = (mean_oos / std_oos * math.sqrt(252)) if std_oos > 1e-10 else 0.0
+
+        return {
+            "n_splits": len(fold_results),
+            "purge_bars": purge_bars,
+            "embargo_bars": embargo_bars,
+            "fold_results": fold_results,
+            "oos_return": oos_return,
+            "oos_sharpe": round(oos_sharpe, 4),
+            "mean_fold_return": round(mean_oos, 6),
+            "std_fold_return": round(std_oos, 6),
+        }
+
+    # ------------------------------------------------------------------
     # Monte Carlo / Bootstrap
     # ------------------------------------------------------------------
 
