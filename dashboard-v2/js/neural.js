@@ -53,7 +53,7 @@ const Neural = {
   },
 
   async trainBrain(ticker) {
-    const target = ticker || App.state.activeTicker;
+    const target = ticker || (App.state && App.state.activeTicker) || 'BTC-USD';
     App.toast('Training brain for ' + target + '...', 'info');
     try {
       const data = await API.trainBrain(target);
