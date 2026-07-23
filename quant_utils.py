@@ -3,12 +3,25 @@ import pandas as pd
 import logging
 
 class KalmanFilterPrice:
-    """1D Kalman Filter to track true price trend by filtering market noise."""
-    def __init__(self, process_variance=1e-4, measurement_variance=1e-2):
+    """1D Kalman Filter to track true price trend by filtering market noise.
+    
+    Includes outlier rejection: measurements deviating > 5 * sqrt(P+R) from the
+    prediction are treated as outliers and rejected outright.
+    """
+    def __init__(self, process_variance=1e-4, measurement_variance=1e-2,
+                 outlier_threshold_sigma=5.0):
         self.Q = process_variance  # Process noise covariance
         self.R = measurement_variance  # Measurement noise covariance
         self.x = None  # Estimated price (state estimate)
         self.P = 1.0   # Estimation error covariance
+        self.outlier_threshold = outlier_threshold_sigma  # Std-dev threshold for outlier rejection
+        self._n_updates = 0  # Track for auto-reset after long outlier streak
+
+    def _reset(self, measurement):
+        """Reinitialize filter state with a measurement."""
+        self.x = measurement
+        self.P = 1.0
+        self._n_updates = 0
 
     def update(self, measurement):
         # Guard against NaN or inf measurements
@@ -16,14 +29,26 @@ class KalmanFilterPrice:
             return float(self.x) if self.x is not None else 0.0
             
         if self.x is None:
-            self.x = measurement
+            self._reset(measurement)
             return float(self.x)
 
         # 1. Predict state and error covariance
         x_pred = self.x
         P_pred = self.P + self.Q
 
-        # 2. Update (Correction)
+        # 2. Outlier rejection: check prediction residual
+        residual = abs(measurement - x_pred)
+        expected_noise = self.outlier_threshold * np.sqrt(P_pred + self.R)
+        if residual > expected_noise:
+            # Reject this measurement — keep state unchanged but increase uncertainty
+            self.P = P_pred  # Let uncertainty grow to track through noise
+            self._n_updates += 1
+            # If more than 5 consecutive outliers, reinitialize (data feed may have reset)
+            if self._n_updates > 5:
+                self._reset(measurement)
+            return float(self.x)
+
+        # 3. Update (Correction)
         kalman_gain = P_pred / (P_pred + self.R)
         # Guard against numerical instability in Kalman gain
         kalman_gain = np.clip(kalman_gain, 0.0, 1.0)
@@ -31,6 +56,7 @@ class KalmanFilterPrice:
         self.P = (1.0 - kalman_gain) * P_pred
         # Prevent P from going negative due to floating point
         self.P = max(self.P, 1e-12)
+        self._n_updates = 0  # Reset outlier counter on valid update
 
         return float(self.x)
 
