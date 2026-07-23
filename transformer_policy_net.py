@@ -403,13 +403,18 @@ class TransformerPolicyNetwork:
 
     @staticmethod
     def _backward_impl(instance, d_out):
-        """Low-level backward implementation."""
+        """Low-level backward implementation.
+
+        d_out is already dL/d(logits) — the gradient at the logit level
+        (computed by reinforce_backward).  No additional softmax Jacobian
+        transformation is needed here.
+        """
         cache = instance._cache
         if 'probs' not in cache:
             return np.zeros_like(d_out) if hasattr(d_out, 'shape') else np.array([])
         batch_size = d_out.shape[0]
         
-        d_logits = cache['probs'] * (d_out - np.sum(d_out * cache['probs'], axis=-1, keepdims=True))
+        d_logits = d_out  # Already ∂L/∂(logits)
         
         instance.d_policy_b2 = np.sum(d_logits, axis=0)
         instance.d_policy_W2 = np.einsum('bh,ba->ha', cache['hidden'], d_logits)
