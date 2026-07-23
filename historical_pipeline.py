@@ -306,18 +306,21 @@ class SimulatedTrader:
         future_close = future_candles[self.lookahead - 1]['close']
         forward_return = (future_close - close) / close
         
-        # Normalize reward to [-1, 1] range via tanh
-        reward = np.tanh(forward_return * 20)  # 5% move → ~0.76 reward
+        # Normalize reward and alignment consistently using tanh.
+        # Both use the same scale so the training signal is coherent.
+        forward_return_norm = np.tanh(forward_return * 20)  # 5% move → ~0.76, saturates at ~15%
+        reward = forward_return_norm
         
         # Alignment: did the signal direction match the forward return?
+        # Uses the same tanh-normalized magnitude as reward for consistency
         if weighted_signal > 0 and forward_return > 0:
-            alignment = min(1.0, abs(forward_return) * 10)   # Strong bullish signal + up = great
+            alignment = forward_return_norm  # Strong bullish signal + up = great
         elif weighted_signal < 0 and forward_return < 0:
-            alignment = min(1.0, abs(forward_return) * 10)   # Strong bearish signal + down = great
+            alignment = forward_return_norm  # Strong bearish signal + down = great
         elif weighted_signal > 0 and forward_return < 0:
-            alignment = -min(1.0, abs(forward_return) * 10)  # Bullish signal but down = wrong
+            alignment = -forward_return_norm  # Bullish signal but down = wrong
         elif weighted_signal < 0 and forward_return > 0:
-            alignment = -min(1.0, abs(forward_return) * 10)  # Bearish signal but up = wrong
+            alignment = -forward_return_norm  # Bearish signal but up = wrong
         else:
             alignment = 0.0  # Flat signal or flat market
         
