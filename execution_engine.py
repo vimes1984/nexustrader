@@ -304,12 +304,12 @@ class ExecutionEngine:
             self.live_equity = total_value_usd
             self.live_holdings = {k: float(v) for k, v in total_bal.items() if float(v) > 0.000001}
             # Merge new prices with cached: don't lose prices for assets that failed to fetch
-        cached_prices_dict = getattr(self, "last_known_prices", {})
-        for k, v in cached_prices_dict.items():
-            if k not in prices or prices.get(k, 0.0) <= 0:
-                if v and float(v) > 0:
-                    prices[k] = float(v)
-        self.last_known_prices = prices
+            cached_prices_dict = getattr(self, "last_known_prices", {})
+            for k, v in cached_prices_dict.items():
+                if k not in prices or prices.get(k, 0.0) <= 0:
+                    if v and float(v) > 0:
+                        prices[k] = float(v)
+            self.last_known_prices = prices
             
             # Save all values to persistent database cache
             database.save_setting("portfolio_balance", str(self.balance))

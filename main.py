@@ -1750,10 +1750,14 @@ def get_safety_status():
 @app.get("/api/status")
 def get_status():
     import datetime, os as _os
+    try:
+        _ticks = getattr(orchestrator, "tickers", []) or []
+    except Exception:
+        _ticks = []
 
     current_prices = {}
-    for t in orchestrator.tickers:
-        if t in orchestrator.data_ingestions:
+    for t in _ticks:
+        if t in getattr(orchestrator, "data_ingestions", {}):
             di_t = orchestrator.data_ingestions.get(t)
             current_prices[t] = di_t.live_price or 0.0
     
