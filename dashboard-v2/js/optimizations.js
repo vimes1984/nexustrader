@@ -32,7 +32,7 @@ const Optimizations = {
         return;
       }
       el.innerHTML = opts.map(o => {
-        const ts = o.timestamp ? new Date(Number(o.timestamp) * 1000).toLocaleString() : '—';
+        const ts = o.timestamp ? (function(t) { try { return new Date(Number(t) * 1000).toLocaleString(); } catch(e) { return '—'; } })(o.timestamp) : '—';
         const icons = { quant: '📊', risk: '🛡️', nn: '🧠', allocator: '⚖️', sentiment: '📈', self_dev: '🔧', self_improve: '🔄' };
         const icon = icons[o.agent] || '🤖';
         const agent = this._escape(o.agent || 'system');
