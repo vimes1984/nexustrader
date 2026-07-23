@@ -405,7 +405,39 @@ class ProbabilityEngine:
         if len(_all_trades) < 20:
             actual_dyn_min = max(0.35, dyn_min * 0.70)  # relaxed for trading
         
-        is_viable = (p_win >= actual_dyn_min) and (ev > 0) and (final_fraction > 0) and entry_ok
+        # ── Viability gating: incorporate portfolio exposure check ──
+        # If this position would be rejected by _open_position_internal's risk
+        # limits (max open positions, concentration, total exposure), mark it
+        # as not viable so we don't waste a cycle evaluating + blocking it.
+        _exposure_ok = True
+        try:
+            import database as _db4
+            import json as _json4
+            _balance_str = _db4.load_setting("portfolio_balance", "0")
+            _balance_val = float(_balance_str) if _balance_str else 0.0
+            _max_open = int(_db4.load_setting("max_open_positions", "3"))
+            _max_conc_pct = float(_db4.load_setting("max_concentration_pct", "40")) / 100.0
+            _max_exp_pct = float(_db4.load_setting("max_total_exposure_pct", "60")) / 100.0
+            _active_pos_str = _db4.load_setting("_active_positions_cache", "{}")
+            _active_pos = _json4.loads(_active_pos_str) if isinstance(_active_pos_str, str) else {}
+            
+            # Check max open positions
+            if len(_active_pos) >= _max_open:
+                _exposure_ok = False
+            else:
+                # Check single-position concentration
+                if _balance_val > 0:
+                    _position_pct = (_balance_val * final_fraction * death_spiral_risk_mult) / _balance_val
+                    if _position_pct > _max_conc_pct:
+                        _exposure_ok = False
+                    # Check total exposure (simplified: no existing positions because
+                    # we'd be blocked by max_open_positions if we had any)
+                    if _position_pct > _max_exp_pct:
+                        _exposure_ok = False
+        except Exception:
+            pass  # Don't crash just because DB lookup failed
+        
+        is_viable = (p_win >= actual_dyn_min) and (ev > 0) and (final_fraction > 0) and entry_ok and _exposure_ok
         
         return {
             "direction": direction,

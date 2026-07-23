@@ -409,6 +409,10 @@ class ExecutionEngine:
         """Callback to execute when a trade closes, returning learning results."""
         self.learning_callback = callback
 
+    # Signal starvation guard: track last trade time across all tickers
+    _last_trade_time = 0.0
+    _starvation_threshold = 3600  # 1 hour
+
     def open_position(self, symbol, evaluation, strategy_signals):
         """Opens a position or queues a limit order based on trade viability."""
         with _exec_lock:
@@ -416,6 +420,18 @@ class ExecutionEngine:
 
     def _open_position_internal(self, symbol, evaluation, strategy_signals):
         """Internal: called with _exec_lock held."""
+        # Signal starvation guard: log warning if no trades in >1 hour
+        if time.time() - self._last_trade_time >= self._starvation_threshold:
+            closed_recent = [t for t in getattr(self, 'closed_trades', []) if t.get('exit_time', 0) > self._last_trade_time]
+            if not closed_recent:
+                logging.warning(
+                    f"[STARVATION GUARD] No trades for {int((time.time() - self._last_trade_time)/60)} minutes. "
+                    f"Active positions: {len(self.active_positions)}. Balance: ${self.balance:.2f}. "
+                    f"Signal may be blocked by risk checks."
+                )
+            else:
+                self._last_trade_time = time.time()
+        
         # Check Loss Cooldown
         try:
             cooldown_raw = database.load_setting(f"cooldown_end_{symbol}", "0.0")
