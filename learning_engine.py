@@ -164,6 +164,23 @@ class PolicyNetwork:
         self.lr = self.initial_lr * (1.0 - fraction * 0.9)  # Decay to 10% of initial over lr_decay_steps
         self.lr = max(self.lr, self.min_lr)
         
+        # Weight change magnitude tracking (every 10th step, log gradient norm)
+        _total_grad_sq = 0.0
+        for i in range(len(dW)):
+            _total_grad_sq += np.sum(dW[i] ** 2) + np.sum(db[i] ** 2)
+        _grad_norm = np.sqrt(_total_grad_sq)
+        if self.total_learning_steps % 10 == 0:
+            if _grad_norm > 10.0:
+                logging.warning(
+                    f"[GRADIENT NORM] grad_norm={_grad_norm:.4f} > 10.0 — gradients may be exploding. "
+                    f"LR={self.lr:.6f}, step={self.total_learning_steps}"
+                )
+            elif _grad_norm < 1e-8 and self.total_learning_steps > 5:
+                logging.warning(
+                    f"[GRADIENT NORM] grad_norm={_grad_norm:.10f} < 1e-8 — gradients may be vanishing. "
+                    f"Step={self.total_learning_steps}"
+                )
+        
         for i in range(len(self.W)):
             if self.optimizer == "Adam":
                 beta1 = 0.9
