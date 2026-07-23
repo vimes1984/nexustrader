@@ -130,6 +130,122 @@ def _compute_correlation_risk_block() -> str:
         return ""
 
 
+def _compute_hedging_risk_block() -> str:
+    """Compute hedging metrics: minimum variance hedge ratios,
+    beta-neutral weights, dollar-neutral assessment, and cointegration
+    test (Engle-Granger via correlation proxy).
+    """
+    try:
+        conn = _db.get_db_connection()
+        conn.row_factory = __import__('sqlite3').Row
+        c = conn.cursor()
+        # Get recent trades PnL via sym
+        c.execute("""
+            SELECT symbol, pnl, pnl_percent FROM trades
+            WHERE pnl IS NOT NULL AND pnl_percent IS NOT NULL
+            ORDER BY id DESC LIMIT 500
+        """)
+        rows = [dict(r) for r in c.fetchall()]
+        conn.close()
+        if not rows or len(rows) < 10:
+            return ""
+        
+        from collections import defaultdict
+        seqs = defaultdict(list)
+        for r in rows:
+            sym = r['symbol']
+            if sym:
+                seqs[sym].append(float(r.get('pnl_percent', 0.0)))
+        seqs = {k: np.array(v[:80]) for k, v in seqs.items() if len(v) >= 5}
+        if len(seqs) < 2:
+            return ""
+        
+        symbols = list(seqs.keys())
+        n = len(symbols)
+        min_len = min(len(v) for v in seqs.values())
+        if min_len < 5:
+            return ""
+        X = np.column_stack([seqs[s][:min_len] for s in symbols])
+        
+        # Price proxy: cumprod of (1 + return)
+        price = np.cumprod(1.0 + X, axis=0)
+        log_ret = X
+        
+        # --- Minimum Variance Hedge Ratio ---
+        # h* = Cov(r_a, r_b) / Var(r_b)
+        # For each pair, compute the hedge ratio that minimizes portfolio variance
+        hedge_lines = []
+        for i in range(n):
+            for j in range(i + 1, n):
+                ri = log_ret[:, i]
+                rj = log_ret[:, j]
+                cov_ij = np.cov(ri, rj)[0, 1]
+                var_j = np.var(rj)
+                if var_j > 1e-12:
+                    h = cov_ij / var_j
+                else:
+                    h = 0.0
+                
+                # Beta: Cov(r_i, r_j) / Var(r_j)
+                beta = h  # same formula for single regressor
+                
+                # Dollar-neutral check: |beta| ≈ 1 means hedged
+                dollar_neutral = abs(abs(beta) - 1.0) < 0.15
+                
+                hedge_lines.append(
+                    f"  {symbols[i]} vs {symbols[j]}: hedge_ratio={h:.4f}, "
+                    f"beta={beta:.4f}, $neutral={dollar_neutral}"
+                )
+        
+        # --- Portfolio Beta to first principal component (market proxy) ---
+        cov = np.cov(log_ret.T)
+        eigvals, eigvecs = np.linalg.eigh(cov)
+        pc1 = eigvecs[:, -1]  # first PC = market direction
+        # Market portfolio returns = projection onto PC1
+        mkt_rets = log_ret @ pc1
+        betas = []
+        for i in range(n):
+            c = np.cov(log_ret[:, i], mkt_rets)[0, 1]
+            v = np.var(mkt_rets)
+            betas.append(c / v if v > 1e-12 else 0.0)
+        
+        # --- Cointegration proxy: correlation of log prices ---
+        # A true cointegration test requires ADF on residuals; here we use
+        # the spread around the hedge ratio as a first-pass signal
+        coint_lines = []
+        if len(symbols) >= 2:
+            for idx in range(min(3, n)):
+                spread = price[:, 0] - betas[0] * price[:, idx]
+                # Simple mean-reversion check on spread
+                spread_mean = np.mean(spread)
+                spread_std = np.std(spread)
+                if spread_std > 1e-12:
+                    last_spread_z = (spread[-1] - spread_mean) / spread_std
+                    coint_lines.append(
+                        f"  {symbols[0]}/{symbols[idx]} spread z={last_spread_z:.2f}, "
+                        f"mean-rev strength={abs(np.mean(np.diff(spread > spread_mean))*2-1):.3f}"
+                    )
+        
+        # Build output
+        lines = ["\n### Hedging & Beta Analysis", ""]
+        lines.append("**Minimum Variance Hedge Ratios & Beta:**")
+        lines.extend(hedge_lines if hedge_lines else ["  (insufficient multi-asset data)"])
+        lines.append("")
+        lines.append("**Portfolio Betas (vs PC1 market proxy):**")
+        for i in range(n):
+            label = "beta-neutral" if abs(betas[i]) < 0.2 else "directional"
+            lines.append(f"  {symbols[i]}: beta={betas[i]:.4f} ({label})")
+        lines.append("")
+        if coint_lines:
+            lines.append("**Cointegration Proxy (spread mean-reversion):**")
+            lines.extend(coint_lines)
+        lines.append("")
+        return "\n".join(lines)
+    except Exception as e:
+        logging.error(f"Hedging analysis failed: {e}")
+        return ""
+
+
 def run_risk_audit(trigger_deploy: bool = False):
     logging.info("Starting Quantitative Portfolio Risk Audit...")
     settings = load_settings()

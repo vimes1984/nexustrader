@@ -20,6 +20,9 @@ ABSOLUTE_MAX_FRACTION = 0.25
 HALF_KELLY = 0.5
 # Minimum historical trades needed for Kelly calculation
 MIN_TRADES_FOR_KELLY = 10
+# Minimum edge (expected return per trade) to allocate any risk budget.
+# If the strategy's edge is below this threshold, treat as noise.
+MIN_EDGE_FOR_RISK = 0.001  # 0.1% expected return per trade
 
 
 def estimate_metrics_from_trades(trades: List[dict]) -> dict:
@@ -130,6 +133,19 @@ def compute_safe_fraction(
 
     # Apply half-kelly for safety
     half_kelly = kelly_raw * HALF_KELLY
+
+    # Compute net edge per trade (expectancy)
+    q = 1.0 - win_rate
+    expectancy = (win_rate * avg_win) - (q * avg_loss)
+    if expectancy < MIN_EDGE_FOR_RISK:
+        return {
+            "kelly_raw": round(kelly_raw, 4),
+            "half_kelly": round(half_kelly, 4),
+            "drawdown_penalty": 1.0,
+            "calibration_cap": calibration_cap,
+            "safe_fraction": 0.0,
+            "signal": "no_edge"
+        }
 
     # Apply calibration cap (from Brier score)
     effective_kelly = min(half_kelly, calibration_cap)
