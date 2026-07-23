@@ -440,6 +440,9 @@ class ExecutionEngine:
         # Fall back to a try: get current prices from any caller-provided context.
         _prices_for_equity = getattr(self, 'last_known_prices', {})
         total_equity = self.get_equity(_prices_for_equity)
+        if total_equity <= 0:
+            logging.warning(f"[EQUITY] Total equity is {total_equity:.2f}. Cannot open position for {symbol}. Skipping.")
+            return False
         kf = evaluation.get("kelly_fraction", 0.05)
         edir = evaluation.get("direction", "BUY")
         eprice = evaluation.get("entry_price", 0.0)
