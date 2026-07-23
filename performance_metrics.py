@@ -23,8 +23,6 @@ def calculate_metrics(equity_curve: List[float], trades: List[dict], periods_per
     equity_curve: list of portfolio values over time
     """
     m = PerformanceMetrics()
-    m.trade_count = len(trades)
-
     # Sanitize inputs: filter NaN, None, negative values from equity curve
     cleaned_curve = [float(v) for v in equity_curve if v is not None and isinstance(v, (int, float)) and not (isinstance(v, float) and math.isnan(v))]
     if not cleaned_curve:
@@ -41,9 +39,15 @@ def calculate_metrics(equity_curve: List[float], trades: List[dict], periods_per
             if dd > max_dd:
                 max_dd = dd
         m.max_drawdown = max_dd
-        start = cleaned_curve[0]
-        end = cleaned_curve[-1]
-        m.total_return = ((end - start) / start) if start > 0 else 0.0
+        start_equity = cleaned_curve[0]
+        end_equity = cleaned_curve[-1]
+        if start_equity > 0:
+            m.total_return = (end_equity - start_equity) / start_equity
+        elif end_equity > 0:
+            # Started from zero (deposit mid-track): use end as baseline
+            m.total_return = 0.0
+        else:
+            m.total_return = 0.0
 
     if len(cleaned_curve) > 2:
         returns = []

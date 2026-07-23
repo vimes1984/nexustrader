@@ -374,6 +374,7 @@ class StrategyEnsemble:
         
         Called after a trade closes. Feeds back which strategies were right/wrong
         so future weightings can favor winning strategies.
+        Stored data is used for IC tracking, alpha decay, and weight updates.
         """
         if not strategy_signals or not trade_direction:
             return
@@ -389,9 +390,86 @@ class StrategyEnsemble:
                     'direction': trade_direction,
                     'pnl_pct': pnl_percent
                 })
-                # Keep rolling window of 50 trades
-                if len(self.strategy_performance[strat.name]) > 50:
+                # Keep rolling window of 50 trades (larger window for IC stability)
+                if len(self.strategy_performance[strat.name]) > 100:
                     self.strategy_performance[strat.name].pop(0)
+    
+    def compute_information_coefficient(self, lookback: int = 30) -> dict:
+        """Compute the Information Coefficient (IC) for each strategy.
+        
+        IC = Spearman rank correlation between signal magnitude and actual pnl_pct.
+        A positive IC means the strategy's signal strength correctly ranks outcomes.
+        
+        Also tracks over time: returns a time series of IC for decay analysis.
+        """
+        results = {}
+        for strat in self.strategies:
+            perf = self.strategy_performance.get(strat.name, [])
+            if len(perf) < 10:
+                results[strat.name] = {
+                    "ic": 0.0,
+                    "ic_rank": 0.0,
+                    "hit_rate": 0.0,
+                    "n_obs": 0,
+                }
+                continue
+            
+            recent = perf[-lookback:]
+            signals = np.array([p['signal'] for p in recent], dtype=np.float64)
+            pnls = np.array([p['pnl_pct'] for p in recent], dtype=np.float64)
+            hits = np.array([1.0 if p['correct'] else 0.0 for p in recent], dtype=np.float64)
+            
+            n = len(signals)
+            if n < 5:
+                continue
+            
+            # Pearson IC: correlation between signal and pnl
+            sig_std = np.std(signals)
+            pnl_std = np.std(pnls)
+            if sig_std > 1e-12 and pnl_std > 1e-12:
+                sig_d = signals - np.mean(signals)
+                pnl_d = pnls - np.mean(pnls)
+                ic_pearson = float(np.sum(sig_d * pnl_d) / (n * sig_std * pnl_std))
+                ic_pearson = float(np.clip(ic_pearson, -1.0, 1.0))
+            else:
+                ic_pearson = 0.0
+            
+            # Rank IC (Spearman): more robust to outliers
+            sig_ranks = np.argsort(np.argsort(signals))
+            pnl_ranks = np.argsort(np.argsort(pnls))
+            if np.std(sig_ranks) > 0 and np.std(pnl_ranks) > 0:
+                sr = sig_ranks - np.mean(sig_ranks)
+                pr = pnl_ranks - np.mean(pnl_ranks)
+                ic_spearman = float(
+                    np.sum(sr * pr) / (n * np.std(sig_ranks) * np.std(pnl_ranks))
+                )
+                ic_spearman = float(np.clip(ic_spearman, -1.0, 1.0))
+            else:
+                ic_spearman = 0.0
+            
+            hit_rate = float(np.mean(hits))
+            
+            results[strat.name] = {
+                "ic": round(ic_pearson, 4),
+                "ic_rank": round(ic_spearman, 4),
+                "hit_rate": round(hit_rate, 4),
+                "n_obs": n,
+            }
+        return results
+
+    def get_ic_report(self) -> str:
+        """Return a human-readable report of Information Coefficient per strategy."""
+        ic_data = self.compute_information_coefficient()
+        lines = ["### Information Coefficient per Strategy"]
+        for sname, d in ic_data.items():
+            if d['n_obs'] > 0:
+                lines.append(
+                    f"  {sname}: IC(pearson)={d['ic']:.4f}, IC(rank)={d['ic_rank']:.4f}, "
+                    f"hit_rate={d['hit_rate']:.2%}, n={d['n_obs']}"
+                )
+            else:
+                lines.append(f"  {sname}: no data")
+        return "\n".join(lines)
 
     def train_ml_strategy(self, history_df):
         for strat in self.strategies:
