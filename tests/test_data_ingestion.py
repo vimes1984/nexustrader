@@ -39,6 +39,51 @@ class TestDataIngestion(unittest.TestCase):
         self.ingestion.compute_technical_indicators()
         self.assertTrue(self.ingestion.data.empty)
 
+    def test_technical_indicators_no_nan_on_valid_data(self):
+        """After compute_technical_indicators, all indicator columns should be NaN-free."""
+        dates = pd.date_range(start="2026-07-01", periods=60, freq="h")
+        df = pd.DataFrame({
+            'timestamp': dates,
+            'open': [100.0 + i * 0.5 for i in range(60)],
+            'high': [102.0 + i * 0.5 for i in range(60)],
+            'low': [98.0 + i * 0.5 for i in range(60)],
+            'close': [101.0 + i * 0.5 for i in range(60)],
+            'volume': [1000.0 + i * 10 for i in range(60)]
+        })
+        self.ingestion.data = df
+        self.ingestion.compute_technical_indicators()
+        with self.ingestion._data_lock:
+            result = self.ingestion.data.copy()
+        
+        # Check key indicators are present and NaN-free
+        for col in ['sma_20', 'sma_50', 'ema_12', 'ema_26', 'macd', 'macd_signal',
+                    'bb_upper', 'bb_lower', 'vwma_20', 'stoch_k', 'stoch_d']:
+            self.assertIn(col, result.columns, f"Missing column: {col}")
+            self.assertFalse(result[col].isna().any(), f"NaN found in {col}")
+            self.assertFalse(np.isinf(result[col]).any(), f"Inf found in {col}")
+        
+        # RSI should be in [0, 100] range
+        self.assertIn('rsi', result.columns)
+        self.assertTrue((result['rsi'] >= 0).all())
+        self.assertTrue((result['rsi'] <= 100).all())
+
+    def test_technical_indicators_short_dataframe(self):
+        """DataFrames with fewer than 14 rows should not crash and should produce empty indicators."""
+        df = pd.DataFrame({
+            'timestamp': pd.date_range(start="2026-07-01", periods=10, freq="h"),
+            'open': [100.0] * 10,
+            'high': [102.0] * 10,
+            'low': [98.0] * 10,
+            'close': [101.0] * 10,
+            'volume': [1000.0] * 10
+        })
+        self.ingestion.data = df
+        self.ingestion.compute_technical_indicators()
+        with self.ingestion._data_lock:
+            result = self.ingestion.data.copy()
+        self.assertEqual(len(result), 10)
+        self.assertIn('rsi', result.columns)
+
     def test_streaming_subscriptions(self):
         callback_mock = MagicMock()
         self.ingestion.subscribe(callback_mock)

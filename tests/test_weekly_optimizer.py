@@ -12,24 +12,33 @@ import weekly_optimizer
 class TestWeeklyOptimizer(unittest.TestCase):
     def setUp(self):
         import database as _db
-        self.test_db = "test_nexustrader_weekly_opt.db"
-        weekly_optimizer.DB_PATH = self.test_db
+        self.orig_db_path = _db.DB_PATH
+        self.test_db = os.path.abspath("test_nexustrader_weekly_opt.db")
         _db.DB_PATH = self.test_db
+        weekly_optimizer.DB_PATH = self.test_db
         
         conn = sqlite3.connect(self.test_db)
         c = conn.cursor()
         c.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
         c.execute("CREATE TABLE IF NOT EXISTS trades (pnl REAL, pnl_percent REAL, sentiment_sources TEXT, direction TEXT)")
         
-        # Seed trades
-        c.execute("INSERT INTO trades (pnl, pnl_percent, sentiment_sources, direction) VALUES (10.0, 1.5, '{\"cointelegraph\": 0.5, \"reddit\": -0.2}', 'BUY')")
-        c.execute("INSERT INTO trades (pnl, pnl_percent, sentiment_sources, direction) VALUES (-5.0, -0.8, '{\"cointelegraph\": -0.2, \"reddit\": 0.4}', 'BUY')")
-        c.execute("INSERT INTO trades (pnl, pnl_percent, sentiment_sources, direction) VALUES (8.0, 1.2, '{\"cointelegraph\": 0.4, \"reddit\": -0.1}', 'BUY')")
+        # Seed 3 trades with valid JSON sentiment_sources
+        for pnl, pnl_pct, sources, direction in [
+            (10.0, 1.5, '{"cointelegraph": 0.5, "reddit": -0.2}', 'BUY'),
+            (-5.0, -0.8, '{"cointelegraph": -0.2, "reddit": 0.4}', 'BUY'),
+            (8.0, 1.2, '{"cointelegraph": 0.4, "reddit": -0.1}', 'BUY'),
+        ]:
+            c.execute(
+                "INSERT INTO trades (pnl, pnl_percent, sentiment_sources, direction) VALUES (?, ?, ?, ?)",
+                (pnl, pnl_pct, sources, direction)
+            )
         
         conn.commit()
         conn.close()
 
     def tearDown(self):
+        import database as _db
+        _db.DB_PATH = self.orig_db_path
         if os.path.exists(self.test_db):
             os.remove(self.test_db)
 

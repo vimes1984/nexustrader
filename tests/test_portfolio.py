@@ -56,8 +56,12 @@ class TestPortfolioBalance(unittest.TestCase):
         database.load_setting.side_effect = None
         database.load_setting.return_value = None
         database.save_setting.reset_mock()
+        database.save_setting.side_effect = None
+        database.save_setting.return_value = None
         database.load_active_positions.return_value = {}
         database.load_trades.return_value = []
+        # After _reset_mocks, the caller MUST call _mock_db_settings() before
+        # any engine operations that read DB settings.
 
     def test_balance_starts_at_initial(self):
         """Balance should equal initial_balance at startup."""
