@@ -192,9 +192,12 @@ class MultiHeadAttention:
         # Gradient through softmax: proper Jacobian
         # d(softmax(x)_i)/dx_j = softmax(x)_i * (delta_ij - softmax(x)_j)
         # In matrix form: diag(p) - p @ p^T
-        p = cache['attn_weights']  # (batch, num_heads, seq, seq)
+        # IMPORTANT: Use PRE-dropout probabilities for the Jacobian.
+        # Dropout zeroes some entries, but the softmax backprop formula
+        # requires the ACTUAL softmax outputs, not the dropped-out values.
+        p_raw = cache.get('attn_weights_raw', cache['attn_weights'])  # (batch, num_heads, seq, seq)
         # d_scores = p * (d_attn - sum(p * d_attn, axis=-1, keepdims=True))
-        d_scores = p * (d_attn_weights - np.sum(p * d_attn_weights, axis=-1, keepdims=True))
+        d_scores = p_raw * (d_attn_weights - np.sum(p_raw * d_attn_weights, axis=-1, keepdims=True))
         d_scores = d_scores / self.scale
         
         # Gradient w.r.t Q, K, V (approximate — full backprop through scale is omitted)
