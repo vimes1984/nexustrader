@@ -653,9 +653,7 @@ class BacktestEngine:
             exit_threshold: abs(signal) below this triggers exit
         """
         try:
-            # Pre-warm with first N candles so ML strategy has training data
-            warmup = candles[:200]
-            ensemble = StrategyEnsemble(history_df=warmup)
+            ensemble = StrategyEnsemble()
         except Exception:
             return self._metrics_to_dict([1.0], [])
 
