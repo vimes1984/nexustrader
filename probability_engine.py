@@ -178,10 +178,10 @@ class ProbabilityEngine:
         if risk is None or (isinstance(risk, (float, int)) and risk != risk):
             risk = reward if reward > 0 else 1e-9
         
-        # Cap reward:risk ratio to prevent numerical issues with extreme values
-        # Also guard division-by-zero: when reward=0, edge doesn't exist, ratio=0
-        risk_reward_ratio = reward / risk if risk > 0 and reward > 0 else 0.0
-        risk_reward_ratio = min(risk_reward_ratio, 20.0)
+        # True reward:risk ratio (uncapped, for EV and reporting)
+        true_risk_reward_ratio = reward / risk if risk > 0 and reward > 0 else 0.0
+        # Cap for Kelly calculation to prevent overbetting on extreme R:R
+        risk_reward_ratio = min(true_risk_reward_ratio, 20.0)
         
         # 4. Calculate Expected Value (EV) per unit size
         ev = (p_win * reward) - ((1 - p_win) * risk)
@@ -318,7 +318,7 @@ class ProbabilityEngine:
             "entry_price": float(price),
             "take_profit": float(tp),
             "stop_loss": float(sl),
-            "risk_reward_ratio": float(risk_reward_ratio),
+            "risk_reward_ratio": float(true_risk_reward_ratio),
             "win_probability": float(p_win),
             "expected_value": float(ev),
             "kelly_fraction": float(final_fraction),
