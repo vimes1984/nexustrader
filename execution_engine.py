@@ -672,13 +672,20 @@ class ExecutionEngine:
             exit_fee = (exit_price * quantity) * self.transaction_fee_rate
             pnl_after_fee = pnl - exit_fee
             
-            # Trigger Loss Cooldown if PnL is negative
+            # Trigger Loss Cooldown if PnL is negative — and clear on win
             if pnl_after_fee < 0:
                 cooldown_hours = float(database.load_setting("loss_cooldown_hours", "4.0"))
                 if cooldown_hours > 0:
                     cooldown_end = time.time() + (cooldown_hours * 3600)
                     database.save_setting(f"cooldown_end_{symbol}", str(cooldown_end))
                     logging.info(f"[LOSS COOLDOWN] Placed {symbol} on cooldown for {cooldown_hours} hours until {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(cooldown_end))}")
+            else:
+                # BUGFIX: Clear cooldown on winning trade so a winning streak isn't interrupted
+                # by stale cooldown from a previous loss on the same symbol.
+                existing_cooldown = database.load_setting(f"cooldown_end_{symbol}", "0")
+                if existing_cooldown and float(existing_cooldown) > time.time():
+                    database.save_setting(f"cooldown_end_{symbol}", "0")
+                    logging.info(f"[WIN COOLDOWN CLEAR] Cleared cooldown for {symbol} after winning trade.")
             
             # Update balance
             original_value = quantity * entry_price

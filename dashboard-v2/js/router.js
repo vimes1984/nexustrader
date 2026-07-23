@@ -450,9 +450,10 @@ const App = {
         this.state.reconnectTimer = setTimeout(() => this.connectWS(), delay);
       };
 
-      ws.onerror = () => {
-        this.el.statusText.textContent = 'Error';
+      ws.onerror = (err) => {
+        this.el.statusText.textContent = 'Connection Error';
         this.el.botStatus?.classList.add('stopped');
+        this.debug('WS error:', err);
       };
     } catch(e) {
       this.debug('WS creation failed:', e);
