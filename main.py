@@ -1655,14 +1655,26 @@ def get_trades():
                         'timeout': 15000,
                     })
                     exchange_trades = reconstruct_trades_from_exchange(exchange)
-                    return exchange_trades
+                    # Merge exchange trades with DB trades (never lose DB data on exchange errors)
+                    local_trades = database.load_trades()
+                    merged = exchange_trades + local_trades
+                    seen = set()
+                    deduped = []
+                    for t in merged:
+                        k = (t.get("symbol",""), t.get("direction",""), round(float(t.get("entry_time",0)or 0), 3), round(float(t.get("exit_time",0)or 0), 3))
+                        if k not in seen:
+                            seen.add(k)
+                            deduped.append(t)
+                    deduped.sort(key=lambda x: float(x.get("exit_time",0)or 0), reverse=True)
+                    return deduped
         except Exception as e:
             logging.error(f"Error fetching live exchange trades: {e}")
             if is_live:
-                return []
+                # Fall through to DB trades instead of returning empty []
+                trading_mode = "paper"
             
-    # For paper trading or simulation mode, return database-stored trades matching that mode
-    local_trades = database.load_trades(trading_mode)
+    # Return database-stored trades matching that mode (or all if no mode filter)
+    local_trades = database.load_trades(trading_mode if not is_live else None)
     return local_trades
 
 @app.get("/api/portfolio/history")

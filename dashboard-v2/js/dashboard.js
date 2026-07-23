@@ -386,7 +386,13 @@ const Dashboard = {
       const dir = t.direction || '—';
       const dirColor = dir === 'long' ? 'var(--neon-green)' : dir === 'short' ? 'var(--neon-red)' : 'var(--text-secondary)';
       const pnl = Number(t.pnl || 0);
-      const pnlStr = t.pnl_pct != null ? (pnl>=0?'+':'')+Number(t.pnl_pct).toFixed(2)+'%' : '$'+pnl.toFixed(2);
+      const pnlPct = t.pnl_pct != null ? Number(t.pnl_pct) : null;
+      let pnlStr;
+      if (pnlPct != null) {
+        pnlStr = (pnl>=0?'+':'') + '$' + pnl.toFixed(2) + ' (' + (pnlPct>=0?'+':'') + pnlPct.toFixed(2) + '%)';
+      } else {
+        pnlStr = (pnl>=0?'+':'') + '$' + pnl.toFixed(2);
+      }
       return `<tr>
         <td style="color:var(--text-muted);font-size:10px">${date}</td>
         <td style="font-weight:600">${t.symbol || t.ticker || '—'}</td>
