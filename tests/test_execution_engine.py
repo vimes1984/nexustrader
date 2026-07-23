@@ -28,7 +28,7 @@ class TestExecutionEngine(unittest.TestCase):
 
     def test_initialization(self):
         self.assertEqual(self.engine.initial_balance, 100.0)
-        self.assertEqual(self.engine.transaction_fee_rate, 0.001)
+        self.assertEqual(self.engine.transaction_fee_rate, 0.0026)
 
     def test_open_position_paper_limit_order(self):
         symbol = "BTC-USD"

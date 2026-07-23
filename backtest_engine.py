@@ -169,6 +169,7 @@ class BacktestEngine:
             # Run on test set using same position-based simulation as _run_nexus_ensemble
             fold_nav = 1.0
             fold_position = None
+            fold_trades = []
             for i, row in enumerate(test_candles):
                 history = candles[max(0, test_start + i - 100):test_start + i]
                 try:
