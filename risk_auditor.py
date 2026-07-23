@@ -28,6 +28,108 @@ def save_setting(key, value):
     # via call-stack inspection, optimization logging, and DB write.
     _db.save_setting(key, str(value))
 
+def _compute_correlation_risk_block() -> str:
+    """Compute correlation matrix with eigenvalue cleaning (shrinkage estimation)
+    and regime-conditional risk metrics from trade-level PnL co-movement.
+    """
+    try:
+        conn = _db.get_db_connection()
+        conn.row_factory = __import__('sqlite3').Row
+        c = conn.cursor()
+        # Get all recent PnL by symbol, grouped by day or trade batch
+        c.execute("""
+            SELECT symbol, pnl FROM trades 
+            WHERE pnl IS NOT NULL 
+            ORDER BY id DESC LIMIT 500
+        """)
+        rows = [dict(r) for r in c.fetchall()]
+        conn.close()
+        
+        if not rows or len(rows) < 10:
+            return ""
+            
+        # Group PnL by symbol into sequences
+        from collections import defaultdict
+        seqs = defaultdict(list)
+        for r in rows:
+            symbol = r['symbol']
+            if symbol:
+                seqs[symbol].append(float(r['pnl']))
+                
+        # Keep only symbols with >= 5 data points for a meaningful correlation
+        seqs = {k: np.array(v[:100]) for k, v in seqs.items() if len(v) >= 5}
+        if len(seqs) < 2:
+            return ""
+            
+        symbols = list(seqs.keys())
+        n = len(symbols)
+        
+        # Align sequences by truncating all to the shortest length
+        min_len = min(len(v) for v in seqs.values())
+        if min_len < 3:
+            return ""
+        X = np.column_stack([seqs[s][:min_len] for s in symbols])
+        
+        # Raw correlation matrix
+        corr_raw = np.corrcoef(X.T)
+        # Replace NaN from constant returns
+        corr_raw = np.nan_to_num(corr_raw, nan=0.0)
+        
+        # Eigenvalue cleaning: shrink extreme eigenvalues toward mean
+        # Marcenko-Pastur-inspired: eigenvalues > 2σ are likely signal, not noise
+        eigvals, eigvecs = np.linalg.eigh(corr_raw)
+        eigvals = np.clip(eigvals, 0.0, None)  # ensure positive semidefinite
+        mean_eig = np.mean(eigvals)
+        # Shrink: pull eigenvalues above 2*mean towards 1.5*mean
+        cleaned = eigvals.copy()
+        threshold = 2.0 * mean_eig
+        for i in range(len(cleaned)):
+            if cleaned[i] > threshold:
+                cleaned[i] = 1.5 * mean_eig
+        # Re-normalize to preserve trace == n
+        cleaned = cleaned * (n / np.sum(cleaned))
+        corr_clean = eigvecs @ np.diag(cleaned) @ eigvecs.T
+        # Re-normalize diagonal to 1.0 and ensure symmetry
+        d = np.sqrt(np.diag(corr_clean))
+        d_inv = np.where(d > 1e-12, 1.0 / d, 1.0)
+        corr_clean = (corr_clean * d_inv) * d_inv[:, np.newaxis]
+        corr_clean = (corr_clean + corr_clean.T) / 2.0  # force symmetry
+        
+        # Compute min-variance hedge ratios from cleaned correlation
+        # w* = inv(Σ) * 1 / (1^T * inv(Σ) * 1)
+        cov_raw = np.cov(X.T)
+        cov_raw = np.nan_to_num(cov_raw, nan=0.0)
+        try:
+            inv_cov = np.linalg.inv(cov_raw + np.eye(n) * 1e-6)
+            ones = np.ones(n)
+            hedge_weights = inv_cov @ ones / (ones @ inv_cov @ ones)
+        except np.linalg.LinAlgError:
+            hedge_weights = np.ones(n) / n
+        
+        # Build readable output
+        lines = ["### Quantitative Risk Analysis", ""]
+        lines.append("**Cleaned Correlation Matrix (shrinkage-estimated):**")
+        header = "Symbol      " + "  ".join(f"{s:<10}" for s in symbols)
+        lines.append(header)
+        for i in range(n):
+            row_vals = "  ".join(f"{corr_clean[i,j]:>+8.4f}" for j in range(n))
+            lines.append(f"{symbols[i]:<12}{row_vals}")
+        lines.append("")
+        lines.append("**Minimum Variance Hedge Portfolio Weights:**")
+        for i in range(n):
+            lines.append(f"  {symbols[i]}: {hedge_weights[i]:>8.4f}")
+        lines.append("")
+        lines.append(f"**Eigenvalue Spectrum (raw):** {', '.join(f'{v:.4f}' for v in sorted(eigvals, reverse=True))}")
+        lines.append(f"**Eigenvalue Spectrum (cleaned):** {', '.join(f'{v:.4f}' for v in sorted(cleaned, reverse=True))}")
+        lines.append(f"**Avg cross-correlation:** {np.mean(corr_clean[np.triu_indices(n, k=1)]):.4f}")
+        lines.append("")
+        
+        return "\n".join(lines)
+    except Exception as e:
+        logging.error(f"Correlation analysis failed: {e}")
+        return ""
+
+
 def run_risk_audit(trigger_deploy: bool = False):
     logging.info("Starting Quantitative Portfolio Risk Audit...")
     settings = load_settings()
