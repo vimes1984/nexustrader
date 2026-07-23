@@ -170,6 +170,7 @@ class SimulatedTrader:
         self.balance = 1000.0
         self.closed_trades = []
         self.samples = []
+        self._wins_buf = []  # rolling win/loss buffer for win_trend (avoid look-ahead on closed_trades)
         
         # Indicators buffer
         self.price_history = []
@@ -331,6 +332,11 @@ class SimulatedTrader:
             if isinstance(info, dict) and abs(info.get('signal', 0)) > 0.01
         ]
         
+        # Record win/loss for win_trend feature (avoids empty closed_trades)
+        self._wins_buf.append(forward_return)
+        if len(self._wins_buf) > 100:
+            self._wins_buf = self._wins_buf[-50:]
+        
         sample = TrainingSample(
             state=np.array(state),
             strategy_indices=active_strategies or [0],
@@ -351,11 +357,11 @@ class SimulatedTrader:
         bb_pos = (close - indicator['bb_lower']) / bb_range - 0.5
         atr_ratio = np.clip(indicator['atr'] / close, 0.0, 0.1) * 10.0
         
-        # Win trend from closed trades
+        # Win trend from recent simulated outcomes (no look-ahead: only past candles)
         win_trend = 0.5
-        if len(self.closed_trades) >= 5:
-            recent = self.closed_trades[-10:]
-            wins = sum(1 for t in recent if t['pnl'] > 0)
+        if len(self._wins_buf) >= 5:
+            recent = self._wins_buf[-10:]
+            wins = sum(1 for x in recent if x > 0)
             win_trend = wins / len(recent)
         
         return np.array([0.0, 0.0, rsi, macd_norm, bb_pos, atr_ratio, win_trend, 0.0])
