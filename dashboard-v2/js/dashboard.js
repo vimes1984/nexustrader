@@ -266,8 +266,10 @@ const Dashboard = {
       if (data.total_pnl != null) {
         const p = Number(data.total_pnl); const e = byId('val-total-pnl'); if (e) { e.textContent = '$' + p.toFixed(2); e.style.color = p >= 0 ? 'var(--neon-green)' : 'var(--neon-red)'; }
         let pct = data.total_pnl_pct;
-        // Compute total_pnl_pct from balance/equity if not provided
-        if (pct == null && data.balance != null && Number(data.balance) > 0) {
+        // Compute total_pnl_pct from initial_balance if not provided (div by initial_balance not current)
+        if (pct == null && data.initial_balance != null && Number(data.initial_balance) > 0) {
+          pct = p / Number(data.initial_balance);
+        } else if (pct == null && data.balance != null && Number(data.balance) > 0) {
           pct = p / Number(data.balance);
         } else if (pct == null && data.equity != null && Number(data.equity) > 0) {
           pct = p / Number(data.equity);
@@ -414,7 +416,15 @@ const Dashboard = {
     }
     let pa = positions;
     if (!Array.isArray(positions) && typeof positions === 'object') {
-      pa = Object.entries(positions).map(function(e) { var p = e[1]; p.symbol = p.symbol || e[0]; return p; });
+      pa = Object.entries(positions).map(function(e) {
+        var key = e[0], p = e[1];
+        // Skip numeric/array-like keys (server may return indexed object)
+        if (p && typeof p === 'object') {
+          if (!p.symbol && isNaN(Number(key))) p.symbol = key;
+          return p;
+        }
+        return null;
+      }).filter(Boolean);
     }
     if (!pa || pa.length === 0) { c.innerHTML = '<span style="color:var(--text-muted)">No active positions</span>'; return; }
     c.innerHTML = pa.map(function(pos) {
