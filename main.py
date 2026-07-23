@@ -1089,6 +1089,43 @@ class NexusTraderOrchestrator:
                         start_date=start_date,
                         end_date=end_date
                     )
+        
+        # ── Trade replay on restart: reload closed trades and run a learning pass ──
+        # This ensures the model catches up on offline trading history and learns from
+        # past outcomes even after a restart. Only runs once per startup.
+        if not getattr(self, '_trade_replay_done', False):
+            self._trade_replay_done = True
+            try:
+                _all_closed = getattr(self.execution_engine, 'closed_trades', [])
+                if len(_all_closed) >= 10:
+                    logging.info(f"[TRADE REPLAY] Running catch-up learning pass on {len(_all_closed)} closed trades...")
+                    for _t in _tickers_for_replay:
+                        _learner = self.learning_engines.get(_t)
+                        _ens = self.strategy_ensembles.get(_t)
+                        if not _learner or not _ens:
+                            continue
+                        _ticker_trades = [t for t in _all_closed if t.get('symbol') == _t]
+                        if len(_ticker_trades) < 10:
+                            continue
+                        _win_count = sum(1 for t in _ticker_trades if t.get('pnl', 0) > 0)
+                        _loss_count = len(_ticker_trades) - _win_count
+                        if _win_count < 1 or _loss_count < 1:
+                            continue
+                        for _tt in _ticker_trades:
+                            try:
+                                _state = _tt.get('entry_state', [])
+                                _signals = _tt.get('strategy_signals', [])
+                                _dir = _tt.get('direction', 'BUY')
+                                _pnl = _tt.get('pnl_pct', _tt.get('pnl', 0))
+                                if _state and len(_state) == 8:
+                                    _learner.learn_from_trade(_state, _signals, _dir, _pnl)
+                            except Exception:
+                                pass
+                        logging.info(f"[TRADE REPLAY] {_t}: learned from {len(_ticker_trades)} trades")
+                    logging.info("[TRADE REPLAY] Catch-up learning pass complete.")
+            except Exception as e:
+                logging.error(f"[TRADE REPLAY] Error during catch-up: {e}")
+        
         logging.info(f"Multi-asset streaming started in {mode} mode. Brain: {brain}, range: {start_date} to {end_date}")
 
     def stop_stream(self):
