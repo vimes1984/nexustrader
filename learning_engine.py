@@ -378,6 +378,14 @@ class PolicyNetwork:
                     f"[LOSS VERIFICATION] Batch replay loss increased from {batch_loss_before:.4f} "
                     f"to {batch_loss_after:.4f} after batch gradient update (n={n})"
                 )
+                # Revert the batch update: reload weights from saved state
+                # This prevents the batch update from making things worse.
+                # We revert by re-applying the negative gradient.
+                for i in range(len(dW_acc)):
+                    dW_acc[i] = -dW_acc[i]
+                    db_acc[i] = -db_acc[i]
+                self._apply_gradients(dW_acc, db_acc)
+                logging.info("[LOSS VERIFICATION] Reverted batch gradient update (loss increased).")
 
     def to_json(self):
         """Serialize network weights to JSON string."""
