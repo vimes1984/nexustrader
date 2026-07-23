@@ -283,17 +283,39 @@ class LayerNorm:
         return out
     
     def backward(self, d_out: np.ndarray) -> np.ndarray:
+        """Backward pass through layer norm.
+
+        Analytical derivatives:
+          x̂ = (x - μ) / σ  where σ = √(var + ε)
+          ∂x̂/∂x_i = (1/σ) - (x_i - μ)² / (d * σ³)
+          ∂x̂_i/∂μ = -1/σ
+          ∂x̂_i/∂var = -(x_i - μ) / (2 * σ³)
+
+        Using the aggregated approach (Ba et al., 2016):
+          ∂L/∂x = (1/σ) * [∂L/∂x̂ - (1/d) * (x̂ ⊙ ∂L/∂x̂) ⊙ x̂ - (1/d) * ⟨∂L/∂x̂⟩]
+          where ⟨⋅⟩ denotes mean over the last dimension.
+        """
         if not self._cache:
             return np.zeros_like(d_out)
         cache = self._cache
         d = d_out.shape[-1]
         N = np.prod(d_out.shape[:-1])
         
-        d_x_norm = d_out * self.gamma
-        d_var = np.sum(d_x_norm * cache['x_norm'] * (-0.5) * (cache['var'] + self.eps) ** (-1.5), axis=-1, keepdims=True)
-        d_mean = np.sum(d_x_norm * (-1.0 / np.sqrt(cache['var'] + self.eps)), axis=-1, keepdims=True)
+        d_x_norm = d_out * self.gamma  # ∂L/∂x̂
+        sigma = np.sqrt(cache['var'] + self.eps)  # (..., 1)
+        x_hat = cache['x_norm']  # cache saved during forward
+        x = cache['x']
+        mu = cache['mean']
         
-        d_x = d_x_norm / np.sqrt(cache['var'] + self.eps)
+        # ∂L/∂var = Σ ∂L/∂x̂  * (x - μ) * (-1/2) * (var + ε)^(-3/2)
+        #         = Σ d_x_norm * -(x - μ) / (2 * σ³)
+        d_var = np.sum(d_x_norm * (cache['x'] - cache['mean']) * (-0.5) * (cache['var'] + self.eps) ** (-1.5), axis=-1, keepdims=True)
+        # ∂L/∂μ = Σ ∂L/∂x̂ * (-1 / σ)
+        d_mean = np.sum(d_x_norm * (-1.0 / sigma), axis=-1, keepdims=True)
+        
+        # ∂x̂_i/∂x_i = 1/σ + (x̂_i * ∂(1/σ)/∂σ² * 2(x_i-μ)/d) ... full vectorized:
+        # ∂L/∂x = ∂L/∂x̂ * (1/σ) + ∂L/∂σ² * (2(x_i-μ)/d) + ∂L/∂μ * (1/d)
+        d_x = d_x_norm / sigma
         d_x += d_var * 2.0 * (cache['x'] - cache['mean']) / d
         d_x += d_mean / d
         

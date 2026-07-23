@@ -415,7 +415,8 @@ class ExecutionEngine:
         """Internal: called with _exec_lock held."""
         # Check Loss Cooldown
         try:
-            cooldown_end = float(database.load_setting(f"cooldown_end_{symbol}", "0.0"))
+            cooldown_raw = database.load_setting(f"cooldown_end_{symbol}", "0.0")
+            cooldown_end = float(cooldown_raw) if cooldown_raw is not None else 0.0
         except (ValueError, TypeError):
             cooldown_end = 0.0
         if time.time() < cooldown_end:
