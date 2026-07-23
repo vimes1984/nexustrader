@@ -626,7 +626,9 @@ class ExecutionEngine:
             pos["unrealized_pnl"] = (current_price - entry_price) * quantity
         else:
             pos["unrealized_pnl"] = (entry_price - current_price) * quantity
-        entry_value = entry_price * quantity if entry_price > 0 else 1e-9
+        entry_value = entry_price * quantity
+        if entry_value <= 0:
+            entry_value = 1e-9
         pos["unrealized_pnl_pct"] = pos["unrealized_pnl"] / entry_value
 
         # Trailing Stop-Loss logic — config-driven
