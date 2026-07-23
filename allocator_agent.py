@@ -286,6 +286,96 @@ def compute_optimal_rebalance(assets: dict, perf: dict) -> dict:
     }
 
 
+def compute_risk_parity_weights() -> dict:
+    """Compute risk parity allocation weights using equal risk contribution.
+    
+    Risk parity: allocate so each asset contributes equally to total portfolio
+    risk. Uses the diagonal form: w_i = (1/σ_i) / Σ(1/σ_j).
+    
+    Also computes full risk contributions accounting for covariance for
+    comparison with the diagonal approximation.
+    """
+    try:
+        conn = _db.get_db_connection()
+        conn.row_factory = __import__('sqlite3').Row
+        c = conn.cursor()
+        c.execute("""
+            SELECT symbol, pnl_percent FROM trades
+            WHERE pnl_percent IS NOT NULL AND pnl_percent != ''
+            ORDER BY id DESC LIMIT 500
+        """)
+        rows = [dict(r) for r in c.fetchall()]
+        conn.close()
+        if not rows:
+            return {}
+        
+        from collections import defaultdict
+        ret_seqs = defaultdict(list)
+        for r in rows:
+            sym = r['symbol']
+            pct = r.get('pnl_percent')
+            if sym and pct is not None:
+                try:
+                    ret_seqs[sym].append(float(pct))
+                except (ValueError, TypeError):
+                    pass
+        
+        ret_seqs = {k: np.array(v) for k, v in ret_seqs.items() if len(v) >= 5}
+        if len(ret_seqs) < 1:
+            return {}
+        
+        symbols = list(ret_seqs.keys())
+        n = len(symbols)
+        min_len = min(len(v) for v in ret_seqs.values())
+        X = np.column_stack([ret_seqs[s][:min_len] for s in symbols])
+        
+        vol = np.std(X, axis=0)
+        vol = np.where(vol < 1e-12, 1e-6, vol)  # floor at epsilon
+        
+        # Diagonal risk parity: wi = (1/σi) / Σ(1/σj)
+        inv_vol = 1.0 / vol
+        rp_diag = inv_vol / inv_vol.sum()
+        
+        # Full covariance-based risk contribution
+        cov = np.cov(X.T)
+        # Iterative risk parity: find w where MRC are equal
+        # MRC_i = (Σw)_i * σ_i / sqrt(w' Σ w)
+        # Simplified: equal risk contribution = equalize marginal contributions
+        # Use equal weights as starting point
+        w = np.ones(n) / n
+        for _ in range(100):
+            port_var = w @ cov @ w
+            if port_var <= 0:
+                break
+            port_vol = np.sqrt(port_var)
+            mrc = (cov @ w) / port_vol  # marginal risk contributions
+            # Target: all MRC equal -> adjust weights toward inverse MRC
+            target_weight = (1.0 / np.maximum(np.abs(mrc), 1e-12))
+            target_weight /= target_weight.sum()
+            w = 0.5 * w + 0.5 * target_weight
+            w = np.clip(w, 0.0, None)
+            w /= w.sum()
+        rp_cov = w / w.sum() if w.sum() > 0 else np.ones(n) / n
+        
+        # Risk contribution per asset (cov method)
+        port_vol = float(np.sqrt(w @ cov @ w))
+        rc = (w * (cov @ w)) / port_vol if port_vol > 0 else w
+        rc_pct = rc / rc.sum() if rc.sum() > 0 else w
+        
+        result = {}
+        for i, s in enumerate(symbols):
+            result[s] = {
+                "volatility": round(float(vol[i]), 6),
+                "risk_parity_diag": round(float(rp_diag[i]), 4),
+                "risk_parity_cov": round(float(rp_cov[i]), 4),
+                "risk_contribution_pct": round(float(rc_pct[i]), 4),
+            }
+        return result
+    except Exception as e:
+        logging.error(f"Risk parity computation failed: {e}")
+        return {}
+
+
 def load_performance_summary():
     summary = {}
     try:

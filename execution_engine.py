@@ -763,14 +763,18 @@ class ExecutionEngine:
             # Get active brain for symbol from DB settings
             active_brain_name = database.load_setting(f"active_policy_brain_{symbol}", "Default Brain")
 
+            entry_price_raw = pos.get("entry_price_raw", entry_price)
+            slippage_paid = abs(entry_price - entry_price_raw) * quantity
             closed_trade_record = {
                 "symbol": symbol,
                 "direction": direction,
-                "entry_price": entry_price,
+                "entry_price": entry_price,  # Slippage-adjusted effective entry
+                "entry_price_raw": entry_price_raw,  # Market price before slippage
                 "exit_price": float(exit_price),
                 "quantity": quantity,
                 "pnl": float(pnl_after_fee),
                 "pnl_percent": float(pnl_percent),
+                "slippage_paid": slippage_paid,
                 "exit_reason": exit_reason,
                 "entry_time": pos["entry_time"],
                 "exit_time": time.time(),
