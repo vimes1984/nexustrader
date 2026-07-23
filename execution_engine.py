@@ -134,6 +134,18 @@ class ExecutionEngine:
         self.closed_trades = database.load_trades()
         logging.info(f"Loaded {len(self.closed_trades)} closed trades from DB.")
         
+        # Restart recovery: if balance is much lower than initial_balance + closed_trades_pnl
+        # and there are no active positions (lost on restart), the balance was saved with
+        # position costs deducted. Recalculate to recover orphaned position capital.
+        _closed_pnl = sum(float(t.get('pnl', 0.0) or 0.0) for t in self.closed_trades)
+        _expected_balance = self.initial_balance + _closed_pnl
+        if len(self.active_positions) == 0 and abs(self.balance - _expected_balance) > 1.0 and self.balance < _expected_balance:
+            diff = _expected_balance - self.balance
+            if diff > 1.0:
+                self.balance = _expected_balance
+                database.save_setting("portfolio_balance", self.balance)
+                logging.info(f"[RESTART RECOVERY] Restored balance from ${self.balance - diff:.2f} to ${self.balance:.2f} (orphaned position costs recovered)")
+        
         self.learning_callback = None
         self.pending_limit_orders = {}  # symbol -> pending order dict
 
