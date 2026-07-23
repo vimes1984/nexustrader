@@ -1775,11 +1775,16 @@ def get_trades():
     local_trades = database.load_trades(trading_mode if not is_live else None)
     # Normalize required fields for all trades so dashboard always has consistent shape
     for t in local_trades:
-        for key in ("symbol", "direction", "quantity", "entry_price", "exit_price", "pnl", "pnl_percent", "exit_reason", "entry_time", "exit_time"):
+        for key in ("symbol", "direction", "quantity", "entry_price", "exit_price", "pnl", "pnl_percent", "pnl_pct", "exit_reason", "entry_time", "exit_time"):
             if key not in t:
                 t[key] = None if key in ("exit_reason", "symbol", "direction") else 0.0
+        # Populate pnl_pct if only pnl_percent is set (dashboard supports both)
+        if t.get("pnl_percent") is not None and (t.get("pnl_pct") is None or t["pnl_pct"] == 0.0):
+            t["pnl_pct"] = t["pnl_percent"]
+        elif t.get("pnl_pct") is not None and t.get("pnl_percent") is None:
+            t["pnl_percent"] = t["pnl_pct"]
         # Ensure float types for numeric fields
-        for nkey in ("quantity", "entry_price", "exit_price", "pnl", "pnl_percent", "entry_time", "exit_time"):
+        for nkey in ("quantity", "entry_price", "exit_price", "pnl", "pnl_percent", "pnl_pct", "entry_time", "exit_time"):
             if t[nkey] is not None:
                 t[nkey] = float(t[nkey])
     return local_trades
