@@ -370,11 +370,18 @@ def load_weights_history(ticker: str, limit: int = 100):
         )
         rows = cursor.fetchall()
         conn.close()
-        return [{
-            "timestamp": r[0],
-            "weights": json.loads(r[1]),
-            "brain_name": r[2] if len(r) > 2 else 'Default Brain'
-        } for r in rows]
+        result = []
+        for r in rows:
+            try:
+                w = json.loads(r[1]) if r[1] else {}
+            except (json.JSONDecodeError, TypeError):
+                w = {}
+            result.append({
+                "timestamp": r[0],
+                "weights": w,
+                "brain_name": r[2] if len(r) > 2 else 'Default Brain'
+            })
+        return result
     except Exception as e:
         logging.error(f"Error loading weights history: {e}")
         return []
