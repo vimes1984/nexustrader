@@ -75,6 +75,11 @@ class DataIngestion:
             if self.data.empty:
                 return
             df = self.data.copy()
+        
+        # Guard against short DataFrames — RSI/ATR seeding requires 14+ rows
+        if len(df) < 14:
+            # df is a copy; no need to assign it back since no changes were made
+            return
 
         # Simple Moving Averages (SMA)
         df['sma_20'] = df['close'].rolling(window=20).mean()
