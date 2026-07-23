@@ -124,16 +124,23 @@ def calibration_error(probabilities: Sequence[float], outcomes: Sequence[int], b
     
     Uses fixed-width probability bins [0, 0.1), [0.1, 0.2), ..., [0.9, 1.0]
     as per standard ECE definition (Guo et al., 2017).
+    Predictions outside [0,1] are clamped before binning.
     """
     if len(probabilities) == 0:
         return 0.0
     n = len(probabilities)
+    # Clamp predictions to [0, 1] so all samples contribute to the ECE
+    clamped = [max(0.0, min(1.0, p)) for p in probabilities]
     total_error = 0.0
     bin_size = 1.0 / bins
     for i in range(bins):
         low = i * bin_size
         high = low + bin_size
-        in_bin = [(p, o) for p, o in zip(probabilities, outcomes) if low <= p < high]
+        # Last bin is inclusive of upper bound (handles predictions exactly 1.0)
+        if i == bins - 1:
+            in_bin = [(p, o) for p, o in zip(clamped, outcomes) if low <= p <= high]
+        else:
+            in_bin = [(p, o) for p, o in zip(clamped, outcomes) if low <= p < high]
         if not in_bin:
             continue
         avg_prob = sum(p for p, _ in in_bin) / len(in_bin)
