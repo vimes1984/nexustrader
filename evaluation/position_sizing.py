@@ -49,7 +49,7 @@ def estimate_metrics_from_trades(trades: List[dict]) -> dict:
     n = len(pnls)
     win_rate = len(wins) / n if n > 0 else 0.5
     avg_win = float(np.mean(wins)) if wins else 0.0
-    avg_loss = float(np.mean(losses)) if losses else 0.0
+    avg_loss = abs(float(np.mean(losses))) if losses else 0.01  # Use positive magnitude
     # Avoid division by zero — use 0.01 fallback for empty losses or zero avg_loss
     if not losses or avg_loss <= 0:
         avg_loss = 0.01

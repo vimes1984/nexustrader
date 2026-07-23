@@ -809,7 +809,8 @@ class ExecutionEngine:
         trailing_stop_enabled = (_ts_setting or "true").lower() == "true"
         if trailing_stop_enabled:
             # Default trail offset widened from 0.5% to 1.5% for crypto noise tolerance
-            trail_offset_pct = float(database.load_setting("trailing_stop_offset_pct", "0.015"))
+            _sop = database.load_setting("trailing_stop_offset_pct", "0.015")
+            trail_offset_pct = float(_sop) if _sop is not None else 0.015
             _trail_updated = False
             if direction == "BUY":
                 if "original_sl" not in pos:
@@ -836,7 +837,8 @@ class ExecutionEngine:
                 database.save_active_position(symbol, pos)
 
         # Check for time-based stop (max position age) — configurable from DB
-        max_position_hours = float(database.load_setting("max_position_hours", "48"))
+        _mph = database.load_setting("max_position_hours", "48")
+        max_position_hours = float(_mph) if _mph is not None else 48
         exit_reason = None
         close_trade = False
         pnl = 0.0
@@ -899,7 +901,8 @@ class ExecutionEngine:
             
             # Trigger Loss Cooldown if PnL is negative — and clear on win
             if pnl_after_fee < 0:
-                cooldown_hours = float(database.load_setting("loss_cooldown_hours", "4.0"))
+                _ch = database.load_setting("loss_cooldown_hours", "4.0")
+                cooldown_hours = float(_ch) if _ch is not None else 4.0
                 if cooldown_hours > 0:
                     cooldown_end = time.time() + (cooldown_hours * 3600)
                     database.save_setting(f"cooldown_end_{symbol}", str(cooldown_end))
