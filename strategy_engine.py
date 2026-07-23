@@ -543,24 +543,44 @@ class StrategyEnsemble:
             s = np.sum(active_weights)
             active_weights = active_weights / s if s > 0 else np.ones(len(signals)) / len(signals)
         
-        # Layer 1: OU Regime Detection (trending vs mean-reverting)
+        # Layer 1: OU Regime Detection (trending vs mean-reverting vs chop)
         from quant_utils import estimate_ou_process
         if len(self.price_history) >= 20:
             theta, mu, is_mr = estimate_ou_process(self.price_history)
-            regime_strength = min(abs(theta) * 5.0, 1.5)
             
-            # Determine regime: require both is_mr AND sufficient theta
-            # If theta is near zero, price is trending with slow decay
-            # If theta is negative (a < 0), OU estimate indicates unstable/trending
-            if is_mr and theta > 0.03:
+            # Chop index: volatility clustering / trend strength quantification
+            # When abs(theta) is very small, price follows random walk (chop)
+            # When theta is moderately positive → mean-reversion
+            # When theta is near zero or negative → trending regime
+            # A chop zone exists when theta is near zero AND vol is normal
+            recent_rets = np.diff(self.price_history[-20:]) / np.array(self.price_history[-21:-1])
+            chop_vol = float(np.std(recent_rets)) if len(recent_rets) > 1 else 0.0
+            # Chop index: low when trend is strong, high when noise dominates
+            if chop_vol > 0:
+                price_range = max(self.price_history[-20:]) - min(self.price_history[-20:])
+                mean_price = np.mean(self.price_history[-20:])
+                chop_idx = chop_vol / (price_range / max(mean_price, 1e-9)) if price_range > 1e-9 else 1.0
+            else:
+                chop_idx = 1.0
+            is_chop = abs(theta) < 0.02 and chop_idx > 0.6
+            
+            if is_mr and theta > 0.03 and not is_chop:
                 # Mean-Reversion Regime: boost mean-reversion, suppress trend
-                real_mr_strength = min((theta - 0.03) / 0.05, 1.5)  # 0→1.5 scaled
+                real_mr_strength = min((theta - 0.03) / 0.05, 1.5)
                 for i, strat in enumerate(self.strategies):
                     regime = getattr(strat, 'regime', None)
                     if regime == 'mean_reversion':
                         active_weights[i] *= 1.0 + 0.3 * real_mr_strength
                     elif regime == 'trend':
                         active_weights[i] *= max(1.0 - 0.5 * real_mr_strength, 0.1)
+            elif is_chop:
+                # Chop Regime: suppress all directional strategies, boost neutral/predictive
+                for i, strat in enumerate(self.strategies):
+                    regime = getattr(strat, 'regime', None)
+                    if regime in ('mean_reversion', 'trend'):
+                        active_weights[i] *= 0.5  # halve directional bets
+                    elif regime == 'predictive':
+                        active_weights[i] *= 1.2  # slight boost to ML/news signals
             else:
                 # Trend Regime: boost trend, suppress mean-reversion
                 trend_strength = min(abs(theta) * 3.0, 1.5) if abs(theta) > 0.001 else 0.5
