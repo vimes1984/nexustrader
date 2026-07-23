@@ -412,8 +412,8 @@ const Dashboard = {
         '<span style="color:var(--text-muted);font-weight:600;font-size:11px;min-width:55px">' + sym + '</span>' +
         '<span style="color:' + dc + ';font-weight:700;font-size:12px">' + dir.toUpperCase() + '</span>' +
         '<span style="font-family:var(--font-mono);font-size:11px">Entry: <b>$' + Number(pos.entry_price||0).toFixed(2) + '</b></span>' +
-        '<span style="font-family:var(--font-mono);font-size:11px">Size: <b>' + Number(pos.size||pos.quantity||0).toFixed(4) + '</b></span>' +
-        '<span style="font-family:var(--font-mono);font-size:11px">PnL: <b style="color:' + (pnl>=0?'var(--neon-green)':'var(--neon-red)') + '">$' + pnl.toFixed(4) + '</b></span>' +
+        '<span style="font-family:var(--font-mono);font-size:11px">Size: <b>' + Number(pos.size||pos.quantity||0).toFixed(6) + '</b></span>' +
+        '<span style="font-family:var(--font-mono);font-size:11px">PnL: <b style="color:' + (pnl>=0?'var(--neon-green)':'var(--neon-red)') + '">$' + pnl.toFixed(2) + '</b></span>' +
       '</div>';
     }).join('');
   },

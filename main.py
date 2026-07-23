@@ -766,7 +766,12 @@ class NexusTraderOrchestrator:
                 # 0.45 ensures at least some trades pass in a $200 account (default ~0.35).
                 _min_sig = max(0.10, min(0.45, float(str(_saved_threshold).strip())))
             else:
-                _min_sig = max(0.20, min(0.45, 1.0 / (1.0 + self.execution_engine.balance / 500.0)))
+                # BUGFIX: Use total EQUITY (balance + unrealized PnL) instead of cash balance.
+                # When a position is open, balance drops by position cost (e.g. $990→$792)
+                # making the threshold skyrocket to 0.387, blocking all new signals.
+                # Equity stays representative of true portfolio size (~$990).
+                _ref_val = current_equity if current_equity > 0 else self.execution_engine.balance
+                _min_sig = max(0.20, min(0.45, 1.0 / (1.0 + _ref_val / 500.0)))
             if abs(weighted_signal) >= _min_sig:
                 direction = "BUY" if weighted_signal > 0 else "SELL"
                 
