@@ -47,11 +47,15 @@ const Dashboard = {
 
     // Debounced resize handler to prevent layout thrashing
     const doResize = () => {
-      if (this.chart && this._chartEl?.clientWidth) {
-        const w = this._chartEl.clientWidth;
-        const h = this._chartEl.clientHeight || 420;
-        if (w > 0 && h > 0) {
-          this.chart.applyOptions({ width: w, height: h });
+      if (this.chart && this._chartEl && this._chartEl.clientWidth) {
+        try {
+          const w = this._chartEl.clientWidth;
+          const h = this._chartEl.clientHeight || 420;
+          if (w > 0 && h > 0) {
+            this.chart.applyOptions({ width: w, height: h });
+          }
+        } catch(e) {
+          this.debug('Chart resize error:', e);
         }
       }
     };
