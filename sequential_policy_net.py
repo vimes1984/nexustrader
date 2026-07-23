@@ -336,12 +336,17 @@ class SequentialPolicyNetwork:
         entropy_beta = 0.005
 
         # Gradient at output: dL/d(logit) for policy gradient + entropy
-        # dL/d(logit_i) = -S * (alignment_i - sum_j(alignment_j) * p_i) - beta * p_i * (entropy - log(p_i))
+        # REINFORCE:  L = -A * log(pi_a) - beta * H(pi)
+        # dL/dz_i = A * (pi_i - delta_{i,a}) - beta * dH/dz_i
+        # dH/dz_i = -pi_i * (log_pi_i + H) = -p_i * (log_p_i + entropy)
+        # So: dL/dz = A * (p - one_hot) + beta * p * (log_p + entropy)
         # Standard PG: dL/dz = S * (probs - alignment)  [with S = scaled_reward]
         d_logits = scaled_reward * (probs - alignment.reshape(1, -1))
-        # Entropy gradient: dH/dz = p * (entropy - log(p))
-        entropy_grad = probs * (entropy - log_p)
-        d_logits -= entropy_beta * entropy_grad
+        # Entropy bonus: L_ent = -beta * H,  dL_ent/dz = -beta * dH/dz
+        # dH/dz_i = -p_i * (log_p_i + entropy)  →  -dH/dz_i = p_i * (log_p_i + entropy)
+        # dL_ent/dz_i = -beta * (-p_i * (log_p_i + entropy)) = beta * p_i * (log_p_i + entropy)
+        entropy_grad = probs * (log_p + entropy)  # = p * (log_p + H) = -dH/dz
+        d_logits += entropy_beta * entropy_grad
 
         # Backprop through output layer
         dW_out = np.dot(self.cache_h[-1][-1].T, d_logits)
