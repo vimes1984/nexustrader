@@ -641,11 +641,24 @@ class LearningEngine:
             return self.policy_net.select_weights(state, weight_floor=self.weight_floor)
         raw_weights = self.policy_net.forward(state, training=False)
         
-        # Apply weight floor to ensure all strategies keep active search-space exploration
+        # Apply weight floor to ensure all strategies keep active search-space exploration.
+        # Only floor the weights below threshold; redistribute the excess uniformly
+        # from weights above floor. This preserves the policy's relative ordering
+        # while guaranteeing minimum mass for each strategy.
         n = len(raw_weights)
         if any(raw_weights < self.weight_floor):
-            raw_weights = np.maximum(raw_weights, self.weight_floor)
-            raw_weights = raw_weights / np.sum(raw_weights)
+            floored = np.maximum(raw_weights, self.weight_floor)
+            excess = np.sum(floored) - 1.0  # How much total mass was added
+            if excess > 0:
+                # Subtract excess from weights that were already above floor
+                above_mask = raw_weights > self.weight_floor
+                if np.any(above_mask):
+                    above_total = np.sum(raw_weights[above_mask])
+                    floored[above_mask] -= excess * (raw_weights[above_mask] / above_total)
+                else:
+                    # All weights were below floor — uniform distribution is correct
+                    floored = np.ones(n) / n
+            raw_weights = floored / np.sum(floored)
             
         return raw_weights.tolist()
 
