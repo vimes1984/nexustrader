@@ -96,8 +96,9 @@ def get_slippage_bps_for_symbol(cost_model: CostModel, symbol: str = "", is_make
 
 
 def get_volume_adjusted_slippage(position_value: float, cost_model: CostModel,
-                                  symbol: str = "", daily_volume_usd: float = 0.0) -> float:
-    """Returns slippage multiplier adjusted for order size vs daily volume.
+                                  symbol: str = "", daily_volume_usd: float = 0.0,
+                                  is_maker: bool = False) -> float:
+    """Returns slippage multiplier adjusted for order type and size vs daily volume.
 
     Market impact grows with order size relative to daily volume:
     - < 0.01% of daily vol: 1x baseline (no additional impact)
@@ -105,11 +106,19 @@ def get_volume_adjusted_slippage(position_value: float, cost_model: CostModel,
     - 0.1-1% of daily vol: 5x baseline (significant impact)
     - > 1% of daily vol: 50x baseline (whale-sized, unlikely to fill cleanly)
 
+    For maker orders: impact is always minimal (0.5x half-spread) since
+    the order provides liquidity and waits for a match.
+
     Returns:
         Price multiplier (e.g., 0.005 = 0.5% price adjustment).
     """
-    total_slip_bps = get_slippage_bps_for_symbol(cost_model, symbol)
+    total_slip_bps = get_slippage_bps_for_symbol(cost_model, symbol, is_maker=is_maker)
 
+    if is_maker:
+        # Maker orders have no market impact (they are resting limit orders)
+        return total_slip_bps / 10_000.0
+
+    impact_mult = 1.0
     if daily_volume_usd > 0 and position_value > 0:
         vol_fraction = position_value / daily_volume_usd
         if vol_fraction > 0.01:
@@ -118,10 +127,6 @@ def get_volume_adjusted_slippage(position_value: float, cost_model: CostModel,
             impact_mult = 5.0
         elif vol_fraction > 0.0001:
             impact_mult = 2.0
-        else:
-            impact_mult = 1.0
-    else:
-        impact_mult = 1.0
 
     return total_slip_bps * impact_mult / 10_000.0
 
@@ -142,7 +147,7 @@ def estimate_round_trip_cost(position_value: float, cost_model: CostModel,
     Returns:
         Total round-trip cost in the same unit as position_value.
     """
-    slip_mult = get_volume_adjusted_slippage(position_value, cost_model, symbol, daily_volume_usd)
+    slip_mult = get_volume_adjusted_slippage(position_value, cost_model, symbol, daily_volume_usd, is_maker=maker_entry or maker_exit)
     fee_entry = cost_model.maker_fee if maker_entry else cost_model.taker_fee
     fee_exit = cost_model.maker_fee if maker_exit else cost_model.taker_fee
     fee_cost = position_value * (fee_entry + fee_exit)

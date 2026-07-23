@@ -26,6 +26,13 @@ class KalmanFilterPrice:
     def update(self, measurement):
         # Guard against NaN or inf measurements
         if measurement is None or not np.isfinite(measurement):
+            if self.x is not None:
+                # Increase uncertainty on NaN so filter can adapt when data resumes
+                self.P = self.P + self.Q
+                self._n_updates += 1
+                # Auto-reset after too many NaN readings (data feed may be stale)
+                if self._n_updates > 10:
+                    self._reset(0.0)
             return float(self.x) if self.x is not None else 0.0
             
         if self.x is None:
