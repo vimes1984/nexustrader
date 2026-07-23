@@ -146,6 +146,17 @@ class PolicyNetwork:
         # Final output layer (Softmax)
         z_out = np.dot(self.a[-1], self.W[-1]) + self.b[-1]
         self.z.append(z_out)
+        
+        # NaN/Inf guard on logits before softmax
+        if np.any(np.isnan(z_out)) or np.any(np.isinf(z_out)):
+            logging.error(
+                f"[FORWARD NaN] Logits contain NaN/Inf. Step={self.total_learning_steps}. "
+                f"Input state: {state.tolist() if hasattr(state, 'tolist') else state}"
+            )
+            # Return uniform distribution as safe fallback
+            self.probs = np.ones_like(z_out) / z_out.shape[-1]
+            return self.probs[0]
+        
         self.probs = self.softmax(z_out)
         return self.probs[0]
 
