@@ -5,6 +5,8 @@ import database as _db
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
+from openclaw_bridge import query_openclaw, extract_json_block
+
 def run_monthly_researcher():
     logging.info("Starting monthly Quantitative Strategy Researcher Agent session...")
     
