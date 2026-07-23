@@ -80,6 +80,11 @@ const Neural = {
   },
 
   loadArch() {
+    // Mark inputs as loading — set defaults first, then overwrite from API
+    setInput('arch-hidden-dim', '12');
+    setInput('arch-hidden-layers', '1');
+    setInput('arch-lr', '0.01');
+    setInput('arch-dropout', '0.0');
     API.brainSpecs().then(data => {
       if (data) {
         setInput('arch-hidden-dim', data.hidden_dim ?? data.hidden ?? '12');
@@ -89,7 +94,10 @@ const Neural = {
         const typeEl = byId('arch-type'); if (typeEl) typeEl.value = data.type || 'simple';
         const optEl = byId('arch-optimizer'); if (optEl) optEl.value = data.optimizer || 'Adam';
       }
-    }).catch(() => {});
+    }).catch(function(err) {
+      // Keep defaults if API fails
+      if (document.body.classList.contains('debug')) console.log('[Neural] Arch load failed, using defaults:', err);
+    });
   },
 
   async saveArch() {
