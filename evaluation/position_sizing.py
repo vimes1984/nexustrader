@@ -30,16 +30,29 @@ def estimate_metrics_from_trades(trades: List[dict]) -> dict:
     if not trades:
         return {"win_rate": 0.5, "avg_win": 0.0, "avg_loss": 0.0, "count": 0}
 
-    pnls = [t.get('pnl_percent', t.get('pnl', 0.0)) or 0.0 for t in trades]
+    import numbers
+    pnls = []
+    for t in trades:
+        pnl = t.get('pnl_percent', t.get('pnl', 0.0)) or 0.0
+        # Guard against None/NaN/non-numeric values
+        if not isinstance(pnl, numbers.Number):
+            try:
+                pnl = float(str(pnl))
+            except (ValueError, TypeError):
+                pnl = 0.0
+        if isinstance(pnl, float) and pnl != pnl:  # NaN check
+            pnl = 0.0
+        pnls.append(pnl)
     wins = [p for p in pnls if p > 0]
     losses = [p for p in pnls if p < 0]
 
     n = len(pnls)
     win_rate = len(wins) / n if n > 0 else 0.5
-    avg_win = np.mean(wins) if wins else 0.0
-    avg_loss = np.mean(losses) if losses else 0.0
-    # Avoid division by zero
-    avg_loss = abs(avg_loss) if avg_loss != 0 else 0.01
+    avg_win = float(np.mean(wins)) if wins else 0.0
+    avg_loss = float(np.mean(losses)) if losses else 0.0
+    # Avoid division by zero — use 0.01 fallback for empty losses or zero avg_loss
+    if not losses or avg_loss <= 0:
+        avg_loss = 0.01
 
     return {
         "win_rate": win_rate,
