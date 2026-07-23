@@ -1301,8 +1301,11 @@ class NexusTraderOrchestrator:
                 _cd_end = 0.0
             if time.time() < _cd_end:
                 logging.warning(f"[SIGNAL BATCH] Best signal {best_ticker} is in loss cooldown. Skipping.")
-                # Fallback: try next-best
-                sorted_viable = sorted(viable_signals.items(), key=lambda x: x[1].get("expected_value", 0), reverse=True)
+                # Fallback: try next-best (use risk-adjusted EV for consistency)
+                def _fallback_key(item):
+                    _t2, _ev2 = item
+                    return _ev2.get("expected_value", 0) * max(_ev2.get("kelly_fraction", 0), 1e-9)
+                sorted_viable = sorted(viable_signals.items(), key=_fallback_key, reverse=True)
                 for _t, _ev in sorted_viable[1:]:
                     try:
                         _cd_raw2 = database.load_setting(f"cooldown_end_{_t}", "0.0")

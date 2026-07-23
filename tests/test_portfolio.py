@@ -24,12 +24,7 @@ class TestPortfolioBalance(unittest.TestCase):
     """Tests that portfolio balance is tracked correctly through trade cycles."""
 
     def setUp(self):
-        database.load_setting.reset_mock()
-        database.save_setting.reset_mock()
-        database.load_active_positions.return_value = {}
-        database.load_trades.return_value = []
-        database.load_setting.return_value = None
-
+        self._reset_mocks()
         self.engine = ExecutionEngine(initial_balance=1000.0)
         self.engine.active_positions = {}
 
@@ -54,6 +49,15 @@ class TestPortfolioBalance(unittest.TestCase):
         def side_effect(key, default=None):
             return defaults.get(key, default)
         database.load_setting.side_effect = side_effect
+
+    def _reset_mocks(self):
+        """Fully reset all mocks to eliminate cross-test contamination."""
+        database.load_setting.reset_mock()
+        database.load_setting.side_effect = None
+        database.load_setting.return_value = None
+        database.save_setting.reset_mock()
+        database.load_active_positions.return_value = {}
+        database.load_trades.return_value = []
 
     def test_balance_starts_at_initial(self):
         """Balance should equal initial_balance at startup."""

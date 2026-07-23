@@ -48,6 +48,52 @@ class TestProbabilityCalibration(unittest.TestCase):
     def test_kelly_cap_insufficient_samples(self):
         self.assertEqual(probability_calibration.kelly_cap_from_calibration(0.0, 29), 0.05)
 
+    def test_kelly_cap_at_known_calibration_levels(self):
+        """Known win rates should produce expected Kelly caps."""
+        # Perfect calibration (brier=0.0): cap = 0.15
+        cap_perfect = probability_calibration.kelly_cap_from_calibration(0.0, n_samples=50)
+        self.assertEqual(cap_perfect, 0.15)
+        
+        # Random calibration (brier=0.25): cap = 0.02
+        cap_random = probability_calibration.kelly_cap_from_calibration(0.25, n_samples=50)
+        self.assertEqual(cap_random, 0.02)
+        
+        # Poor but not terrible (brier=0.12): cap interpolated
+        cap_mid = probability_calibration.kelly_cap_from_calibration(0.12, n_samples=50)
+        self.assertGreater(cap_mid, 0.02)
+        self.assertLess(cap_mid, 0.15)
+        
+        # Insufficient samples (< 30): falls back to conservative 0.05
+        cap_few = probability_calibration.kelly_cap_from_calibration(0.0, n_samples=29)
+        self.assertEqual(cap_few, 0.05)
+        
+        # Brier = 0.25 + small epsilon (exactly at threshold — also 0.02)
+        cap_at_edge = probability_calibration.kelly_cap_from_calibration(0.251, n_samples=50)
+        self.assertEqual(cap_at_edge, 0.02)
+        
+        # Calibration with very poor score (>0.3) still capped at 0.02
+        cap_terrible = probability_calibration.kelly_cap_from_calibration(0.35, n_samples=50)
+        self.assertEqual(cap_terrible, 0.02)
+
+    def test_brier_score_with_known_outcomes(self):
+        """Brier score on known prediction/outcome pairs."""
+        # 80% win rate, predicted 70% consistently
+        preds_biased = [0.7] * 100
+        outs_biased = [1 if i < 80 else 0 for i in range(100)]
+        bs = probability_calibration.brier_score(preds_biased, outs_biased)
+        # expected Brier = 0.7^2*0.2 + 0.3^2*0.8 ... no let's compute:
+        # (0.7-1)^2*80 + (0.7-0)^2*20 = 0.09*80 + 0.49*20 = 7.2 + 9.8 = 17.0
+        # mean = 17/100 = 0.17
+        self.assertAlmostEqual(bs, 0.17, places=2)
+        
+        # 60% win rate, well-calibrated predictions around 0.6
+        preds_calibrated = [0.6] * 60 + [0.4] * 40
+        outs_calibrated = [1] * 60 + [0] * 40
+        bs_cal = probability_calibration.brier_score(preds_calibrated, outs_calibrated)
+        # (0.6-1)^2*60 + (0.4-0)^2*40 = 0.16*60 + 0.16*40 = 16
+        # mean = 16/100 = 0.16
+        self.assertAlmostEqual(bs_cal, 0.16, places=2)
+
     def test_load_calibration_from_trades(self):
         # Create temp DB
         with tempfile.NamedTemporaryFile(delete=False) as f:
