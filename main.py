@@ -892,7 +892,10 @@ class NexusTraderOrchestrator:
                                 }))
 
         # Check Loss Cooldown status
-        cooldown_end = float(database.load_setting(f"cooldown_end_{ticker}", "0.0"))
+        try:
+            cooldown_end = float(database.load_setting(f"cooldown_end_{ticker}", "0.0"))
+        except (ValueError, TypeError):
+            cooldown_end = 0.0
         cooldown_active = time.time() < cooldown_end
         cooldown_remaining = max(0, int((cooldown_end - time.time()) / 60)) if cooldown_active else 0
 

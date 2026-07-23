@@ -421,6 +421,13 @@ const App = {
 
   // ── WebSocket ──
   connectWS() {
+    // Close any existing connection cleanly before opening a new one
+    if (this.state.ws) {
+      try {
+        this.state.ws.onclose = null; // prevent reconnect trigger from old socket
+        this.state.ws.close();
+      } catch(e) {}
+    }
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
     try {
       const ws = new WebSocket(`${proto}://${location.host}/ws`);
