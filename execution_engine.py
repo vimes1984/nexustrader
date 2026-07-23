@@ -396,8 +396,10 @@ class ExecutionEngine:
             logging.info(f"[LIVE TRADING EXECUTE] Routing market {side.upper()} order for {amount} {ccxt_symbol}...")
             order = exchange.create_order(ccxt_symbol, 'market', side.lower(), amount)
             
-            logging.info(f"[LIVE TRADING SUCCESS] Placed order on {broker_type.upper()}: ID={order.get('id')}, Status={order.get('status')}, Filled={order.get('filled')}")
-            return True, amount
+            filled_qty = order.get('filled', None)
+            actual_filled = float(filled_qty) if filled_qty is not None else amount
+            logging.info(f"[LIVE TRADING SUCCESS] Placed order on {broker_type.upper()}: ID={order.get('id')}, Status={order.get('status')}, Requested={amount}, Filled={actual_filled}")
+            return True, actual_filled
         except Exception as e:
             logging.error(f"[LIVE TRADING EXCEPTION] Failed to place live order: {e}")
             return False, qty
