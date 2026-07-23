@@ -53,7 +53,7 @@ def apply_entry_cost(price: float, side: str, cost_model: CostModel,
         is_maker: If True, use maker fee instead of taker (limit orders).
     """
     fee = cost_model.maker_fee if is_maker else cost_model.taker_fee
-    slip = cost_model.slippage_bps / 10_000.0
+    slip = get_slippage_bps_for_symbol(cost_model, symbol) / 10_000.0
     if side.upper() == "BUY":
         return price * (1 + fee + slip)
     else:  # SELL
@@ -71,11 +71,24 @@ def apply_exit_cost(price: float, side: str, cost_model: CostModel,
     is_maker: If True, use maker fee instead of taker (limit orders on exit).
     """
     fee = cost_model.maker_fee if is_maker else cost_model.taker_fee
-    slip = cost_model.slippage_bps / 10_000.0
+    slip = get_slippage_bps_for_symbol(cost_model, symbol) / 10_000.0
     if side.upper() == "BUY":
         return price * (1 - fee - slip)
     else:
         return price * (1 + fee + slip)
+
+
+def get_slippage_bps_for_symbol(cost_model: CostModel, symbol: str = "") -> float:
+    """Returns total slippage estimate in bps for a symbol.
+
+    Combines the baseline slippage_bps from the cost model with the
+    asset-specific spread from SPREAD_BPS_BY_PAIR.
+    """
+    base_slip = cost_model.slippage_bps
+    pair_spread = get_spread_bps_for_symbol(symbol)
+    # Use the larger of the two: if we know the spread is wide (e.g. DOGE: 12 bps),
+    # the slippage estimate should not be lower than the raw spread.
+    return max(base_slip, pair_spread)
 
 
 def estimate_round_trip_cost(position_value: float, cost_model: CostModel,
@@ -83,25 +96,22 @@ def estimate_round_trip_cost(position_value: float, cost_model: CostModel,
                              maker_exit: bool = False) -> float:
     """Estimates total cost for a full round-trip trade on Kraken.
 
-    Entry: pays fee + slippage (slippage = half-spread + market impact)
-    Exit: pays fee + slippage
-    Total: fee_entry + fee_exit + 2*slippage
-
-    slippage_bps already includes spread + market impact, so no separate
-    spread cost is added (avoids double-counting with apply_entry_cost/apply_exit_cost).
-
-    Optional maker routing:
-    - maker_entry: use maker fee on entry (post-only limit order)
-    - maker_exit: use maker fee on exit (post-only limit order)
-
-    Spread varies by pair (see SPREAD_BPS_BY_PAIR):
+    Total cost = fee_entry + fee_exit + 2 * slippage
+    where slippage (from get_slippage_bps_for_symbol) varies by asset:
     - BTC pairs: ~2 bps
     - ETH pairs: ~2.5 bps
     - DOGE pairs: ~12 bps
+
+    Optional maker routing:
+    - maker_entry: use maker fee on entry (post-only limit order, saves ~0.1%)
+    - maker_exit: use maker fee on exit (post-only limit order)
+
+    Returns:
+        Total round-trip cost in the same unit as position_value.
     """
-    slip_bps = cost_model.slippage_bps / 10_000.0
+    total_slip_bps = get_slippage_bps_for_symbol(cost_model, symbol) / 10_000.0
     fee_entry = cost_model.maker_fee if maker_entry else cost_model.taker_fee
     fee_exit = cost_model.maker_fee if maker_exit else cost_model.taker_fee
     fee_cost = position_value * (fee_entry + fee_exit)
-    slip_cost = position_value * slip_bps * 2
+    slip_cost = position_value * total_slip_bps * 2
     return fee_cost + slip_cost

@@ -7,21 +7,25 @@ import math
 from typing import Sequence, Optional
 
 
-def sharpe_ratio(returns: Sequence[float], risk_free_rate: float = 0.0) -> float:
+def sharpe_ratio(returns: Sequence[float], risk_free_rate: float = 0.0,
+                 annualize: bool = True) -> float:
     """Annualized Sharpe ratio from a sequence of per-trade returns."""
-    if len(returns) < 2:
+    n = len(returns)
+    if n < 2:
         return 0.0
-    mean_r = sum(returns) / len(returns)
-    variance = sum((r - mean_r) ** 2 for r in returns) / (len(returns) - 1)
+    mean_r = sum(returns) / n
+    # Use population variance for consistency with annualization factor
+    variance = sum((r - mean_r) ** 2 for r in returns) / (n - 1)
     if variance <= 0:
         return 0.0
     std = math.sqrt(variance)
-    # Approximate annualization factor assuming ~252 trading days
-    # per-trade returns are already fractional (e.g. 0.02 for 2%), so scale by sqrt(n_trades)
-    # For a proper annualized Sharpe, we'd need daily returns. This is a heuristic.
-    if std == 0:
-        return 0.0
-    return (mean_r - risk_free_rate) / std
+    excess = mean_r - risk_free_rate
+    sharpe = excess / std if std > 0 else 0.0
+    if annualize:
+        # Scale by sqrt(n) to annualize per-trade Sharpe
+        # Assumes returns are i.i.d. per trade; for daily returns use sqrt(252)
+        sharpe = sharpe * math.sqrt(n)
+    return sharpe
 
 
 def sortino_ratio(returns: Sequence[float], risk_free_rate: float = 0.0,

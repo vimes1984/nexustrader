@@ -12,6 +12,8 @@ import os
 import random
 from dataclasses import asdict
 
+import numpy as np
+
 from cost_model import CostModel, apply_entry_cost, apply_exit_cost
 from performance_metrics import calculate_metrics, PerformanceMetrics
 from strategy_engine import StrategyEnsemble
