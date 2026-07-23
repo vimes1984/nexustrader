@@ -8,6 +8,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 
 def optimize_sentiment_weights():
     logging.info("Starting weekly sentiment source optimization...")
+    conn = None
     try:
         conn = _db.get_db_connection()
         conn.row_factory = __import__('sqlite3').Row
@@ -19,7 +20,6 @@ def optimize_sentiment_weights():
         
         if len(rows) < 3:
             logging.info(f"Insufficient trade history ({len(rows)} trades). Need at least 3 trades to compute correlations. Keeping default weights.")
-            conn.close()
             return
             
         # Parse data
@@ -83,7 +83,6 @@ def optimize_sentiment_weights():
             report_lines.append(f"| **{src}** | {len(pairs)} | {correlation:+.4f} | **{weight:.4f}** |")
             
         conn.commit()
-        conn.close()
         
         # Add report to blog daily summary or a dedicated optimizer summary
         report_content = "\n".join(report_lines)
@@ -99,6 +98,9 @@ def optimize_sentiment_weights():
                 
     except Exception as e:
         logging.error(f"Error optimizing sentiment weights: {e}")
+    finally:
+        if conn:
+            conn.close()
 
 if __name__ == "__main__":
     optimize_sentiment_weights()
