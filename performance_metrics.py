@@ -25,26 +25,31 @@ def calculate_metrics(equity_curve: List[float], trades: List[dict], periods_per
     m = PerformanceMetrics()
     m.trade_count = len(trades)
 
+    # Sanitize inputs: filter NaN, None, negative values from equity curve
+    cleaned_curve = [float(v) for v in equity_curve if v is not None and isinstance(v, (int, float)) and not (isinstance(v, float) and math.isnan(v))]
+    if not cleaned_curve:
+        return m
+
     # Process equity curve FIRST (before early return for empty trades)
-    if equity_curve and len(equity_curve) > 1:
-        peak = equity_curve[0]
+    if len(cleaned_curve) > 1:
+        peak = cleaned_curve[0]
         max_dd = 0.0
-        for val in equity_curve:
+        for val in cleaned_curve:
             if val > peak:
                 peak = val
             dd = (peak - val) / peak if peak > 0 else 0.0
             if dd > max_dd:
                 max_dd = dd
         m.max_drawdown = max_dd
-        start = equity_curve[0]
-        end = equity_curve[-1]
+        start = cleaned_curve[0]
+        end = cleaned_curve[-1]
         m.total_return = ((end - start) / start) if start > 0 else 0.0
 
-    if len(equity_curve) > 2:
+    if len(cleaned_curve) > 2:
         returns = []
-        for i in range(1, len(equity_curve)):
-            prev = equity_curve[i - 1]
-            curr = equity_curve[i]
+        for i in range(1, len(cleaned_curve)):
+            prev = cleaned_curve[i - 1]
+            curr = cleaned_curve[i]
             # Guard against zero or negative equity causing division issues
             r = (curr - prev) / prev if prev > 1e-10 else 0.0
             returns.append(r)

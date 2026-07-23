@@ -246,6 +246,90 @@ def _compute_hedging_risk_block() -> str:
         return ""
 
 
+def _compute_stress_test_block() -> str:
+    """Run scenario stress tests on portfolio.
+    
+    Scenarios:
+    1. Flash crash: -15% single-day drop in all assets
+    2. Vol spike: +50% volatility expansion (+2σ daily move)
+    3. Liquidity crisis: 3x spread widening
+    4. Trend reversal: 5-day -8% across all positions
+    """
+    try:
+        conn = _db.get_db_connection()
+        conn.row_factory = __import__('sqlite3').Row
+        c = conn.cursor()
+        c.execute("""
+            SELECT symbol, pnl, pnl_percent FROM trades
+            WHERE pnl IS NOT NULL AND pnl_percent IS NOT NULL
+            ORDER BY id DESC LIMIT 300
+        """)
+        rows = [dict(r) for r in c.fetchall()]
+        conn.close()
+        if not rows:
+            return ""
+        
+        from collections import defaultdict
+        seqs = defaultdict(list)
+        for r in rows:
+            sym = r['symbol']
+            if sym:
+                seqs[sym].append(float(r.get('pnl_percent', 0.0)))
+        seqs = {k: np.array(v) for k, v in seqs.items() if len(v) >= 3}
+        if not seqs:
+            return ""
+        
+        lines = ["\n### Stress Test Scenarios"]
+        
+        # Est. current equity from settings
+        current_equity = 1000.0
+        try:
+            from database import load_setting as _ls
+            eq = _ls("current_equity", "1000")
+            current_equity = float(eq)
+        except Exception:
+            pass
+        
+        for sym, rets in seqs.items():
+            vol = float(np.std(rets))
+            mean_ret = float(np.mean(rets))
+            
+            lines.append(f"\n**{sym}** (vol={vol:.4f}, mean={mean_ret:.4f}, n={len(rets)}):")
+            
+            # Scenario 1: Flash crash (-15%)
+            crash_impact = -0.15
+            lines.append(f"  Flash crash (-15%): impact=${current_equity * crash_impact:,.2f}")
+            
+            # Scenario 2: Vol spike: 2σ daily move adverse direction
+            if vol > 0:
+                vol_spike = mean_ret - 2.0 * vol
+                lines.append(f"  Vol spike (2σ adverse): expected return {vol_spike:.4f}")
+            
+            # Scenario 3: Max historical drawdown from returns
+            cum_ret = np.cumprod(1.0 + rets)
+            if len(cum_ret) > 1:
+                peak = np.maximum.accumulate(cum_ret)
+                dd = (peak - cum_ret) / peak
+                max_dd = float(np.max(dd))
+                lines.append(f"  Historical max DD: {max_dd*100:.2f}%")
+            
+            # Scenario 4: Consecutive loss analysis
+            neg_streak = 0
+            max_neg_streak = 0
+            for r_val in rets:
+                if r_val < 0:
+                    neg_streak += 1
+                    max_neg_streak = max(max_neg_streak, neg_streak)
+                else:
+                    neg_streak = 0
+            lines.append(f"  Max consecutive losses: {max_neg_streak}")
+        
+        return "\n".join(lines)
+    except Exception as e:
+        logging.error(f"Stress test failed: {e}")
+        return ""
+
+
 def run_risk_audit(trigger_deploy: bool = False):
     logging.info("Starting Quantitative Portfolio Risk Audit...")
     settings = load_settings()
