@@ -135,6 +135,82 @@ def compute_multi_asset_kelly() -> dict:
         return {}
 
 
+def compute_turnover_penalty() -> dict:
+    """Compute turnover penalty and cost-aware rebalancing metrics.
+
+    Estimates the drag from portfolio turnover by:
+    1. Comparing current Kelly ceilings vs previous settings
+    2. Estimating round-trip transaction cost per asset
+    3. Computing turnover ratio = (trades / total_capital) as a cost drag
+    """
+    try:
+        conn = _db.get_db_connection()
+        conn.row_factory = __import__('sqlite3').Row
+        c = conn.cursor()
+        # Get trade history for turnover estimation
+        c.execute("""
+            SELECT symbol, pnl, side, fee FROM trades
+            WHERE fee IS NOT NULL
+            ORDER BY id DESC LIMIT 200
+        """)
+        rows = [dict(r) for r in c.fetchall()]
+        conn.close()
+    except Exception:
+        rows = []
+
+    try:
+        # Fallback: estimate from trade count if fees not stored
+        conn2 = _db.get_db_connection()
+        c2 = conn2.cursor()
+        c2.execute("SELECT COUNT(*) as cnt, COALESCE(SUM(ABS(pnl)), 0) as vol FROM trades")
+        r = c2.fetchone()
+        conn2.close()
+        trade_count = r[0] if r else 0
+        trade_volume = float(r[1]) if r and r[1] else 0.0
+    except Exception:
+        trade_count = 0
+        trade_volume = 0.0
+
+    # Load previous Kelly settings for turnover delta
+    current_assets = load_active_assets()
+    prev_settings = {}
+    try:
+        conn3 = _db.get_db_connection()
+        c3 = conn3.cursor()
+        c3.execute("SELECT key, value FROM settings WHERE key LIKE 'kelly_ceiling_%'")
+        prev = c3.fetchall()
+        conn3.close()
+        prev_settings = {r[0]: float(r[1]) for r in prev} if prev else {}
+    except Exception:
+        pass
+
+    # Compute sum of absolute delta in Kelly ceilings
+    kelly_delta = 0.0
+    asset_count = 0
+    for ticker, info in current_assets.items():
+        current_k = info.get("kelly_ceiling", 0.2) if isinstance(info, dict) else 0.2
+        prev_k = prev_settings.get(f"kelly_ceiling_{ticker}", current_k)
+        kelly_delta += abs(current_k - prev_k)
+        asset_count += 1
+
+    avg_kelly_delta = kelly_delta / max(asset_count, 1)
+    # Estimate annualized turnover from trade volume / assets
+    estimated_turnover = trade_volume / max(trade_count, 1) if trade_count > 0 else 0.0
+
+    # Transaction cost drag: estimate from Kraken taker fees (0.26%) per side
+    est_cost_per_trade = 0.0026 * 2  # entry + exit
+    total_cost_drag = trade_count * est_cost_per_trade * estimated_turnover if estimated_turnover > 0 else 0.0
+
+    return {
+        "trade_count": trade_count,
+        "trade_volume": round(trade_volume, 2),
+        "avg_kelly_delta": round(avg_kelly_delta, 4),
+        "estimated_turnover": round(estimated_turnover, 4),
+        "total_cost_drag": round(total_cost_drag, 4),
+        "turnover_label": "low" if avg_kelly_delta < 0.05 else ("medium" if avg_kelly_delta < 0.15 else "high"),
+    }
+
+
 def load_performance_summary():
     summary = {}
     try:
@@ -196,6 +272,17 @@ At the very end of your response, output a strict JSON block with your recommend
             kelly_lines.append(f"{sym:<10} | {vals['multi_asset_kelly']:<12.4f} | {vals['simple_kelly']:<13.4f} | {vals['mean_return_pct']:<9.4f} | {vals['trade_count']}")
         kelly_block = "\n".join(kelly_lines)
     
+    # Turnover penalty / cost-aware rebalancing
+    turnover = compute_turnover_penalty()
+    turnover_block = (
+        f"\n### Turnover & Cost Drag Analysis:\n"
+        f"  Trade count: {turnover['trade_count']}\n"
+        f"  Est. trade volume: {turnover['trade_volume']}\n"
+        f"  Kelly delta (rebalancing churn): {turnover['avg_kelly_delta']}\n"
+        f"  Est. total cost drag: {turnover['total_cost_drag']}\n"
+        f"  Turnover regime: {turnover['turnover_label']}\n"
+    )
+    
     prompt = f"""{db_prompt}
 
 Current Asset Configs:
@@ -205,6 +292,8 @@ Recent Performance Summary (Last 100 Trades Grouped By Ticker):
 {json.dumps(perf_summary, indent=2)}
 
 {kelly_block}
+
+{turnover_block}
 """
     
     report_lines = ["\n## ⚖️ Ensemble Asset Allocator Report"]
