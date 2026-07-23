@@ -273,12 +273,13 @@ const Dashboard = {
         const p = Number(data.total_pnl); const e = byId('val-total-pnl'); if (e) { e.textContent = '$' + p.toFixed(2); e.style.color = p >= 0 ? 'var(--neon-green)' : 'var(--neon-red)'; }
         let pct = data.total_pnl_pct;
         // Compute total_pnl_pct from initial_balance if not provided (div by initial_balance not current)
+        // Client-side computes decimal (0.05 for 5%); server sends percentage (5.0). Normalize to percentage.
         if (pct == null && data.initial_balance != null && Number(data.initial_balance) > 0) {
-          pct = p / Number(data.initial_balance);
+          pct = (p / Number(data.initial_balance)) * 100;
         } else if (pct == null && data.balance != null && Number(data.balance) > 0) {
-          pct = p / Number(data.balance);
+          pct = (p / Number(data.balance)) * 100;
         } else if (pct == null && data.equity != null && Number(data.equity) > 0) {
-          pct = p / Number(data.equity);
+          pct = (p / Number(data.equity)) * 100;
         }
         const e2 = byId('val-total-pnl-percent');
         if (e2 && pct != null) { e2.textContent = (pct>=0?'+':'') + Number(pct).toFixed(2)+'%'; e2.style.color = pct>=0?'var(--neon-green)':'var(--neon-red)'; }

@@ -107,6 +107,19 @@ async def api_auth_middleware(request: Request, call_next):
                 is_protected = False
                 break
     
+    # Handle CORS preflight (OPTIONS) before any auth check
+    if request.method == "OPTIONS":
+        return JSONResponse(
+            status_code=200,
+            content={"status": "ok"},
+            headers={
+                "Access-Control-Allow-Origin": origin or "*",
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type, X-API-Token",
+                "Access-Control-Max-Age": "86400",
+            }
+        )
+    
     if is_protected:
         # Check for API token in header or query param
         api_token = request.headers.get("X-API-Token", request.query_params.get("token", ""))
@@ -119,11 +132,10 @@ async def api_auth_middleware(request: Request, call_next):
     
     response = await call_next(request)
     
-    # Add CORS headers for dashboard
-    if origin:
-        response.headers["Access-Control-Allow-Origin"] = origin
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, X-API-Token"
+    # Add CORS headers for all responses (not just browser-originated)
+    response.headers["Access-Control-Allow-Origin"] = origin or "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, X-API-Token"
     
     return response
 
