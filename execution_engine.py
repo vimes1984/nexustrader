@@ -663,8 +663,8 @@ class ExecutionEngine:
                     pos["stop_loss"] = trailed_sl
                     logging.debug(f"[TRAILING SL] {symbol} SELL: trailed SL to {trailed_sl:.4f}")
 
-        # Check for time-based stop (max position age)
-        max_position_hours = 48  # Hard close after 48 hours
+        # Check for time-based stop (max position age) — configurable from DB
+        max_position_hours = float(database.load_setting("max_position_hours", "48"))
         exit_reason = None
         close_trade = False
         pnl = 0.0
