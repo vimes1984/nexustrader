@@ -3,9 +3,9 @@
  * Provides offline caching with offline fallback page + stale-while-revalidate for assets
  * Updated: proper cache versioning, stale retry, HTML escaping in fallback
  */
-const CACHE = 'nt-cache-v3';
-const CACHE_STATIC = 'nt-static-v3';
-const CACHE_DYNAMIC = 'nt-dynamic-v3';
+const CACHE = 'nt-cache-v4';
+const CACHE_STATIC = 'nt-static-v4';
+const CACHE_DYNAMIC = 'nt-dynamic-v4';
 const CORE_ASSETS = [
   '/dashboard-v2/',
   '/dashboard-v2/index.html',
