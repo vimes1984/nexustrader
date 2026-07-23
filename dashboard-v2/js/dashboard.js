@@ -370,7 +370,10 @@ const Dashboard = {
         retryBtn.className = 'btn btn-sm';
         retryBtn.textContent = '🔄 Retry';
         retryBtn.style.marginLeft = '8px';
-        retryBtn.addEventListener('click', function() { Dashboard.loadHistory(App.state.activeTicker); });
+        retryBtn.addEventListener('click', function() {
+          var ticker = App && App.state && App.state.activeTicker;
+          if (ticker) Dashboard.loadHistory(ticker);
+        });
         chartInfo.parentNode.appendChild(retryBtn);
       }
     }

@@ -229,16 +229,34 @@ class TransformerPolicyNetwork:
     
     Same interface as PolicyNetwork and SequentialPolicyNetwork.
     Usable as drop-in replacement in LearningEngine.
+    
+    Accepts either pre-embedded (batch, seq, d_model) arrays or raw
+    (seq, max_tokens) token ID arrays via an internal TokenEmbedder.
     """
     
     def __init__(self, action_dim: int = 6, d_model: int = 64, num_heads: int = 4,
                  num_layers: int = 2, d_ff: int = 128, max_seq_len: int = 24,
-                 dropout: float = 0.1, learning_rate: float = 0.001):
+                 dropout: float = 0.1, learning_rate: float = 0.001, vocab_size: int = None,
+                 seed: int = 42):
         
         self.action_dim = action_dim
         self.d_model = d_model
         self.max_seq_len = max_seq_len
         self.learning_rate = learning_rate
+        
+        # Token embedder for raw token ID input (same architecture as LSTM path)
+        self.vocab_size = vocab_size
+        if vocab_size is not None:
+            from token_embedder import TokenEmbedder as _TE
+            from tokenizer import VOCAB_SIZE as _VS
+            self.embedder = _TE(
+                vocab_size=vocab_size,
+                embedding_dim=d_model,
+                max_seq_len=max_seq_len,
+                seed=seed,
+            )
+        else:
+            self.embedder = None
         
         # Layers
         self.pos_encoding = PositionalEncoding(max_seq_len, d_model)
@@ -270,7 +288,8 @@ class TransformerPolicyNetwork:
         """Forward pass through transformer → softmax strategy weights.
         
         Args:
-            x: (batch, seq, d_model) input embeddings
+            x: (batch, seq, d_model) input embeddings, or
+               (seq, max_tokens) integer token ID array (embedded internally)
             training: Force training/eval mode
         
         Returns:
@@ -278,6 +297,16 @@ class TransformerPolicyNetwork:
         """
         if training is None:
             training = self._training
+        
+        # Auto-embed if input is raw token IDs (2D integer array)
+        if self.embedder is not None and x.dtype.kind in ('i', 'u'):
+            batch_size_emb = 1
+            seq_len_emb = x.shape[0]
+            embedded = self.embedder.forward(x, training=training)
+            x = embedded  # (1, seq_len, d_model)
+        # Handle 2D float input (seq, d_model) by adding batch dim
+        elif x.ndim == 2 and x.dtype.kind == 'f':
+            x = x[np.newaxis, :, :]
         
         # Positional encoding
         x = self.pos_encoding.forward(x)
