@@ -255,12 +255,17 @@ class MutationFreeze:
         )
         return suggestion
 
-    def apply(self, suggestion_index: int) -> bool:
-        """Apply a specific pending suggestion (human approval gate)."""
+    def apply(self, suggestion_index: int) -> tuple[bool, dict | None]:
+        """Apply a specific pending suggestion (human approval gate).
+
+        Returns (success, suggestion_dict) where suggestion_dict contains
+        the details needed for the caller to implement the mutation:
+        {'parameter': str, 'new_value': str, 'old_value': str, ...}
+        """
         if suggestion_index < 0 or suggestion_index >= len(self.pending_suggestions):
-            return False
-        self.pending_suggestions.pop(suggestion_index)
-        return True  # caller implements the actual mutation
+            return False, None
+        suggestion = self.pending_suggestions.pop(suggestion_index)
+        return True, suggestion
 
     def thaw(self):
         self.frozen = False

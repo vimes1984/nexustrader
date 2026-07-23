@@ -152,34 +152,43 @@ def fetch_ticker_sentiment(ticker):
 
     # 1. Compute average score per feed source (if no matches, default to 0.0)
     source_averages = {}
+    source_volumes = {}
     for source, scores in raw_feed_scores.items():
         if scores:
             source_averages[source] = float(sum(scores) / len(scores))
+            source_volumes[source] = len(scores)
         else:
             source_averages[source] = 0.0
+            source_volumes[source] = 0
             
-    # 2. Load feed weights from database and calculate weighted average
+    # 2. Load feed weights from database and calculate volume-weighted average
     weighted_sum = 0.0
     weight_total = 0.0
     
     # We only include feeds that had active matches to avoid diluting the score
-    active_sources = {s: av for s, av in source_averages.items() if len(raw_feed_scores[s]) > 0}
+    active_sources = {s: av for s, av in source_averages.items() if source_volumes[s] > 0}
     
     for source, avg_score in active_sources.items():
         # Load weights from SQLite setting
         weight_str = database.load_setting(f"feed_weight_{source}", "1.0")
         try:
-            weight = float(weight_str)
+            base_weight = float(weight_str)
         except ValueError:
-            weight = 1.0
-            
-        weighted_sum += avg_score * weight
-        weight_total += weight
+            base_weight = 1.0
+        
+        # Volume-adjust the weight: more articles → higher confidence in the signal
+        # Use sqrt of volume so 100 articles don't dominate 1 article by 100x
+        volume = source_volumes[source]
+        volume_weight = base_weight * (volume ** 0.5)
+        
+        weighted_sum += avg_score * volume_weight
+        weight_total += volume_weight
         
     final_score = 0.0
     if weight_total > 0:
         final_score = weighted_sum / weight_total
-        logging.info(f"[SENTIMENT] Ticker: {ticker} | Weighted Score: {final_score:+.4f} (Active feeds: {list(active_sources.keys())})")
+        logging.info(f"[SENTIMENT] Ticker: {ticker} | Weighted Score: {final_score:+.4f} "
+                     f"(Active feeds: {list(active_sources.keys())}, volumes: {source_volumes})")
     else:
         logging.info(f"[SENTIMENT] Ticker: {ticker} | No active feeds matched. Defaulting to neutral (0.0000)")
         
