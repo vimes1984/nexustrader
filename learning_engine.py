@@ -275,9 +275,11 @@ class PolicyNetwork:
         advantage = reward - self.reward_baseline
         self.reward_baseline = (1.0 - self.baseline_alpha) * self.reward_baseline + self.baseline_alpha * reward
         
-        def _compute_loss_for_state(s, al, adv):
-            """Compute current policy loss for a single (state, alignment, advantage)."""
-            probs = self.forward(s, training=False)
+        def _compute_loss_for_state(s, al, adv, training_=False):
+            """Compute current policy loss for a single (state, alignment, advantage).
+            Uses training=False for consistency with inference.
+            """
+            probs = self.forward(s, training=training_)
             alignment_flat = al.reshape(-1)
             if np.any(alignment_flat > 0):
                 action_idx = np.argmax(alignment_flat)
@@ -287,8 +289,8 @@ class PolicyNetwork:
             log_prob = np.log(max(probs[action_idx], 1e-12))
             return -scaled_adv * log_prob  # REINFORCE loss
         
-        # Compute loss BEFORE update
-        loss_before = _compute_loss_for_state(state, alignment, advantage)
+        # Compute loss BEFORE update (no dropout for deterministic loss computation)
+        loss_before = _compute_loss_for_state(state, alignment, advantage, training_=False)
         
         # Store in replay buffer
         self.replay.push(np.array(state, dtype=float), alignment, advantage)
