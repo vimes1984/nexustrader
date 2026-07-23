@@ -28,7 +28,11 @@ SPREAD_BPS_BY_PAIR = {
 def get_spread_bps_for_symbol(symbol: str) -> float:
     """Return typical Kraken spread in bps for a given symbol (e.g. 'BTC-USD')."""
     base = re.split(r'[-/]', symbol)[0].upper() if symbol else ""
-    return SPREAD_BPS_BY_PAIR.get(base, SPREAD_BPS_BY_PAIR["DEFAULT"])
+    # Map Kraken alternate asset names to canonical
+    canonical_map = {"XBT": "BTC", "XETH": "ETH", "XXRP": "XRP",
+                     "XLTC": "LTC", "XDG": "DOGE", "XXLM": "XLM"}
+    canonical_base = canonical_map.get(base, base)
+    return SPREAD_BPS_BY_PAIR.get(canonical_base, SPREAD_BPS_BY_PAIR["DEFAULT"])
 
 
 @dataclass
