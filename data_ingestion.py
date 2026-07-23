@@ -370,16 +370,16 @@ class DataIngestion:
                                 
                             now_dt = pd.Timestamp.now(tz=last_ts_dt.tz if hasattr(last_ts_dt, 'tz') else None)
                             
-                            # Calculate interval duration limit in seconds
-                            seconds_limit = 3600
-                            if self.interval == '1m':
-                                seconds_limit = 60
-                            elif self.interval == '5m':
-                                seconds_limit = 300
-                            elif self.interval == '15m':
-                                seconds_limit = 900
-                            elif self.interval == '1d':
-                                seconds_limit = 86400
+                            # Parse interval string to seconds (e.g., '1h'→3600, '30m'→1800, '4h'→14400, '1d'→86400)
+                            import re as _re
+                            match = _re.match(r'(\d+)([smhdw])', self.interval.lower())
+                            if match:
+                                num = int(match.group(1))
+                                unit = match.group(2)
+                                unit_map = {'s': 1, 'm': 60, 'h': 3600, 'd': 86400, 'w': 604800}
+                                seconds_limit = num * unit_map[unit]
+                            else:
+                                seconds_limit = 3600  # fallback to 1h
                                 
                             # If pandas Timestamps are timezone-naive/aware, strip tz for simple comparison
                             now_naive = now_dt.tz_localize(None) if hasattr(now_dt, 'tz_localize') and now_dt.tz is not None else now_dt
