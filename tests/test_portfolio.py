@@ -34,8 +34,14 @@ class TestPortfolioBalance(unittest.TestCase):
         self.engine.active_positions = {}
 
     def _mock_db_settings(self, extra=None):
-        """Helper to return sensible DB defaults."""
+        """Helper to return sensible DB defaults.
+        Must be called AFTER engine.__init__ to avoid overriding __init__'s mock reads."""
         defaults = {
+            "portfolio_balance": None,
+            "initial_portfolio_balance": None,
+            "portfolio_live_equity": None,
+            "portfolio_live_holdings": None,
+            "portfolio_last_known_prices": None,
             "max_open_positions": "10",
             "max_concentration_pct": "80",
             "max_total_exposure_pct": "90",

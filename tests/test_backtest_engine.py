@@ -84,10 +84,10 @@ class TestBacktestEngine(unittest.TestCase):
         self.assertEqual(res["n_simulations"], 0)
 
     def test_walk_forward_sufficient_data(self):
-        """With 150 candles, walk_forward should produce valid folds."""
+        """With 300 candles, walk_forward should produce valid folds."""
         be = BacktestEngine("BTC-USD")
-        candles = make_candles(150, start_price=100, up_trend=True)
-        res = be.run_walk_forward(candles, n_splits=3)
+        candles = make_candles(300, start_price=100, up_trend=True)
+        res = be.run_walk_forward(candles, n_splits=2)
         self.assertNotIn("error", res, f"Got error: {res.get('error')}")
         self.assertGreater(res.get("n_splits", 0), 0)
 

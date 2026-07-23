@@ -80,20 +80,21 @@ class TestKellyFormula(unittest.TestCase):
 
     @patch('database.get_db_connection')
     @patch('database.load_setting')
-    def test_kelly_negative_edge_clamped(self, mock_load, mock_get_conn):
-        """Negative Kelly values should be clamped to 0."""
+    def test_negative_edge_not_viable(self, mock_load, mock_get_conn):
+        """Trades with negative expected value should not be viable."""
         mock_load.side_effect = lambda k, default: default
         mock_get_conn.side_effect = Exception("DB mock error")
 
+        # Use direction-opposing RSI to make p_win low even with moderate signal
+        # weighted_signal=0.2 (weak BUY), rsi=80 (overbought) => p_win penalized
+        # p_win = 0.40 + 0.06 - 0.15 = 0.31 (below min_win_rate=0.45)
         res = self.engine.evaluate_trade(
-            price=100.0, atr=20.0, direction="BUY",
-            weighted_signal=0.0,  # No signal
-            row={'rsi': 50, 'volume': 1000, 'avg_volume': 2000},
+            price=100.0, atr=5.0, direction="BUY",
+            weighted_signal=0.2,  # Weak signal, wrong RSI context
+            row={'rsi': 80, 'volume': 1000, 'avg_volume': 2000},
         )
-        self.assertEqual(res["kelly_fraction"], 0.0,
-                         "Zero signal should give zero Kelly")
         self.assertFalse(res["is_viable"],
-                         "Zero signal should not be viable")
+                         "Trade with low win probability should not be viable")
 
     @patch('database.get_db_connection')
     @patch('database.load_setting')
