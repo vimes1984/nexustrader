@@ -19,14 +19,17 @@ class PerformanceMetrics:
 def _infer_periods_per_year(curve_len: int) -> int:
     """Infer the number of bars per year from the length of the equity curve.
     
-    If we have ~252 bars, assume daily data.
-    If we have ~4000+ bars, assume hourly data.
-    If we have ~100, assume weekly data.
+    This is a heuristic based on typical trading data granularity:
+    - < 50 bars: assume weekly (52 periods/year)
+    - 50-200: assume daily (252)
+    - 200-1000: assume 4-hour (252*6 = 1512)
+    - 1000-5000: assume hourly (252*24 = 6048)
+    - 5000+: assume 5-min bars (252*78 = 19656)
     
-    Default heuristic uses curve_len as a proxy for granularity.
+    A value of at least 1 is always returned to prevent div-by-zero.
     """
     if curve_len < 50:
-        return 52  # weekly-ish
+        return max(1, 52)  # weekly-ish
     elif curve_len < 200:
         return 252  # daily-ish
     elif curve_len < 1000:
