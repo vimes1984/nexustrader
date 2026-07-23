@@ -390,6 +390,11 @@ class LearningEngine:
         self.nn_architecture = nn_architecture
         if nn_architecture == "transformer":
             from transformer_policy_net import TransformerPolicyNetwork
+            # Import VOCAB_SIZE for token embedding
+            try:
+                from tokenizer import VOCAB_SIZE as _VS
+            except ImportError:
+                _VS = 128
             self.policy_net = TransformerPolicyNetwork(
                 action_dim=num_strategies,
                 d_model=hidden_dim if hidden_dim >= 64 else 64,
@@ -398,6 +403,7 @@ class LearningEngine:
                 max_seq_len=24,
                 dropout=dropout,
                 learning_rate=learning_rate,
+                vocab_size=_VS,
             )
         elif nn_architecture == "lstm":
             from sequential_policy_net import SequentialPolicyNetwork

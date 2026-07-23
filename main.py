@@ -1274,6 +1274,9 @@ async def api_init_state(request: Request):
 
     # Trades from DB
     all_trades = _db.load_trades() or []
+    _today_start = _time.time() - (_time.time() % 86400)  # midnight today
+    _today_trades = [t for t in all_trades if float(t.get("exit_time", 0) or 0) >= _today_start]
+    _today_pnl = sum(float(t.get("pnl", 0) or 0) for t in _today_trades)
 
     # Active brains
     active_brains = []
@@ -1309,6 +1312,7 @@ async def api_init_state(request: Request):
     return {
         "status":"ok", "balance":balance, "equity":equity,
         "trades":all_trades, "total_pnl":round(sum(float(t.get("pnl",0)or 0) for t in all_trades), 2),
+        "today_pnl": round(_today_pnl, 2),
         "total_pnl_pct": round((sum(float(t.get("pnl",0)or 0) for t in all_trades) / float(_db.load_setting("initial_portfolio_balance","100.0")) * 100) if float(_db.load_setting("initial_portfolio_balance","100.0")) > 0 else 0.0, 2),
         "tickers":tickers, "ticker":default_ticker, "ticker_prices":ticker_prices,
         "active_brains":active_brains,

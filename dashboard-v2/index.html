@@ -468,7 +468,14 @@ if ('serviceWorker' in navigator) {
   var ts = Date.now();
   var scripts = ['api','router','dashboard','neural','assets','llm','agents','settings','strategy','optimizations','architecture','logs'];
   function loadNext(i) {
-    if (i >= scripts.length) return;
+    if (i >= scripts.length) {
+      // All scripts loaded — fire a ready event
+      try { document.dispatchEvent(new CustomEvent('nt:scriptsReady')); } catch(e) {}
+      // Manually init modules as DOMContentLoaded already fired by now
+      function safeInit(fn, name) { try { if (typeof fn === 'function') fn(); } catch(e) { console.warn('[Init] ' + name + ':', e); } }
+      safeInit(App.init, 'App');
+      return;
+    }
     var s = document.createElement('script');
     s.src = '/dashboard-v2/js/' + scripts[i] + '.js?v=' + ts;
     s.onload = function() { loadNext(i+1); };

@@ -620,11 +620,16 @@ class TransformerPolicyNetwork:
             'learning_rate': self.learning_rate,
             'pos_encoding': json.loads(self.pos_encoding.to_json()),
             'encoder_layers': [json.loads(layer.to_json()) for layer in self.encoder_layers],
+            'vocab_size': self.vocab_size,
+            'pos_encoding': json.loads(self.pos_encoding.to_json()),
+            'encoder_layers': [json.loads(layer.to_json()) for layer in self.encoder_layers],
             'policy_W1': self.policy_W1.tolist(),
             'policy_b1': self.policy_b1.tolist(),
             'policy_W2': self.policy_W2.tolist(),
             'policy_b2': self.policy_b2.tolist(),
         }
+        if self.embedder is not None:
+            data['embedder'] = json.loads(self.embedder.to_json())
         return json.dumps(data)
     
     @classmethod
@@ -641,7 +646,11 @@ class TransformerPolicyNetwork:
             max_seq_len=data['max_seq_len'],
             dropout=data['encoder_layers'][0]['attention']['dropout'],
             learning_rate=data['learning_rate'],
+            vocab_size=data.get('vocab_size', None),
         )
+        if net.embedder is not None and 'embedder' in data:
+            from token_embedder import TokenEmbedder as _TE
+            net.embedder = _TE.from_json(json.dumps(data['embedder']))
         net.pos_encoding = PositionalEncoding.from_json(json.dumps(data['pos_encoding']))
         for i, layer_data in enumerate(data['encoder_layers']):
             net.encoder_layers[i] = TransformerEncoderLayer.from_json(json.dumps(layer_data))
