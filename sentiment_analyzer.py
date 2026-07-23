@@ -37,8 +37,9 @@ def finbert_sentiment(text: str) -> Optional[Tuple[float, float]]:
         with torch.no_grad():
             outputs = _FINBERT_MODEL(**inputs)
         probs = torch.nn.functional.softmax(outputs.logits, dim=-1).squeeze()
-        # FinBERT outputs: [positive, negative, neutral] logits
-        pos, neg, neu = probs[0].item(), probs[1].item(), probs[2].item()
+        # FinBERT model outputs: [negative, neutral, positive] logits
+        # (ProsusAI/finbert uses the original FinBERT label order)
+        neg, neu, pos = probs[0].item(), probs[1].item(), probs[2].item()
         # Map to [-1, 1] score: positive - negative, weighted by confidence
         score = pos - neg
         confidence = 1.0 - neu  # higher confidence = less neutral
