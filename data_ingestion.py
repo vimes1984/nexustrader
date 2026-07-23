@@ -153,8 +153,8 @@ class DataIngestion:
         df['stoch_k'] = 100 * ((df['close'] - low_14) / (high_14 - low_14 + 1e-9))
         df['stoch_d'] = df['stoch_k'].rolling(window=3).mean()
         
-        # Clean up NaNs
-        df = df.bfill().ffill()
+        # Clean up NaNs — forward-fill only (no backfill to prevent look-ahead bias)
+        df = df.ffill()
         # Assign back under lock
         self._require_lock()
         with self._data_lock:

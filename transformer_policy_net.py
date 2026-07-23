@@ -385,11 +385,14 @@ class TransformerPolicyNetwork:
         d_logits = -scaled_reward * d_logits_unnorm
 
         # Entropy bonus: H = -sum(p * log(p))
+        # dH/dz_i = -p_i * (log(p_i) + H)
+        # L = L_pg - beta * H  →  dL/dz = dL_pg/dz - beta * dH/dz
+        # dH/dz_i = -p_i * (log p_i + H)
+        # -beta * dH/dz = +beta * p * (log p + H)
         log_p = np.log(probs + 1e-9)
         entropy = -np.sum(probs * log_p)
         entropy_beta = 0.005
-        entropy_grad = probs * (entropy - log_p)  # dH/dz
-        d_logits -= entropy_beta * entropy_grad
+        d_logits += entropy_beta * probs * (log_p + entropy)
 
         # Call the low-level backward (not self.backward which aliases back here)
         TransformerPolicyNetwork._backward_pass(self, d_logits)
