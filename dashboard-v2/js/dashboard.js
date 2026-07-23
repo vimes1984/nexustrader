@@ -219,7 +219,10 @@ const Dashboard = {
             close: data.price
           });
         } catch(e) {
-          this.chart?.timeScale()?.fitContent();
+          // Candle update can fail if tick is outside visible range — fit content to recover
+          if (this.chart && typeof this.chart.timeScale === 'function') {
+            try { this.chart.timeScale().fitContent(); } catch(e2) {}
+          }
         }
       }
       // Update data freshness indicator
