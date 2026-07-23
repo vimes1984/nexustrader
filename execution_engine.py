@@ -923,7 +923,12 @@ class ExecutionEngine:
             self._last_trade_time = time.time()
             
             # Trigger online learning callback
-            if self.learning_callback:
+            if self.learning_callback is None:
+                logging.critical(
+                    f"[LEARNING DISABLED] No learning_callback set for {symbol}. "
+                    f"Model will NOT learn from this trade. Check orchestrator initialization."
+                )
+            else:
                 try:
                     self.learning_callback(
                         symbol,
