@@ -194,6 +194,10 @@ class NexusTraderOrchestrator:
         
         self.probability_engine = ProbabilityEngine(kelly_fraction=0.2)
         self.execution_engine = ExecutionEngine(initial_balance=100.0)
+        # Rebuild active positions from DB immediately after EE creation
+        # (EE.__init__ already does this, but calling explicitly ensures
+        # the orchestration layer has the latest state before any tick processing)
+        self.execution_engine.rebuild_active_positions_from_db()
         self.long_term_layer = LongTermStrategyLayer()
         
         # State tracking
