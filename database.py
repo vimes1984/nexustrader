@@ -403,9 +403,20 @@ def save_tick(row, symbol):
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
-        INSERT OR REPLACE INTO ticks 
+        INSERT INTO ticks
         (timestamp, symbol, open, high, low, close, volume, rsi, macd, macd_signal, bb_upper, bb_lower, atr)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(timestamp, symbol) DO UPDATE SET
+            high  = MAX(high, excluded.high),
+            low   = MIN(low, excluded.low),
+            close = excluded.close,
+            volume = volume + excluded.volume,
+            rsi   = excluded.rsi,
+            macd  = excluded.macd,
+            macd_signal = excluded.macd_signal,
+            bb_upper = excluded.bb_upper,
+            bb_lower = excluded.bb_lower,
+            atr   = excluded.atr
         """, (
             str(row.get('timestamp', '')),
             symbol,
