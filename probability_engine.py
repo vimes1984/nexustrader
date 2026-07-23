@@ -174,6 +174,78 @@ class ProbabilityEngine:
         # 1. Calc SL/TP
         tp, sl = self.calculate_atr_bounds(price, atr, direction, symbol)
         
+        # ── PRE-FILTER: Quick exposure check before full evaluation ──
+        # If the Kelly-based position size would exceed max_exposure given
+        # the current stop distance, skip early to save compute.
+        # This check uses a coarse estimate: position_value ≈ balance * kelly_fraction
+        # and compares against the minimum viable position ($5).
+        if symbol and price > 0:
+            import database as _db
+            import time as _time
+            if not hasattr(self, '_early_exit_cache'):
+                self._early_exit_cache = {}
+            cache_key = f"_max_pos_pct_{symbol}"
+            if cache_key not in self._early_exit_cache or (_time.time() - self._early_exit_cache.get(f"_ts_{cache_key}", 0) > 60):
+                self._early_exit_cache[cache_key] = float(_db.load_setting("max_position_pct", "15")) / 100.0
+                self._early_exit_cache[f"_ts_{cache_key}"] = _time.time()
+            _max_pos_pct = self._early_exit_cache[cache_key]
+            try:
+                _balance = float(_db.load_setting("portfolio_balance", "0"))
+            except (ValueError, TypeError):
+                _balance = 0.0
+            if _balance > 0:
+                # Rough test: even the minimum viable position ($5) relative to stop distance
+                stop_dist_pct = abs(price - sl) / price if sl > 0 and price > 0 else 0.1
+                if stop_dist_pct < 0.001:
+                    stop_dist_pct = 0.001
+                capped_stop = min(stop_dist_pct, 0.5)
+                # Minimum position size needed: $5 / entry_price => quantity
+                # Risk budget needed: quantity * entry_price * capped_stop * kelly_fraction
+                # If min $5 position would exceed max exposure, bail early
+                _min_possible_position = 5.0  # $5 minimum
+                _max_allowed_position = _balance * _max_pos_pct
+                if _min_possible_position > _max_allowed_position:
+                    logging.debug(
+                        f"[PRE-FILTER] {symbol}: min position ${_min_possible_position:.2f} exceeds "
+                        f"max allowed ${_max_allowed_position:.2f} (balance=${_balance:.2f}, "
+                        f"max_pos_pct={_max_pos_pct:.1%}). Skipping full eval."
+                    )
+                    return {
+                        "direction": direction,
+                        "entry_price": float(price),
+                        "take_profit": float(tp),
+                        "stop_loss": float(sl),
+                        "risk_reward_ratio": 0.0,
+                        "win_probability": 0.0,
+                        "expected_value": 0.0,
+                        "kelly_fraction": 0.0,
+                        "is_viable": False
+                    }
+        
+        # ── PRE-FILTER: Exposure check using kelly_fraction * balance / min_stop ──
+        # Estimate if the position value this signal would produce is likely to get
+        # blocked by max_total_exposure. Quick check before full evalaution.
+        if symbol:
+            import database as _db2
+            import json as _json
+            _active_positions_str = _db2.load_setting("_active_positions_cache", "{}")
+            try:
+                _active_positions = _json.loads(_active_positions_str) if isinstance(_active_positions_str, str) else {}
+            except Exception:
+                _active_positions = {}
+            if hasattr(self, 'kelly_fraction') and self.kelly_fraction:
+                kelly_frac = getattr(self, 'kelly_fraction', 0.1)  # match risk_mode
+                quick_kelly_size = 0.0
+                if stop_dist_pct > 0:
+                    quick_pos_val = (_balance * kelly_frac) / capped_stop
+                    quick_pos_val = min(quick_pos_val, _balance * 3.0)
+                else:
+                    quick_pos_val = _balance * kelly_frac
+            else:
+                quick_pos_val = _balance * self.kelly_fraction if hasattr(self, 'kelly_fraction') else _balance * 0.1
+
+        
+        
         # 2. Get win probability
         p_win = self.estimate_win_probability(weighted_signal, row, history_df)
         

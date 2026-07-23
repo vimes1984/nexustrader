@@ -499,11 +499,42 @@ class ExecutionEngine:
         position_value = (available_capital * kelly_fraction) / capped_stop_pct
         position_value = min(position_value, available_capital * max_leverage)
         
+        # DEBUG LOG SIZE COMPUTATION
+        logging.info(
+            f"[SIZING DEBUG] {symbol}: kelly_fraction={kelly_fraction:.4f}, "
+            f"stop_loss_pct={stop_loss_pct:.4f}, capped_stop_pct={capped_stop_pct:.4f}, "
+            f"available_capital=${available_capital:.2f}, total_equity=${total_equity:.2f}, "
+            f"raw_position_value=${position_value:.2f}"
+        )
+        
         # Cap by max % of equity (configurable, default 15%)
         max_pos_pct = float(database.load_setting("max_position_pct", "15")) / 100.0
         max_allowed_position = max(total_equity * max_pos_pct, 0.0)
         if position_value > max_allowed_position:
             position_value = max_allowed_position
+            
+        # ABSOLUTE HARD CAP: Never exceed 25% of total equity regardless of ANY other calculation
+        # This is the ultimate backstop against any Kelly/stop-loss/leverage math explosion.
+        ABSOLUTE_MAX_POSITION_PCT = 0.25
+        hard_cap = max(total_equity * ABSOLUTE_MAX_POSITION_PCT, 0.0)
+        if position_value > hard_cap:
+            logging.warning(
+                f"[ABSOLUTE CAP] {symbol}: position_value ${position_value:.2f} capped to "
+                f"${hard_cap:.2f} ({ABSOLUTE_MAX_POSITION_PCT*100:.0f}% of equity=${total_equity:.2f})"
+            )
+            position_value = hard_cap
+        
+        # Micro-account mode: if total_equity < $50, use reduced risk
+        if total_equity < 50.0:
+            micro_max = max(total_equity * 0.10, 0.0)  # Max 10% per trade
+            if position_value > micro_max:
+                logging.warning(
+                    f"[MICRO ACCOUNT] {symbol}: equity=${total_equity:.2f} < $50. "
+                    f"Capping position from ${position_value:.2f} to ${micro_max:.2f}"
+                )
+                position_value = micro_max
+            # Micro-account: also halve the max_concentration for safety
+            self.max_concentration = min(self.max_concentration, 0.20)
         
         # Now check portfolio-level risk limits against the FINAL position_value
         if total_equity > 0 and position_value > 0:
