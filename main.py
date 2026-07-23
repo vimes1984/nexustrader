@@ -419,6 +419,23 @@ class NexusTraderOrchestrator:
         _ticker_losses = _ticker_closed_count - _ticker_wins
         _min_data_ok = _ticker_closed_count >= 10 and _ticker_wins >= 1 and _ticker_losses >= 1
         
+        # Learning frequency tracking: log ratio of closed trades to actual learning steps
+        _learn_freq_key = f"_learn_freq_count_{ticker}"
+        _prev_learn_count = getattr(self, _learn_freq_key, 0)
+        if _min_data_ok:
+            setattr(self, _learn_freq_key, _prev_learn_count + 1)
+        if _ticker_closed_count > 0 and _ticker_closed_count % 50 == 0:
+            _learn_count = getattr(self, _learn_freq_key, 0)
+            logging.info(
+                f"[LEARN FREQ] {ticker}: {_learn_count}/{_ticker_closed_count} trades triggered learning "
+                f"({100*_learn_count/_ticker_closed_count:.1f}%)"
+            )
+            if _learn_count == 0:
+                logging.warning(
+                    f"[LEARN FREQ] {ticker}: 0 learning steps despite {_ticker_closed_count} closed trades. "
+                    f"Learning may be disabled or min-data condition never met."
+                )
+        
         # Feed trade outcome to strategy performance tracker
         if strategy_signals:
             ensemble.record_trade_outcome(strategy_signals, direction, pnl_percent)
