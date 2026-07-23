@@ -570,7 +570,12 @@ class ExecutionEngine:
             "strategy_signals": strategy_signals,
             "entry_state": evaluation.get("state", []),
             "sentiment_sources": evaluation.get("sentiment_sources", {}),
-            "fee_paid": fee
+            "fee_paid": fee,
+            # Store evaluation metadata for trade recording on close
+            "predicted_win_probability": evaluation.get("win_probability"),
+            "expected_value": evaluation.get("expected_value"),
+            "risk_reward_ratio": evaluation.get("risk_reward_ratio"),
+            "kelly_fraction": evaluation.get("kelly_fraction"),
         }
         logging.info(f"Opened {exec_label} {direction} position for {symbol}: Qty {actual_qty:.6f} at {effective_entry:.2f} (incl. slippage). Fee: {fee:.2f}")
         return True
