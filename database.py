@@ -967,29 +967,45 @@ def run_db_maintenance():
     cursor = conn.cursor()
     try:
         # Trim old ticks: keep last 100K rows
+        # Use range-based DELETE with timestamp threshold instead of rowid subquery
+        # to avoid SQLite subquery re-evaluation performance trap.
         tick_count = cursor.execute("SELECT COUNT(*) FROM ticks").fetchone()[0]
         if tick_count > 100000:
-            excess = tick_count - 50000
+            keep_target = 50000
             cursor.execute(
-                "DELETE FROM ticks WHERE rowid IN (SELECT rowid FROM ticks ORDER BY timestamp ASC LIMIT ?)",
-                (excess,)
+                "SELECT timestamp FROM ticks ORDER BY timestamp DESC LIMIT 1 OFFSET ?",
+                (keep_target - 1,)
             )
-            logging.info(f"DB maintenance: trimmed {excess} old tick rows")
+            row = cursor.fetchone()
+            if row:
+                trim_before = row[0]
+                cursor.execute("DELETE FROM ticks WHERE timestamp < ?", (trim_before,))
+                logging.info(f"DB maintenance: trimmed ticks older than {trim_before}, kept ~{keep_target}")
 
-        # Trim old portfolio_history: keep last 1 year (8760 hourly entries)
+        # Trim old portfolio_history: keep last 8760 entries (~1 year at 1h granularity)
         ph_count = cursor.execute("SELECT COUNT(*) FROM portfolio_history").fetchone()[0]
         if ph_count > 10000:
+            keep_target_ph = 8760
             cursor.execute(
-                "DELETE FROM portfolio_history WHERE timestamp < (SELECT MIN(timestamp) FROM (SELECT timestamp FROM portfolio_history ORDER BY timestamp DESC LIMIT 8760))"
+                "SELECT timestamp FROM portfolio_history ORDER BY timestamp DESC LIMIT 1 OFFSET ?",
+                (keep_target_ph - 1,)
             )
-            logging.info(f"DB maintenance: trimmed portfolio_history rows")
+            row = cursor.fetchone()
+            if row:
+                trim_before_ph = row[0]
+                cursor.execute("DELETE FROM portfolio_history WHERE timestamp < ?", (trim_before_ph,))
+                logging.info(f"DB maintenance: trimmed portfolio_history older than {trim_before_ph}")
 
         # Trim old agent_runs: keep last 5000
         ar_count = cursor.execute("SELECT COUNT(*) FROM agent_runs").fetchone()[0]
         if ar_count > 5000:
             cursor.execute(
-                "DELETE FROM agent_runs WHERE id <= (SELECT id FROM agent_runs ORDER BY id DESC LIMIT 1 OFFSET 5000)"
+                "SELECT id FROM agent_runs ORDER BY id DESC LIMIT 1 OFFSET 4999"
             )
+            row = cursor.fetchone()
+            if row:
+                keep_after = row[0]
+                cursor.execute("DELETE FROM agent_runs WHERE id < ?", (keep_after,))
 
         # Trim old trades: keep last 1000 closed trades
         # Trades table is unbounded and grows with every closed position.
@@ -997,12 +1013,13 @@ def run_db_maintenance():
         trade_count = cursor.execute("SELECT COUNT(*) FROM trades").fetchone()[0]
         if trade_count > 1000:
             cursor.execute(
-                "DELETE FROM trades WHERE rowid IN ("
-                "SELECT rowid FROM trades ORDER BY exit_time ASC LIMIT ?"
-                ")",
-                (trade_count - 1000,)
+                "SELECT exit_time FROM trades ORDER BY exit_time DESC LIMIT 1 OFFSET 999"
             )
-            logging.info(f"DB maintenance: trimmed {trade_count - 1000} old trades")
+            row = cursor.fetchone()
+            if row:
+                trim_before_ts = row[0]
+                cursor.execute("DELETE FROM trades WHERE exit_time < ?", (trim_before_ts,))
+                logging.info(f"DB maintenance: trimmed trades with exit_time < {trim_before_ts}")
 
         # Trim old weights_history: keep last 5000 per ticker
         # This table grows with every neural network update (~100/day per ticker)
@@ -1014,12 +1031,17 @@ def run_db_maintenance():
                 ).fetchone()[0]
                 if wh_count > 5000:
                     cursor.execute(
-                        "DELETE FROM weights_history WHERE ticker = ? AND rowid IN ("
-                        "SELECT rowid FROM weights_history WHERE ticker = ? ORDER BY timestamp ASC LIMIT ?"
-                        ")",
-                        (ticker_row, ticker_row, wh_count - 5000)
+                        "SELECT timestamp FROM weights_history WHERE ticker = ? ORDER BY timestamp DESC LIMIT 1 OFFSET 4999",
+                        (ticker_row,)
                     )
-                    logging.debug(f"DB maintenance: trimmed {wh_count - 5000} weights_history rows for {ticker_row}")
+                    row = cursor.fetchone()
+                    if row:
+                        trim_before_wh = row[0]
+                        cursor.execute(
+                            "DELETE FROM weights_history WHERE ticker = ? AND timestamp < ?",
+                            (ticker_row, trim_before_wh)
+                        )
+                        logging.debug(f"DB maintenance: trimmed weights_history for {ticker_row} older than {trim_before_wh}")
         except Exception as e:
             logging.warning(f"DB maintenance: weights_history trim error: {e}")
 

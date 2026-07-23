@@ -446,13 +446,21 @@ class ExecutionEngine:
         eprice = evaluation.get("entry_price", 0.0)
         esl = evaluation.get("stop_loss", 0.0)
         
-        # Calculate notional exposure from existing positions
-        # BUY positions: entry_price * qty was cost deducted from balance
-        # SELL positions: notional value is NOT deducted (margin/spot short allocation)
-        # Exposure = absolute notional value regardless of direction
+        # Calculate current notional exposure from existing positions
+        # Uses current market value when available, falls back to entry price.
+        # Market-value-based exposure is more accurate for risk checks:
+        # a position down 50% should show 50% of original exposure, not 100%.
         existing_exposure = 0.0
-        for pos in self.active_positions.values():
-            existing_exposure += pos.get('quantity', 0) * pos.get('entry_price', 0)
+        _price_cache = _prices_for_equity if _prices_for_equity else {}
+        for sym, pos in self.active_positions.items():
+            qty = pos.get('quantity', 0)
+            entry_px = pos.get('entry_price', 0)
+            # Try to get current price from available sources
+            cur_px = _price_cache.get(sym) or pos.get('current_price') or entry_px
+            if cur_px and float(cur_px) > 0:
+                existing_exposure += qty * float(cur_px)
+            else:
+                existing_exposure += qty * entry_px
         
         # Available capital for new positions = cash balance
         # For BUY positions: balance was reduced by position_cost at entry
