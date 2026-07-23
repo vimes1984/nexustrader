@@ -163,12 +163,14 @@ def compute_safe_fraction(
 
     # Apply drawdown penalty: scale down linearly as drawdown approaches limit
     drawdown_penalty = 1.0
-    if current_drawdown_pct > 0 and drawdown_limit_pct > 0:
+    if current_drawdown_pct > 0 and drawdown_limit_pct > 1e-6:
         dd_ratio = current_drawdown_pct / drawdown_limit_pct
         if dd_ratio >= 1.0:
             drawdown_penalty = 0.0  # Halt trading
         elif dd_ratio > 0.5:
-            drawdown_penalty = 2.0 * (1.0 - dd_ratio)  # Linear taper
+            drawdown_penalty = 2.0 * (1.0 - dd_ratio)  # Linear taper from 0.5 to 1.0
+    elif drawdown_limit_pct <= 1e-6:
+        drawdown_penalty = 0.0  # Limit is zero: halt immediately
 
     safe_fraction = effective_kelly * drawdown_penalty
 
