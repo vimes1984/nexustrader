@@ -411,7 +411,7 @@ const Dashboard = {
         if (ts > 0 && isFinite(ts)) date = new Date(ts * 1000).toLocaleDateString();
       }
       const dir = t.direction || '—';
-      const dirColor = dir === 'long' ? 'var(--neon-green)' : dir === 'short' ? 'var(--neon-red)' : 'var(--text-secondary)';
+      const dirColor = (dir === 'BUY' || dir === 'long') ? 'var(--neon-green)' : (dir === 'SELL' || dir === 'short') ? 'var(--neon-red)' : 'var(--text-secondary)';
       const pnl = Number(t.pnl || 0);
       const pnlPct = t.pnl_percent != null ? Number(t.pnl_percent) : (t.pnl_pct != null ? Number(t.pnl_pct) : null);
       let pnlStr;
