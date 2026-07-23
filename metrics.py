@@ -101,7 +101,8 @@ def avg_trade(trades: Sequence[dict]) -> float:
 
 
 def max_drawdown_from_equity(equity_curve: Sequence[float]) -> float:
-    """Maximum drawdown as a positive fraction (0.25 = 25% drop)."""
+    """Maximum drawdown as a positive fraction (0.25 = 25% drop).
+    Correctly handles negative equity (margin scenarios)."""
     if len(equity_curve) < 2:
         return 0.0
     peak = equity_curve[0]
@@ -109,7 +110,10 @@ def max_drawdown_from_equity(equity_curve: Sequence[float]) -> float:
     for value in equity_curve[1:]:
         if value > peak:
             peak = value
-        dd = (peak - value) / peak if peak > 0 else 0.0
+        # Use absolute value of peak as denominator for drawdown calculation
+        # Handles negative peaks by measuring relative to |peak|
+        peak_abs = abs(peak) if peak != 0 else 1e-12
+        dd = (peak - value) / peak_abs
         if dd > max_dd:
             max_dd = dd
     return max_dd
