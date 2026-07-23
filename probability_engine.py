@@ -49,6 +49,20 @@ class ProbabilityEngine:
             atr = price * 0.01
 
         sl_distance = atr * sl_multiplier
+        # BUGFIX: Enforce a minimum stop distance of 1.0% of price to prevent position sizing explosion.
+        # When ATR is very small (e.g., stable coin pairs or stale data), sl_distance can be
+        # tiny (0.01-0.05% of price). This makes position_value = risk_budget / stop_loss_pct
+        # explode to 50-100x capital, which no amount of downstream capping can fully fix.
+        # A 1% minimum stop means max position = risk_budget / 0.01 = 15× capital even with
+        # a 15% risk budget, and the 3x leverage cap in execution_engine handles the rest.
+        min_stop_distance = price * 0.01  # 1% of price minimum
+        if sl_distance < min_stop_distance:
+            logging.debug(
+                f"[MIN STOP] sl_distance={sl_distance:.4f} < min_stop_distance={min_stop_distance:.4f}. "
+                f"ATR={atr:.4f}, sl_mult={sl_multiplier}. Clamping to {min_stop_distance:.4f}."
+            )
+            sl_distance = min_stop_distance
+        
         tp_distance = atr * tp_multiplier
 
         if direction == "BUY":
