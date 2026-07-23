@@ -31,12 +31,24 @@ const Assets = {
         tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><div class="empty-state-icon" aria-hidden="true">📦</div><div class="empty-state-title">No tracked assets</div><div class="empty-state-desc">Add your first ticker symbol to start tracking assets.</div></div></td></tr>';
         return;
       }
+      // Helper to normalize timestamp
+      function fmtDate(v) {
+        if (!v) return '—';
+        var n = Number(v);
+        // If it's a numeric timestamp
+        if (!isNaN(n)) {
+          if (n > 1e12) n = Math.floor(n / 1000); // ms to s
+          if (n > 1e9 && n < 1e11) return new Date(n * 1000).toLocaleDateString();
+        }
+        var d = new Date(v);
+        return isNaN(d.getTime()) ? '—' : d.toLocaleDateString();
+      }
+
       tbody.innerHTML = tickers.map(t => {
         const ticker = typeof t === 'string' ? t : (t.ticker || t.symbol || t.name || '?');
         const name = t.name || ticker;
         const isActive = t.is_active !== false;
-        const added = t.added_at || t.created || '';
-        const addedDate = added ? new Date(added).toLocaleDateString() : '—';
+        const addedDate = fmtDate(t.added_at || t.created || t.added || '');
         return `<tr>
           <td style="font-weight:600">${this._escape(ticker)}</td>
           <td style="color:var(--text-secondary)">${this._escape(name)}</td>

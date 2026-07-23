@@ -1840,18 +1840,33 @@ def get_ticker_history(ticker: str = "ETH-USD"):
         return []
     
     ingest = orchestrator.data_ingestions[ticker]
-    df = ingest.data.tail(40)
+    df = ingest.data.tail(100)
     history = []
     for idx, r in df.iterrows():
-        # Handle index timestamp or column timestamp
-        ts = str(idx)
-        if 'timestamp' in r:
-            ts = str(r['timestamp'])
+        # Parse timestamp to Unix epoch seconds (float)
+        raw_ts = str(r['timestamp']) if 'timestamp' in r else str(idx)
+        ts = None
+        # Try converting string timestamp to float
+        try:
+            ts = float(raw_ts)
+            if ts > 1e12:  # milliseconds → seconds
+                ts = ts / 1000.0
+        except (ValueError, TypeError):
+            try:
+                from datetime import datetime
+                ts = datetime.fromisoformat(raw_ts.replace('Z', '+00:00').split('.')[0]).timestamp()
+            except Exception:
+                ts = idx if isinstance(idx, (int, float)) else time.mktime(time.strptime(str(idx)[:19], '%Y-%m-%d %H:%M:%S')) if len(str(idx)) >= 19 else time.time()
         
         history.append({
-            "timestamp": ts,
+            "timestamp": ts if ts else time.time(),
+            "open": float(r.get('open', r['close'])),
+            "high": float(r.get('high', r['close'])),
+            "low": float(r.get('low', r['close'])),
             "close": float(r['close']),
+            "volume": float(r.get('volume', 0)),
             "bb_upper": float(r.get('bb_upper', r['close'])),
+            "bb_mid": float(r.get('bb_mid', r['close'])),
             "bb_lower": float(r.get('bb_lower', r['close'])),
             "rsi": float(r.get('rsi', 50))
         })
