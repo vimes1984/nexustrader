@@ -82,28 +82,33 @@ TICKER_KEYWORDS = {
 def analyze_text_sentiment(text):
     """Calculates a sentiment score between -1.0 and 1.0.
     
-    Uses FinBERT neural model when available, falls back to lexical matching.
+    Uses FinBERT neural model when available, blending lexical fallback
+    weighted by FinBERT's non-neutral confidence.
     """
-    # Try FinBERT first
-    finbert_result = finbert_sentiment(text)
-    if finbert_result is not None:
-        score, confidence = finbert_result
-        # Only use FinBERT if it has reasonable confidence (>30% non-neutral)
-        if confidence > 0.30:
-            return score
-    
-    # Fallback: lexical matching
-    text = text.lower()
-    score = 0.0
-    words = re.findall(r'\b\w+\b', text)
-    count = 0
+    # Compute lexical baseline first (always available)
+    text_lower = text.lower()
+    words = re.findall(r'\b\w+\b', text_lower)
+    lex_score = 0.0
+    lex_count = 0
     for w in words:
         if w in FINANCIAL_LEXICON:
-            score += FINANCIAL_LEXICON[w]
-            count += 1
-    if count > 0:
-        return max(-1.0, min(1.0, score / count))
-    return 0.0
+            lex_score += FINANCIAL_LEXICON[w]
+            lex_count += 1
+    lexical = max(-1.0, min(1.0, lex_score / lex_count)) if lex_count > 0 else 0.0
+    
+    # Try FinBERT and blend with lexical
+    finbert_result = finbert_sentiment(text)
+    if finbert_result is not None:
+        nn_score, nn_confidence = finbert_result
+        # Blend: high confidence → FinBERT dominates; low confidence → lexical dominates
+        # confidence ∈ [0, 1] is 1 - P(neutral), so 0=all neutral, 1=no neutral
+        blend_weight = nn_confidence  # 0..1
+        # Blend weight threshold: only use FinBERT if it adds value (>10% non-neutral)
+        if blend_weight > 0.10:
+            return lexical * (1 - blend_weight) + nn_score * blend_weight
+    
+    # Fallback: lexical only
+    return lexical
 
 def fetch_ticker_sentiment(ticker):
     """Fetches the latest RSS news and social posts, filters by coin keywords, and computes weighted sentiment."""
