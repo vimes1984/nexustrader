@@ -566,16 +566,8 @@ class StrategyEnsemble:
                     elif regime == 'mean_reversion':
                         active_weights[i] *= 1.0 - 0.4 * regime_strength
         
-        # Layer 2: Recent Performance Biasing (runtime adjustment)
-        for i, strat in enumerate(self.strategies):
-            perf = self.strategy_performance.get(strat.name, [])
-            if len(perf) >= 10:
-                recent = perf[-20:]
-                win_rate = sum(1 for r in recent if r['correct']) / len(recent)
-                if win_rate > 0.60:
-                    active_weights[i] *= 1.0 + (win_rate - 0.60) * 1.5
-                elif win_rate < 0.35 and len(perf) >= 20:
-                    active_weights[i] *= 1.0 - (0.35 - win_rate) * 2.0
+        # Layer 2: Omitted — performance bias is already persisted in self.weights
+        # via update_base_weights().  Applying it again here would double-count.
         
         # Normalize
         weight_sum = np.sum(active_weights)
