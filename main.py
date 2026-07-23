@@ -629,6 +629,28 @@ class NexusTraderOrchestrator:
                         activate_neural_brain(best_brain, ticker, is_manual=False)
             except Exception as e:
                 logging.error(f"[AUTO-BRAIN-SWITCH ERROR] Failed to auto-switch brain: {e}")
+        
+        # ── Cumulative PnL tracking per ticker (detect if learning is improving) ──
+        _cumul_key = f"_cumulative_pnl_{ticker}"
+        _cumul_count_key = f"_cumulative_pnl_count_{ticker}"
+        _prev_cumul = getattr(self, _cumul_key, 0.0)
+        _prev_count = getattr(self, _cumul_count_key, 0)
+        _new_cumul = _prev_cumul + pnl_percent
+        _new_count = _prev_count + 1
+        setattr(self, _cumul_key, _new_cumul)
+        setattr(self, _cumul_count_key, _new_count)
+        if _new_count >= 10 and _new_count % 10 == 0:
+            _avg_pnl = _new_cumul / _new_count
+            _prev_avg = _prev_cumul / max(1, _prev_count)
+            logging.info(
+                f"[CUMULATIVE PNL] {ticker}: {_new_count} trades, "
+                f"cumulative={_new_cumul:.4f}, avg={_avg_pnl:.6f}"
+            )
+            if _new_count >= 20 and _avg_pnl < _prev_avg * 0.5 and _prev_avg > 0:
+                logging.warning(
+                    f"[CUMULATIVE PNL] {ticker}: avg PnL dropped from {_prev_avg:.6f} to "
+                    f"{_avg_pnl:.6f}. Learning may not be improving performance."
+                )
 
         # ── Proton Mail Bridge trade notification ──
         try:
