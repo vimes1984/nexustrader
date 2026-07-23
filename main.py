@@ -1769,7 +1769,9 @@ def get_status():
             di_t = orchestrator.data_ingestions.get(t)
             current_prices[t] = di_t.live_price or 0.0
     
-    ee = orchestrator.execution_engine
+    ee = getattr(orchestrator, "execution_engine", None)
+    if ee is None:
+        return {"status": "error", "detail": "Execution engine not initialized"}
     fiat_breakdown = {}
     holdings = getattr(ee, "live_holdings", {})
     if holdings:
