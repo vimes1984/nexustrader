@@ -83,24 +83,24 @@ jobs:
 
       - name: Verify all Python files parse
         run: |
-          python3 -c "
-import ast, os, sys
-errors = []
-for root, dirs, files in os.walk('.'):
-    dirs[:] = [d for d in dirs if d not in ('__pycache__', '.git', 'node_modules')]
-    for f in files:
-        if f.endswith('.py'):
-            path = os.path.join(root, f)
-            try:
-                ast.parse(open(path).read())
-            except SyntaxError as e:
-                errors.append(f'{path}: {e}')
-if errors:
-    for e in errors:
-        print(e, file=sys.stderr)
-    sys.exit(1)
-print('All Python files parse cleanly.')
-"
+          python3 << 'PYEOF'
+          import ast, os, sys
+          errors = []
+          for root, dirs, files in os.walk('.'):
+              dirs[:] = [d for d in dirs if d not in ('__pycache__', '.git', 'node_modules')]
+              for f in files:
+                  if f.endswith('.py'):
+                      path = os.path.join(root, f)
+                      try:
+                          ast.parse(open(path).read())
+                      except SyntaxError as e:
+                          errors.append(f'{path}: {e}')
+          if errors:
+              for e in errors:
+                  print(e, file=sys.stderr)
+              sys.exit(1)
+          print('All Python files parse cleanly.')
+          PYEOF
 
       - name: Verify JavaScript files syntax (basic check)
         run: |
