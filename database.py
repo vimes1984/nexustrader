@@ -8,8 +8,18 @@ import time
 try:
     from evaluation.singletons import mutation_freeze
 except ImportError:
-    # Fallback: root-level singletons module
-    from singletons import mutation_freeze
+    try:
+        # Fallback: root-level singletons module
+        import singletons as _singletons
+        mutation_freeze = _singletons.mutation_freeze
+    except (ImportError, AttributeError):
+        # Define a no-op mutation_freeze as last resort fallback
+        class _NoopMutationFreeze:
+            frozen = False
+            def freeze(self): pass
+            def unfreeze(self): pass
+            def suggest(self, *args, **kwargs): pass
+        mutation_freeze = _NoopMutationFreeze()
 from trading_modes import ns as ns_key, MODE_RESEARCH, MODE_LIVE
 
 def get_data_dir():

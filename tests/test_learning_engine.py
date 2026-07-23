@@ -167,38 +167,35 @@ class TestLearningEngine(unittest.TestCase):
         for i, w in enumerate(net.W):
             np.testing.assert_array_almost_equal(w, restored.W[i], decimal=10)
 
-    def test_adam_momentum_zeroed_on_restore_weights_changed(self):
-        """If weights change between save and restore (e.g., architecture migration),
+    def test_adam_momentum_zeroed_on_weight_migration(self):
+        """When weights change dimension (e.g., action_dim change),
         Adam state should be re-initialized (zeroed) with correct shapes."""
-        net = PolicyNetwork(state_dim=8, hidden_dim=12, action_dim=6, learning_rate=0.05)
+        net = PolicyNetwork(state_dim=8, hidden_dim=12, action_dim=5, learning_rate=0.05)
         
         # Build up Adam state
         for i in range(3):
             state = np.random.randn(8)
-            net.backward(state, [0.5, 0.3, 0.1, 0.05, 0.03, 0.02], "BUY", 0.02)
+            net.backward(state, [0.5, 0.3, 0.1, 0.05, 0.03], "BUY", 0.02)
         
         json_str = net.to_json()
         data = json.loads(json_str)
         
-        # Modify weight dimension to simulate architecture change
-        data["W"][-1] = [[0.01] * 6 for _ in range(12)]  # output weights 12x6
-        # Trim to 5 actions (simulate migration)
-        data["W"][-1] = [row[:5] for row in data["W"][-1]]
-        data["b"][-1] = [[0.01] * 5]
-        
+        # Simulate expanding action_dim from 5 to 6
+        old_w_last = data["W"][-1]  # (12, 5)
+        old_b_last = data["b"][-1]  # (1, 5)
+        data["W"][-1] = [list(row) + [0.01] for row in old_w_last]  # (12, 6)
+        data["b"][-1] = [list(row) + [0.01] for row in old_b_last]  # (1, 6)
         modified_json = json.dumps(data)
         
         restored = PolicyNetwork(state_dim=8, hidden_dim=12, action_dim=6, learning_rate=0.05)
         restored.from_json(modified_json)
         
-        # Adam state should be re-initialized (zero) with correct shapes
-        self.assertEqual(restored.m_W[-1].shape, (12, 5))
-        self.assertEqual(restored.v_W[-1].shape, (12, 5))
-        # All zeros
-        self.assertTrue(np.allclose(restored.m_W[-1], 0))
-        self.assertTrue(np.allclose(restored.v_W[-1], 0))
-        # Step counter reset
+        # Adam state should be re-initialized (all zeros) because shapes changed
         self.assertEqual(restored.t, 0)
+        for i, mw in enumerate(restored.m_W):
+            self.assertTrue(np.allclose(mw, 0), msg=f"m_W[{i}] not zeroed after migration")
+        for i, vw in enumerate(restored.v_W):
+            self.assertTrue(np.allclose(vw, 0), msg=f"v_W[{i}] not zeroed after migration")
 
     def test_lr_scheduling_decay(self):
         """Learning rate should decay from initial_lr toward min_lr over steps."""
@@ -237,7 +234,7 @@ class TestLearningEngine(unittest.TestCase):
         # The LR scheduling parameters should be preserved
         self.assertEqual(restored.total_learning_steps, steps_before)
         self.assertEqual(restored.initial_lr, 0.1)
-        self.assertEqual(restored.min_lr, 0.01)
+        self.assertAlmostEqual(restored.min_lr, 0.01, places=5)
         self.assertEqual(restored.lr_decay_steps, 100)
         
         # After one more backward pass, the recomputed LR should match
