@@ -392,9 +392,17 @@ class DataIngestion:
                                 self.data.loc[last_idx, 'high'] = max(self.data.loc[last_idx, 'high'], price)
                                 self.data.loc[last_idx, 'low'] = min(self.data.loc[last_idx, 'low'], price)
                             else:
-                                # Append new candle
-                                row['timestamp'] = last_ts_dt + pd.Timedelta(seconds=seconds_limit)
-                                self.data = pd.concat([self.data, pd.DataFrame([row])], ignore_index=True)
+                                # Fill any missing candles due to connectivity gaps
+                                # One candle per interval boundary
+                                missing_periods = int(time_diff // seconds_limit)
+                                # If more than 100 candles missed, cap to prevent OOM
+                                if missing_periods > 100:
+                                    missing_periods = 1
+                                    last_ts_dt = now_naive - pd.Timedelta(seconds=seconds_limit)
+                                for gap_i in range(1, missing_periods + 1):
+                                    new_row = row.copy()
+                                    new_row['timestamp'] = last_ts_dt + pd.Timedelta(seconds=seconds_limit * gap_i)
+                                    self.data = pd.concat([self.data, pd.DataFrame([new_row])], ignore_index=True)
                         else:
                             self.data = pd.DataFrame([row])
                         
