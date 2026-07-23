@@ -11,7 +11,10 @@ import weekly_optimizer
 
 class TestWeeklyOptimizer(unittest.TestCase):
     def setUp(self):
+        import importlib
         import database as _db
+        # Force fresh import in case a previous test file mocked database
+        importlib.reload(weekly_optimizer)
         self.orig_db_path = _db.DB_PATH
         self.test_db = os.path.abspath("test_nexustrader_weekly_opt.db")
         _db.DB_PATH = self.test_db

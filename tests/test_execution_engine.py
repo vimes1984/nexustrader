@@ -7,6 +7,9 @@ import time
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Mock database and ccxt modules before importing execution_engine
+_orig_mods = {
+    k: sys.modules[k] for k in ['ccxt', 'database'] if k in sys.modules
+}
 sys.modules['ccxt'] = MagicMock()
 sys.modules['database'] = MagicMock()
 import database
@@ -20,6 +23,12 @@ from execution_engine import ExecutionEngine
 
 
 class TestExecutionEngine(unittest.TestCase):
+    @classmethod
+    def tearDownClass(cls):
+        # Remove mocked modules from cache so other tests get the real module
+        for k in ['ccxt', 'database']:
+            if k in sys.modules and isinstance(sys.modules[k], MagicMock):
+                del sys.modules[k]
     def setUp(self):
         # Fully reset all mocks to eliminate cross-test-file contamination
         database.load_setting.reset_mock()

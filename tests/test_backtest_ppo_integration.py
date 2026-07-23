@@ -85,9 +85,11 @@ class TestBacktestPPOIntegration(unittest.TestCase):
 
     def setUp(self):
         np.random.seed(42)
-        self.engine = BacktestEngine("PPO-TEST", CostModel(
-            maker_fee=0, taker_fee=0, slippage_bps=0, spread_bps=0
-        ))
+        cm = CostModel()
+        cm.maker_fee = 0.0
+        cm.taker_fee = 0.0
+        cm.slippage_bps = 0.0
+        self.engine = BacktestEngine("PPO-TEST", cm)
 
     def _candles(self, n=50):
         candles = []
@@ -139,10 +141,11 @@ class TestBacktestPPOIntegration(unittest.TestCase):
         candles = self._candles(30)
         ppo = _StubPPOAgent()
         res_paper = self.engine.run(candles, ppo_agent=ppo)
-        engine_live = BacktestEngine(
-            "PPO-TEST", CostModel(maker_fee=0.001, taker_fee=0.002,
-                                  slippage_bps=2, spread_bps=1)
-        )
+        cm2 = CostModel()
+        cm2.maker_fee = 0.001
+        cm2.taker_fee = 0.002
+        cm2.slippage_bps = 2.0
+        engine_live = BacktestEngine("PPO-TEST", cm2)
         res_live = engine_live.run(candles, ppo_agent=ppo)
         self.assertIn("ppo_policy", res_paper["results"])
         self.assertIn("ppo_policy", res_live["results"])
