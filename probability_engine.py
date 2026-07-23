@@ -403,8 +403,15 @@ class ProbabilityEngine:
             except:
                 pass
         
+        # Cold-start curriculum: first 100 trades use conservative sizing
+        # Models are unreliable early on, so we reduce position size to limit damage.
+        cold_start_mult = 1.0
+        if len(_all_trades) < 100:
+            # Linear ramp: 0.25 → 1.0 over 100 trades
+            cold_start_mult = 0.25 + 0.75 * (len(_all_trades) / 100.0)
+        
         # Apply death spiral position size reduction
-        final_fraction = final_fraction * death_spiral_risk_mult
+        final_fraction = final_fraction * death_spiral_risk_mult * cold_start_mult
         
         # Ensure minimum allocation for small accounts (at least 2.5% = $5 on $200)
         # Prevents cold-start paradox where sizing rounds to zero.
