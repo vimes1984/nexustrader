@@ -1282,8 +1282,8 @@ async def api_init_state(request: Request):
             bn = getattr(learner, "active_brain_name", None)
             if bn:
                 active_brains.append({"name": bn, "ticker": tn, "version": getattr(learner, "brain_version", 1)})
-        except Exception:
-            pass
+        except Exception as e:
+            logging.warning(f"/api/init brain loading for {tn}: {e}")
 
     # Positions
     positions = []
@@ -1301,8 +1301,8 @@ async def api_init_state(request: Request):
                 "unrealized_pnl_pct": pos.get("unrealized_pnl_pct", 0) if isinstance(pos, dict) else getattr(pos, "unrealized_pnl_pct", 0),
                 "age_seconds": int(_time.time()) - entry_time,
             })
-    except Exception:
-        pass
+    except Exception as e:
+        logging.warning(f"/api/init position serialization error: {e}")
 
     return {
         "status":"ok", "balance":balance, "equity":equity,

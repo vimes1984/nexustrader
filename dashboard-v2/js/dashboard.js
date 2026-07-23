@@ -529,6 +529,9 @@ const Dashboard = {
 
   renderProbability(prob) {
     if (!prob || typeof prob !== 'object') return;
+    // Skip if dashboard tab is not visible (elements won't be in the DOM)
+    const container = byId('tab-dashboard');
+    if (!container || !container.classList.contains('active')) return;
     if (prob.probability != null) {
       const p = Number(prob.probability);
       byId('prob-value').textContent = (p*100).toFixed(1)+'%';
