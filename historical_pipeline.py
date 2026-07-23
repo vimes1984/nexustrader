@@ -231,36 +231,32 @@ class SimulatedTrader:
             bb_upper = ma + 2 * std
             bb_lower = ma - 2 * std
         
-        # ATR (14-period) — Wilder's smoothed (using simple mean approximation for standalone calc)
+        # ATR (14-period) — simple SMA approximation
+        # Store raw candle data for TR calculation (preserving high/low across calls)
         atr = close * 0.01
-        if len(self.price_history) >= 15:
-            tr_values = []
-            # Store current candle for ATR calculation (before overwriting the buffer)
-            if not hasattr(self, '_raw_candles'):
-                self._raw_candles = []
-            # Pre-store the current candle for this computation
-            self._raw_candles.append({
-                'high': float(row.get('high', close)),
-                'low': float(row.get('low', close)),
-            })
+        if not hasattr(self, '_raw_candles'):
+            self._raw_candles = []
+        self._raw_candles.append({
+            'high': float(row.get('high', close)),
+            'low': float(row.get('low', close)),
+            'close': close,
+        })
+        if len(self._raw_candles) >= 15:
             buf = self._raw_candles
-            for i in range(-13, 1):
-                if i < 0 and len(buf) >= abs(i):
-                    c = buf[i]
-                    h, l = c['high'], c['low']
-                else:
-                    h, l = close, close
-                # prev_c is the close BEFORE this candle; price_history[-2] is close before current
-                # For i=0 (current), prev_i=-2; for i=-13, prev_i=-14
-                prev_idx = i - 1  # candle before candle i
-                prev_c = self.price_history[prev_idx] if abs(prev_idx) <= len(self.price_history) else close
+            tr_values = []
+            # Iterate over last 14 candles (buf[-14:])
+            for j in range(-14, 0):
+                c = buf[j]
+                h, l = c['high'], c['low']
+                # prev_c is the close of the candle BEFORE candle j
+                prev_c = buf[j - 1]['close']  # candle j-1's close
                 tr = max(h - l, abs(h - prev_c), abs(l - prev_c))
                 tr_values.append(tr)
-            atr = sum(tr_values) / len(tr_values) if tr_values else close * 0.01
-            
-            # Trim to prevent unbounded growth
-            if len(self._raw_candles) > 51:
-                self._raw_candles = self._raw_candles[-50:]
+            atr = sum(tr_values) / len(tr_values)
+        
+        # Trim to prevent unbounded growth
+        if len(self._raw_candles) > 64:
+            self._raw_candles = self._raw_candles[-50:]
         
         indicator = {
             'rsi': rsi,

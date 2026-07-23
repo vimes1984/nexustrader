@@ -568,13 +568,15 @@ class ExecutionEngine:
         
         # Adjust TP for exit slippage: the market price must be slightly more favorable
         # to cover the slippage that will be incurred on the exit fill.
-        # Entry slippage is already baked into effective_entry, so only adjust for exit.
+        # Entry slippage is already baked into effective_entry, so TP adjustment is
+        # only for the exit side. But SL is also affected by exit slippage:
+        # the actual stop-loss fill price will be worse than the trigger price.
         if direction == "BUY":
             adjusted_tp = tp - slippage_cost  # Need higher market price to exit with profit
-            adjusted_sl = sl  # SL: entry slippage already widened it, exit slippage is worse
+            adjusted_sl = sl - slippage_cost  # Stop fills at lower price (worse for BUY)
         else:
             adjusted_tp = tp + slippage_cost  # Need lower market price
-            adjusted_sl = sl
+            adjusted_sl = sl + slippage_cost  # Stop fills at higher price (worse for SELL)
 
         # Balance check for spot trading: SELL requires holding the base asset
         base_asset = symbol.split('-')[0] if '-' in symbol else symbol
