@@ -371,7 +371,7 @@ class BacktestEngine:
         Parameters:
             entry_threshold: abs(signal) must exceed this to enter
             exit_threshold: abs(signal) below this triggers exit
-        """"
+        """
         try:
             ensemble = StrategyEnsemble()
         except Exception:
