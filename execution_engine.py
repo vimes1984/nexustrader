@@ -950,4 +950,8 @@ class ExecutionEngine:
                 unrealized = (entry - price) * qty
                 
             equity += unrealized
-        return float(equity)
+        result = float(equity)
+        if math.isnan(result) or math.isinf(result):
+            logging.error("[EQUITY] NaN/Inf equity detected. Falling back to balance.")
+            return float(self.balance)
+        return result
