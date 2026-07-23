@@ -711,7 +711,15 @@ class NexusTraderOrchestrator:
             logging.error(f"Error updating shadow positions: {ste}")
         
         # Calculate current total equity across all tickers
-        current_prices = {t: float(r['close']) for t, r in self.latest_ticks.items()}
+        # Use latest_ticks first, then fall back to live_price from data ingestion
+        current_prices = {}
+        for t in self.tickers:
+            if t in self.latest_ticks and 'close' in self.latest_ticks[t]:
+                current_prices[t] = float(self.latest_ticks[t]['close'])
+            elif t in getattr(self, 'data_ingestions', {}):
+                di = self.data_ingestions.get(t)
+                if di and hasattr(di, 'live_price') and di.live_price:
+                    current_prices[t] = float(di.live_price)
         current_equity = self.execution_engine.get_equity(current_prices)
         
         # Periodic equity history logging (every 1 hour)
