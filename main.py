@@ -1428,6 +1428,24 @@ async def startup_event():
             parsed = json.loads(ks_data)
             kill_switch.__dict__.update(type(kill_switch).from_dict(parsed).__dict__)
             logging.info("[KillSwitch] Restored from saved state")
+            
+            # BUGFIX: Auto-reset KillSwitch on startup if the tripped condition
+            # has expired (e.g., daily loss limit reset after 24h has passed).
+            # Without this, "tripped: true" persists across restarts and blocks
+            # ALL trades until manual reset() is called, even if the original
+            # condition (e.g. daily loss) no longer applies.
+            if kill_switch.tripped:
+                # Check if 24h has passed since the daily reset time
+                # (daily_pnl resets every 86400s in check(), so if we're past
+                # the next reset window, the condition is stale)
+                elapsed_since_reset = time.time() - kill_switch.daily_reset_time
+                if elapsed_since_reset > 86400:
+                    logging.warning(
+                        "[KillSwitch] Startup: tripped state from saved data is stale "
+                        "({}s old, >24h). Auto-resetting."
+                        .format(int(elapsed_since_reset))
+                    )
+                    kill_switch.reset()
         except Exception as e:
             logging.error("Error restoring KillSwitch state: {}".format(e))
 
