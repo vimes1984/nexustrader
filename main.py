@@ -1337,10 +1337,10 @@ async def api_positions():
             active_pos = getattr(ee, "active_positions", {})
             # Compute current prices once for all positions
             live_prices = {}
-            for t in orchestrator.tickers:
-                if t in orchestrator.data_ingestions:
+            for t in getattr(orchestrator, "tickers", []) or []:
+                if t in getattr(orchestrator, "data_ingestions", {}):
                     di = orchestrator.data_ingestions.get(t)
-                    live_prices[t] = float(di.live_price or 0.0)
+                    live_prices[t] = float(di.live_price or 0.0) if di else 0.0
             for sym, pos in active_pos.items():
                 entry_time = pos.get("entry_time", int(_time.time())) if isinstance(pos, dict) else int(_time.time())
                 entry_price = float(pos.get("entry_price", 0) if isinstance(pos, dict) else 0)
@@ -1366,6 +1366,12 @@ async def api_positions():
                 })
     except Exception as e:
         logging.error(f"/api/positions error building position list: {e}")
+    
+    # Guard orchestrator access for fiat breakdown too
+    try:
+        live_holdings = getattr(ee or getattr(orchestrator, "execution_engine", None), "live_holdings", {}) or {}
+    except Exception:
+        live_holdings = {}
     fiat_breakdown = {}
     crypto_count = 0
     try:

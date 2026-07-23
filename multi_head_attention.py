@@ -164,6 +164,9 @@ class MultiHeadAttention:
     
     def backward(self, d_out: np.ndarray) -> np.ndarray:
         """Backward pass through multi-head attention."""
+        if not self._cache:
+            # No forward cache — backward called out of order
+            return np.zeros_like(d_out)
         cache = self._cache
         batch_size, seq_len, d_model = d_out.shape
         
@@ -280,6 +283,8 @@ class LayerNorm:
         return out
     
     def backward(self, d_out: np.ndarray) -> np.ndarray:
+        if not self._cache:
+            return np.zeros_like(d_out)
         cache = self._cache
         d = d_out.shape[-1]
         N = np.prod(d_out.shape[:-1])
