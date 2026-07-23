@@ -405,7 +405,11 @@ class ExecutionEngine:
             logging.warning(f"[LOSS COOLDOWN] Ticker {symbol} is in a loss cooldown period. {remaining_minutes} mins remaining. Skipping.")
             return False
 
-        # Portfolio-level risk checks
+        # Portfolio-level risk checks — reload limits each time so optimizer/prompt changes take effect
+        self.max_open_positions = int(database.load_setting("max_open_positions", str(self.max_open_positions)))
+        self.max_concentration = float(database.load_setting("max_concentration_pct", str(self.max_concentration * 100))) / 100.0
+        self.max_total_exposure = float(database.load_setting("max_total_exposure_pct", str(self.max_total_exposure * 100))) / 100.0
+        
         if len(self.active_positions) >= self.max_open_positions:
             logging.warning(f"[PORTFOLIO RISK] Max open positions ({self.max_open_positions}) reached. Skipping {symbol}.")
             return False
