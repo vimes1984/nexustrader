@@ -162,10 +162,14 @@ class DataIngestion:
             for col in ['sma_20', 'sma_50', 'ema_12', 'ema_26', 'macd', 'macd_signal', 'macd_hist',
                         'bb_mid', 'bb_std', 'bb_upper', 'bb_lower', 'vwma_20', 'stoch_d']:
                 if col in df.columns:
-                    df[col] = df[col].fillna(df[col].expanding().mean())
+                    # expanding mean fills NaN from early candle window — remaining NaN (e.g.
+                    # first row where expanding mean is also NaN) gets filled with 0
+                    df[col] = df[col].fillna(df[col].expanding().mean()).fillna(0.0)
             # RSI, ATR, stoch_k are bounded and harder to expanding-fill; use ffill as last resort
             df['rsi'] = df['rsi'].fillna(50.0)  # neutral RSI for warmup gaps
-            df['atr'] = df['atr'].ffill().fillna(df['atr'].expanding().mean()).fillna(1.0)  # ATR=1% as final fallback
+            # ATR: ffill valid values → expanding mean for remaining NaN → fallback to 1% of close
+            atr_fallback = df['close'] * 0.01
+            df['atr'] = df['atr'].ffill().fillna(df['atr'].expanding().mean()).fillna(atr_fallback)
             df['stoch_k'] = df['stoch_k'].ffill().fillna(50.0)  # neutral stoch for warmup gaps
             # Write back — still under lock to prevent TOCTOU corruption
             self.data = df
