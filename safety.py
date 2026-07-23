@@ -41,13 +41,18 @@ class DrawdownTracker:
         return self.current_drawdown
 
     def to_dict(self) -> dict:
-        return {"peak": self.peak, "max_drawdown": self.max_drawdown}
+        return {
+            "peak": self.peak,
+            "max_drawdown": self.max_drawdown,
+            "current_drawdown": self.current_drawdown,
+        }
 
     @classmethod
     def from_dict(cls, data: dict) -> "DrawdownTracker":
         t = cls()
         t.peak = data.get("peak", 0.0)
         t.max_drawdown = data.get("max_drawdown", 0.0)
+        t.current_drawdown = data.get("current_drawdown", 0.0)
         return t
 
 

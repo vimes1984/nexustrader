@@ -113,9 +113,10 @@ def max_drawdown_from_equity(equity_curve: Sequence[float]) -> float:
 
 def brier_score(probabilities: Sequence[float], outcomes: Sequence[int]) -> float:
     """Brier score (mean squared error) for probability predictions. Lower is better.
-    outcomes should be 0 or 1 (loss or win)."""
+    outcomes should be 0 or 1 (loss or win).
+    Returns 0.25 (random baseline) for empty or mismatched data."""
     if len(probabilities) != len(outcomes) or len(probabilities) == 0:
-        return 0.0
+        return 0.25  # Random baseline for insufficient data
     return sum((p - o) ** 2 for p, o in zip(probabilities, outcomes)) / len(probabilities)
 
 
