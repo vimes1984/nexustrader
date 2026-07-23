@@ -489,7 +489,7 @@ const Dashboard = {
     c.innerHTML = pa.map(function(pos) {
       var dir = pos.direction || 'long';
       var dc = dir === 'long' ? 'var(--neon-green)' : 'var(--neon-red)';
-      var pnl = Number(pos.unrealized_pnl || 0);
+      var pnl = pos.unrealized_pnl != null ? Number(pos.unrealized_pnl) : 0;
       var sym = pos.symbol || '\u2014';
       var curPrice = Number(pos.current_price || pos.mark_price || 0);
       var entryPrice = Number(pos.entry_price||0);
