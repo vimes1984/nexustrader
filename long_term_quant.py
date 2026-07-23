@@ -11,6 +11,7 @@ from openclaw_bridge import query_openclaw, extract_json_block
 def run_long_term_strategy_optimization():
     logging.info("Starting weekly Long-Term Strategy Quant Agent session...")
 
+    conn = None
     try:
         conn = _db.get_db_connection()
         conn.row_factory = __import__('sqlite3').Row
@@ -178,8 +179,6 @@ def run_long_term_strategy_optimization():
         except Exception as me_e:
             logging.error(f"Failed to meta-optimize prompt: {me_e}")
 
-        conn.close()
-
         report_content = "\n".join(report_lines)
         logging.info("Long-term strategy parameters optimized:\n" + report_content)
 
@@ -192,6 +191,9 @@ def run_long_term_strategy_optimization():
 
     except Exception as e:
         logging.error(f"Error in Long-Term Strategy Quant session: {e}")
+    finally:
+        if conn:
+            conn.close()
 
 
 if __name__ == "__main__":
