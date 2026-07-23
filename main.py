@@ -791,7 +791,10 @@ class NexusTraderOrchestrator:
                     )
                     safe, reason = kill_switch.check(
                         current_drawdown=drawdown_tracker.current_drawdown,
-                        open_positions={k: v.get("quantity", 0) for k, v in self.execution_engine.active_positions.items()},
+                        # BUGFIX: Pass dollar exposure per symbol, not raw coin quantity.
+                        # max_per_pos is a dollar value ($50 baseline, scaled by account) but
+                        # raw quantity (e.g. 396 ADA) vs dollars ($247) is apples-to-oranges.
+                        open_positions={k: abs(v.get("quantity", 0)) * v.get("entry_price", 0) for k, v in self.execution_engine.active_positions.items()},
                         total_exposure=exposure,
                         current_equity=current_equity,
                     )
