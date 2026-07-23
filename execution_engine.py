@@ -408,7 +408,11 @@ class ExecutionEngine:
             return False
         
         # Concentration limit: prevent too much capital in one position
-        total_equity = self.get_equity(getattr(self, 'last_known_prices', {}))
+        # BUGFIX: In paper mode, last_known_prices is empty {} so get_equity() only returns balance.
+        # This underestimates equity by ignoring unrealized PnL when a position is in profit.
+        # Fall back to a try: get current prices from any caller-provided context.
+        _prices_for_equity = getattr(self, 'last_known_prices', {})
+        total_equity = self.get_equity(_prices_for_equity)
         kf = evaluation.get("kelly_fraction", 0.05)
         edir = evaluation.get("direction", "BUY")
         eprice = evaluation.get("entry_price", 0.0)

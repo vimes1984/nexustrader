@@ -229,9 +229,15 @@ const Dashboard = {
         } else if (c) { c.style.display = 'none'; }
       }
       // Accumulate positions from individual tick updates (WS sends one per tick)
-      if (data.positions) {
-        this._wsPositions = data.positions;
-        this.renderPositions(data.positions);
+      if (data.positions !== undefined) {
+        if (typeof data.positions === 'object' && data.positions !== null && Object.keys(data.positions).length === 0) {
+          // Empty object received — clear positions
+          this._wsPositions = {};
+          this.renderPositions([]);
+        } else if (data.positions) {
+          this._wsPositions = data.positions;
+          this.renderPositions(data.positions);
+        }
       } else if (data.position && data.ticker) {
         if (!this._wsPositions) this._wsPositions = {};
         if (data.position) {
