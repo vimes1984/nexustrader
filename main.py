@@ -568,12 +568,13 @@ class NexusTraderOrchestrator:
                     )
                     if info is not None:
                         logging.info(
-                            "[PPO %s] actor_loss=%.4f entropy=%.4f kl=%.5f clip=%.2f%%",
+                            "[PPO %s] actor_loss=%.4f entropy=%.4f kl=%.5f clip=%.2f%% grad_norm=%.4f",
                             ticker,
                             info.get('actor_loss', 0),
                             info.get('entropy', 0),
                             info.get('approx_kl', 0),
                             info.get('clip_frac', 0) * 100,
+                            info.get('grad_norm', 0),
                         )
                         
                         # Persist updated PPO weights periodically
