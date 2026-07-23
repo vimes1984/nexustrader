@@ -1331,7 +1331,7 @@ class NexusTraderOrchestrator:
             # KillSwitch check
             _exposure_prices = {t: float(r['close']) for t, r in self.latest_ticks.items()}
             exposure = sum(
-                abs(v.get("quantity", 0)) * _exposure_prices.get(k, {}).get("close", v.get("entry_price", 0))
+                abs(v.get("quantity", 0)) * _exposure_prices.get(k, v.get("entry_price", 0))
                 for k, v in self.execution_engine.active_positions.items()
             )
             safe, reason = kill_switch.check(
