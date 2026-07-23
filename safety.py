@@ -20,13 +20,21 @@ class DrawdownTracker:
         self.max_drawdown = 0.0
 
     def update(self, equity: float) -> float:
-        """Call with current portfolio value. Returns current drawdown as fraction."""
+        """Call with current portfolio value. Returns current drawdown as fraction.
+
+        Drawdown is peak-to-trough, capped at 1.0 (100% loss).
+        Negative equity (account in debt) is treated as 100% drawdown.
+        """
         if equity > self.peak:
             self.peak = equity
         if self.peak > 0:
-            self.current_drawdown = (self.peak - equity) / self.peak
+            if equity >= 0:
+                self.current_drawdown = (self.peak - equity) / self.peak
+            else:
+                self.current_drawdown = 1.0  # Total loss if equity is negative
         else:
             self.current_drawdown = 0.0
+        self.current_drawdown = min(self.current_drawdown, 1.0)  # Hard cap at 100%
         if self.current_drawdown > self.max_drawdown:
             self.max_drawdown = self.current_drawdown
         return self.current_drawdown
