@@ -149,7 +149,9 @@ class ExecutionEngine:
         _closed_pnl = sum(float(t.get('pnl', 0.0) or 0.0) for t in self.closed_trades)
         _expected_no_positions = self.initial_balance + _closed_pnl
         _open_capital = sum(float(p.get('cost_basis', p.get('entry_price', 0) * p.get('quantity', 0))) for p in self.active_positions.values())
-        _expected_with_positions = _expected_no_positions - _open_capital
+        _open_fees = sum(float(p.get('fee_paid', 0.0)) for p in self.active_positions.values())
+        # Expected balance = initial + closed PnL - open position costs - open fees
+        _expected_with_positions = _expected_no_positions - _open_capital - _open_fees
         if len(self.active_positions) == 0:
             # No positions recovered — check if balance has orphaned capital deduction
             if abs(self.balance - _expected_no_positions) > 1.0 and self.balance < _expected_no_positions:

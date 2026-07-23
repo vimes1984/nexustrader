@@ -238,7 +238,9 @@ class PPOAgent:
         self.max_grad_norm = max_grad_norm
         self.lr_schedule_decay = lr_schedule_decay
         self._update_count = 0
-
+        self._running_kl = []          # Window for KL divergence tracking
+        self._running_entropy = []     # Window for entropy tracking
+        
         # Create critic if not provided
         if critic is None:
             self.critic = PPOCritic(
@@ -433,12 +435,46 @@ class PPOAgent:
         approx_kl /= n
         total_actor_loss /= n
         total_entropy /= n
+        
+        # Running KL tracking for instability detection
+        self._running_kl.append(approx_kl)
+        if len(self._running_kl) > 20:
+            self._running_kl.pop(0)
+        
+        # Running entropy tracking for collapse detection
+        self._running_entropy.append(total_entropy / n)
+        if len(self._running_entropy) > 20:
+            self._running_entropy.pop(0)
+        
+        # Training instability checks (periodic, every 10th update)
+        if self._update_count % 10 == 0 and len(self._running_kl) >= 10:
+            avg_kl = sum(self._running_kl) / len(self._running_kl)
+            if avg_kl > 0.05:
+                logger.warning(
+                    f"[PPO INSTABILITY] Running avg KL={avg_kl:.5f} > 0.05. "
+                    f"Policy may be changing too fast. (updates={self._update_count})"
+                )
+            avg_entropy = sum(self._running_entropy) / len(self._running_entropy)
+            if avg_entropy < 0.01:
+                logger.warning(
+                    f"[PPO INSTABILITY] Running avg entropy={avg_entropy:.5f} < 0.01. "
+                    f"Policy may be collapsing to deterministic. (updates={self._update_count})"
+                )
+        
+        # Gradient norm monitoring
+        total_grad_norm = 0.0
+        for w in dW_acc:
+            total_grad_norm += np.sum(w ** 2)
+        for b in db_acc:
+            total_grad_norm += np.sum(b ** 2)
+        grad_norm = np.sqrt(total_grad_norm)
 
         return {
             'actor_loss': float(total_actor_loss),
             'entropy': float(total_entropy),
             'clip_frac': float(clip_frac),
             'approx_kl': float(approx_kl),
+            'grad_norm': float(grad_norm),
         }
 
     # ----------------------------------------------------------------
