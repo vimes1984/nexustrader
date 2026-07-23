@@ -134,13 +134,16 @@ def list_keys_for_mode(database_module, mode: str) -> dict:
     """List all settings keys that belong to a given trading mode."""
     prefix = f"{mode}:"
     result = {}
+    conn = None
     try:
         conn = database_module.get_db_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT key, value FROM settings WHERE key LIKE ?", (prefix + "%",))
         for row in cursor.fetchall():
             result[row[0]] = row[1]
-        conn.close()
     except Exception:
         pass
+    finally:
+        if conn:
+            conn.close()
     return result
