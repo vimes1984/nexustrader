@@ -137,19 +137,23 @@ def estimate_round_trip_cost(position_value: float, cost_model: CostModel,
                              daily_volume_usd: float = 0.0) -> float:
     """Estimates total cost for a full round-trip trade on Kraken.
 
-    Total cost = fee_entry + fee_exit + 2 * slippage
-    where slippage (from get_volume_adjusted_slippage) varies by asset AND order size.
+    Total cost = fee_entry + fee_exit + slippage_entry + slippage_exit
+    where slippage (from get_volume_adjusted_slippage) varies by:
+    - Asset liquidity (BTC: 2bps, DOGE: 12bps)
+    - Order size relative to daily volume
+    - Order type (maker vs taker)
 
     Optional maker routing:
-    - maker_entry: use maker fee on entry (post-only limit order, saves ~0.1%)
-    - maker_exit: use maker fee on exit (post-only limit order)
+    - maker_entry: use maker fee + maker slippage on entry (post-only limit order)
+    - maker_exit: use maker fee + maker slippage on exit
 
     Returns:
         Total round-trip cost in the same unit as position_value.
     """
-    slip_mult = get_volume_adjusted_slippage(position_value, cost_model, symbol, daily_volume_usd, is_maker=maker_entry or maker_exit)
+    slip_entry = get_volume_adjusted_slippage(position_value, cost_model, symbol, daily_volume_usd, is_maker=maker_entry)
+    slip_exit = get_volume_adjusted_slippage(position_value, cost_model, symbol, daily_volume_usd, is_maker=maker_exit)
     fee_entry = cost_model.maker_fee if maker_entry else cost_model.taker_fee
     fee_exit = cost_model.maker_fee if maker_exit else cost_model.taker_fee
     fee_cost = position_value * (fee_entry + fee_exit)
-    slip_cost = position_value * slip_mult * 2
+    slip_cost = position_value * (slip_entry + slip_exit)
     return fee_cost + slip_cost
