@@ -422,11 +422,18 @@ def save_tick(row, symbol):
 
 def save_trade(trade):
     """Saves a closed trade to database."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    conn = None
     try:
-        signals_str = json.dumps(trade.get('strategy_signals', []))
-        sources_str = json.dumps(trade.get('sentiment_sources', {}))
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        signals_val = trade.get('strategy_signals', [])
+        if hasattr(signals_val, 'tolist'):
+            signals_val = signals_val.tolist()
+        signals_str = json.dumps(signals_val)
+        sources_val = trade.get('sentiment_sources', {})
+        if hasattr(sources_val, 'tolist'):
+            sources_val = sources_val.tolist()
+        sources_str = json.dumps(sources_val)
         # Ensure calibration columns exist (load_calibration_from_trades has ALTER TABLE fallbacks)
         cursor.execute("""
         INSERT INTO trades (symbol, direction, quantity, entry_price, exit_price, pnl, pnl_percent, exit_reason, entry_time, exit_time, strategy_signals, sentiment_sources, policy_brain, trading_mode, predicted_win_probability, expected_value, risk_reward_ratio, kelly_fraction)
