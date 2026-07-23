@@ -353,6 +353,67 @@ class TransformerPolicyNetwork:
                 pass  # Skip if backward cache not available
         
         return d_x
+
+    # ------------------------------------------------------------------
+    # RL backward pass (PolicyNetwork-compatible interface)
+    # ------------------------------------------------------------------
+
+    def reinforce_backward(self, state, strategy_signals, trade_direction, reward):
+        """Policy gradient backward pass compatible with LearningEngine.learn_from_trade.
+
+        Uses REINFORCE (Williams, 1992) with entropy bonus.
+        This assumes self.forward() was already called with training=True.
+        """
+        cache = self._cache
+        if 'probs' not in cache:
+            logging.warning("[Transformer] reinforce_backward() called without prior forward(training=True) — skipping")
+            return
+
+        dir_val = 1.0 if trade_direction == "BUY" else -1.0
+        alignment = np.array(strategy_signals) * dir_val
+
+        # Ensure alignment matches action_dim
+        if len(alignment) != self.action_dim:
+            alignment = np.resize(alignment, self.action_dim)
+
+        # Advantage
+        if not hasattr(self, 'reward_baseline'):
+            self.reward_baseline = 0.0
+            self.baseline_alpha = 0.05
+        advantage = reward - self.reward_baseline
+        self.reward_baseline = (1.0 - self.baseline_alpha) * self.reward_baseline + self.baseline_alpha * reward
+
+        scaled_reward = np.clip(advantage * 100.0, -5.0, 5.0)
+        batch_size = 1
+
+        # Policy gradient loss: -A * log(π_a) but computed per-output as:
+        # dL/dz_i = S * (p_i - alignment_i)   (REINFORCE gradient using alignment as target)
+        probs = cache['probs']  # (1, action_dim)
+
+        # Standard PG gradient: dL/d(logit) = S * (probs - one_hot_on_winning_action)
+        # But we use alignment-weighted variant to distribute credit across strategies
+        # dL/dz_i = -S * (alignment_i - sum_j(alignment_j * p_j))  
+        d_logits_unnorm = alignment.reshape(1, -1) - np.sum(alignment.reshape(1, -1) * probs, axis=-1, keepdims=True)
+        d_logits = -scaled_reward * d_logits_unnorm
+
+        # Entropy bonus: H = -sum(p * log(p))
+        log_p = np.log(probs + 1e-9)
+        entropy = -np.sum(probs * log_p)
+        entropy_beta = 0.005
+        entropy_grad = probs * (entropy - log_p)  # dH/dz
+        d_logits -= entropy_beta * entropy_grad
+
+        # Override _cache['probs'] for the low-level backward call to use
+        # the REINFORCE-adjusted gradient
+        old_probs = cache['probs']
+
+        # Call the low-level backward with this gradient
+        self.backward(d_logits)
+
+        # Apply gradients
+        self.apply_gradients()
+
+    backward = reinforce_backward
     
     # ------------------------------------------------------------------
     # Strategy weight selection

@@ -3083,8 +3083,8 @@ def update_system_risk_mode(risk_mode: str):
         return {"status": "success", "risk_mode": risk_mode}
     return {"error": "Invalid risk mode"}
 
-@app.get("/api/system/test_broker")
-def test_broker_connection():
+@app.post("/api/system/test_broker")
+async def test_broker_connection():  # Changed to POST (state-changing operation that connects to external service)
     config_path = os.path.expanduser("~/.nexustrader/config.json")
     if not os.path.exists(config_path):
         return {"status": "error", "message": "No configuration file found."}

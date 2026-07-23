@@ -31,7 +31,9 @@ const Assets = {
       if (typeof tickers === 'string') {
         tickers = tickers.split(/[,\s]+/).filter(Boolean);
       }
-      if (!tickers || !tickers.length) {
+      // Guard against non-array types
+      if (!Array.isArray(tickers)) tickers = [];
+      if (!tickers.length) {
         tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><div class="empty-state-icon" aria-hidden="true">📦</div><div class="empty-state-title">No tracked assets</div><div class="empty-state-desc">Add your first ticker symbol to start tracking assets.</div></div></td></tr>';
         return;
       }
