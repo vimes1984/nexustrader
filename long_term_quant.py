@@ -38,7 +38,10 @@ def run_long_term_strategy_optimization():
 
         total_trades = len(shadow_trades)
         wins = [t for t in shadow_trades if (t.get("pnl") or 0.0) > 0.0]
-        win_rate = (len(wins) / total_trades * 100.0) if total_trades > 0 else 0.0
+        losses = [t for t in shadow_trades if (t.get("pnl") or 0.0) < 0.0]
+        ties = total_trades - len(wins) - len(losses)  # zero-PnL trades
+        resolved = len(wins) + len(losses)
+        win_rate = (len(wins) / resolved * 100.0) if resolved > 0 else 0.0
         total_pnl = sum(t.get("pnl") or 0.0 for t in shadow_trades)
         avg_pnl = (total_pnl / total_trades) if total_trades > 0 else 0.0
 

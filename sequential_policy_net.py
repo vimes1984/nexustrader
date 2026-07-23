@@ -375,17 +375,20 @@ class SequentialPolicyNetwork:
                 dx, dh_in, dc_in = self.lstm_layers[layer_idx].backward(
                     dh_combined, dc_combined, self.lr
                 )
+
+                # LSTMCell.backward returns:
+                #   dx     = ∂L/∂x       — gradient to input (output of layer below at SAME timestep)
+                #   dh_in  = ∂L/∂h_{t-1} — gradient to PREVIOUS timestep of SAME layer (horizontal)
+                #   dc_in  = ∂L/∂c_{t-1} — same for cell state
                 
-                # Gradient flows to previous layer (lower index) at THIS timestep
+                # Vertical: gradient flows to lower layer (layer_idx-1) at THIS timestep
                 if layer_idx > 0:
-                    dh_per_layer[layer_idx - 1] += dh_in
-                    dc_per_layer[layer_idx - 1] += dc_in
-                # Gradient also flows to next timestep of same layer
-                # (handled by the reversed loop — we track in separate accumulators)
+                    dh_per_layer[layer_idx - 1] += dx  # ∂L/∂x is input gradient for layer below
+                    dc_per_layer[layer_idx - 1] += dc_in  # cell state flows through layers
                 
-                # Save gradient to propagate to earlier timestep
-                dh_per_layer[layer_idx] = dh_in
-                dc_per_layer[layer_idx] = dc_in
+                # Horizontal: gradient flows to PREVIOUS timestep (t-1) of SAME layer
+                dh_per_layer[layer_idx] = dh_in  # ∂L/∂h_{t-1} for this layer
+                dc_per_layer[layer_idx] = dc_in  # ∂L/∂c_{t-1} for this layer
 
         # Backprop through embedder
         if self.cache_emb is not None:
