@@ -179,7 +179,9 @@ class ProbabilityEngine:
             risk = reward if reward > 0 else 1e-9
         
         # Cap reward:risk ratio to prevent numerical issues with extreme values
-        risk_reward_ratio = min(reward / risk, 20.0)
+        # Also guard division-by-zero: when reward=0, edge doesn't exist, ratio=0
+        risk_reward_ratio = reward / risk if risk > 0 and reward > 0 else 0.0
+        risk_reward_ratio = min(risk_reward_ratio, 20.0)
         
         # 4. Calculate Expected Value (EV) per unit size
         ev = (p_win * reward) - ((1 - p_win) * risk)
@@ -187,8 +189,13 @@ class ProbabilityEngine:
         # 5. Position Sizing via Kelly Criterion
         # f* = p - (q / b) = p - (1-p)/R
         # where b = win_amount/loss_amount = R
-        kelly_size = p_win - ((1.0 - p_win) / risk_reward_ratio)
-        kelly_size = max(0.0, kelly_size)  # No negative sizes
+        # Guard against division by zero when R = 0 (no reward edge)
+        if risk_reward_ratio > 0:
+            kelly_size = p_win - ((1.0 - p_win) / risk_reward_ratio)
+        else:
+            kelly_size = 0.0  # No edge: zero position
+        # Kelly must be in [0, 1]; clamp both sides
+        kelly_size = max(0.0, min(kelly_size, 1.0))
         
         # Apply fractional Kelly
         final_fraction = kelly_size * self.kelly_fraction
