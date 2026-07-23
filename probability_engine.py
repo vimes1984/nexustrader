@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import logging
 from evaluation.position_sizing import compute_safe_fraction, estimate_metrics_from_trades
 
