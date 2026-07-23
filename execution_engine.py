@@ -501,7 +501,7 @@ class ExecutionEngine:
         
         # Cap by max % of equity (configurable, default 15%)
         max_pos_pct = float(database.load_setting("max_position_pct", "15")) / 100.0
-        max_allowed_position = total_equity * max_pos_pct
+        max_allowed_position = max(total_equity * max_pos_pct, 0.0)
         if position_value > max_allowed_position:
             position_value = max_allowed_position
         
