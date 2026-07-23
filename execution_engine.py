@@ -566,12 +566,14 @@ class ExecutionEngine:
         else:  # SELL
             effective_entry = entry_price - slippage_cost
         
-        # Adjust TP/SL for slippage on entry
+        # Adjust TP for exit slippage: the market price must be slightly more favorable
+        # to cover the slippage that will be incurred on the exit fill.
+        # Entry slippage is already baked into effective_entry, so only adjust for exit.
         if direction == "BUY":
-            adjusted_tp = tp - slippage_cost  # Tougher to hit TP
-            adjusted_sl = sl  # SL stays (worst case)
+            adjusted_tp = tp - slippage_cost  # Need higher market price to exit with profit
+            adjusted_sl = sl  # SL: entry slippage already widened it, exit slippage is worse
         else:
-            adjusted_tp = tp + slippage_cost
+            adjusted_tp = tp + slippage_cost  # Need lower market price
             adjusted_sl = sl
 
         # Balance check for spot trading: SELL requires holding the base asset
