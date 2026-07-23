@@ -487,7 +487,17 @@ const App = {
   async pollStatus() {
     try {
       const data = await API.status();
-      this.emit('statusUpdate', data);
+      // If status response doesn't include positions/trades, augment from separate endpoints
+      const augmented = Object.assign({}, data);
+      if (!data.positions) {
+        try {
+          const pos = await API.positions();
+          if (pos && (Array.isArray(pos) ? pos.length : Object.keys(pos).length)) {
+            augmented.positions = pos;
+          }
+        } catch(e2) { /* positions unavailable */ }
+      }
+      this.emit('statusUpdate', augmented);
       this.updateStatusBadge();
     } catch(e) {}
   },
