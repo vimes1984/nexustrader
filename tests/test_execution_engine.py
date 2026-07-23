@@ -21,18 +21,13 @@ from execution_engine import ExecutionEngine
 
 class TestExecutionEngine(unittest.TestCase):
     def setUp(self):
-        # Clear mock histories
+        # Fully reset all mocks to eliminate cross-test-file contamination
         database.load_setting.reset_mock()
-        database.save_setting.reset_mock()
-        database.load_active_positions.reset_mock()
-        database.load_trades.reset_mock()
-        
-        # Make load_setting return None by default (simulating empty DB)
+        database.load_setting.side_effect = None
         database.load_setting.return_value = None
-        
-        # Simulate fresh start: no positions or trades in DB
-        database.load_active_positions.return_value = {}
-        database.load_trades.return_value = []
+        database.save_setting.reset_mock()
+        database.load_active_positions = MagicMock(return_value={})
+        database.load_trades = MagicMock(return_value=[])
         
         # Instantiate engine
         self.engine = ExecutionEngine(initial_balance=100.0)
