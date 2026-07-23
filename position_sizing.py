@@ -111,7 +111,8 @@ def compute_safe_fraction(
     n_trades: int,
     calibration_cap: float = 0.15,
     current_drawdown_pct: float = 0.0,
-    drawdown_limit_pct: float = 15.0
+    drawdown_limit_pct: float = 15.0,
+    exchange_min_order_pct: float = 0.0  # Min order as % of capital (e.g., $5 on $100 = 5%)
 ) -> dict:
     """
     Computes the safe fraction of capital to risk on the next trade.
@@ -124,6 +125,8 @@ def compute_safe_fraction(
         calibration_cap: Kelly cap from calibration (lower = more conservative)
         current_drawdown_pct: Current drawdown percent
         drawdown_limit_pct: Max drawdown before trading halts
+        exchange_min_order_pct: Minimum order as pct of capital (if size falls below
+                                this, signal = 'below_exchange_min')
 
     Returns:
         dict with keys: kelly_raw, half_kelly, drawdown_penalty,
@@ -133,12 +136,14 @@ def compute_safe_fraction(
 
     # If insufficient data, use conservative default
     if n_trades < MIN_TRADES_FOR_KELLY:
+        # Cold-start: use 5% default, but ensure it meets exchange minimum
+        safe_fraction = max(0.05, exchange_min_order_pct)
         return {
             "kelly_raw": 0.0,
             "half_kelly": 0.02,
             "drawdown_penalty": 1.0,
             "calibration_cap": calibration_cap,
-            "safe_fraction": 0.05,  # 5% default when cold-starting
+            "safe_fraction": safe_fraction,
             "signal": "cold_start_default"
         }
 

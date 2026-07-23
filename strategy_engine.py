@@ -307,11 +307,14 @@ class VWAPCrossoverStrategy(TradingStrategy):
         vwap = row.get('vwma_20', close)
         if vwap is None:
             vwap = close
-        # Require a meaningful deviation from VWAP (0.15% vs 0.05%) to reduce noise
-        # 0.05% buffer was too tight — produces whipsaw signals in ranging markets
-        if close > vwap * 1.0015:
+        # Use ATR-adaptive threshold instead of flat 0.15%
+        # Threshold = max(0.10%, ATR/close * 0.5) — adjusts to volatility regime
+        atr = row.get('atr', 0)
+        pct_atr = (atr / close) * 0.5 if atr > 0 and close > 0 else 0.0015
+        threshold = max(pct_atr, 0.0010)  # floor at 0.10% to avoid noise in ultra-low vol
+        if close > vwap * (1.0 + threshold):
             return 1.0
-        elif close < vwap * 0.9985:
+        elif close < vwap * (1.0 - threshold):
             return -1.0
         return 0.0
 
