@@ -307,14 +307,19 @@ class LayerNorm:
         x = cache['x']
         mu = cache['mean']
         
-        # ∂L/∂var = Σ ∂L/∂x̂  * (x - μ) * (-1/2) * (var + ε)^(-3/2)
-        #         = Σ d_x_norm * -(x - μ) / (2 * σ³)
+        # ∂L/∂var = Σ ∂L/∂x̂  * ∂x̂/∂var
+        # ∂x̂/∂var = -(x - μ) / (2 * σ³)   where σ = √(var + ε)
+        # NB: code stores x̂ (not x-μ) in cache['x_norm']; the old version
+        # used x̂ * (-0.5) * σ^(-3) which is off-by-1/σ.  The correct form:
+        # ∂L/∂var = Σ d_x̂ * (-(x - μ) / (2σ³))
+        # We compute directly from (x-μ) to avoid the 1/σ error:
         d_var = np.sum(d_x_norm * (cache['x'] - cache['mean']) * (-0.5) * (cache['var'] + self.eps) ** (-1.5), axis=-1, keepdims=True)
         # ∂L/∂μ = Σ ∂L/∂x̂ * (-1 / σ)
         d_mean = np.sum(d_x_norm * (-1.0 / sigma), axis=-1, keepdims=True)
         
-        # ∂x̂_i/∂x_i = 1/σ + (x̂_i * ∂(1/σ)/∂σ² * 2(x_i-μ)/d) ... full vectorized:
-        # ∂L/∂x = ∂L/∂x̂ * (1/σ) + ∂L/∂σ² * (2(x_i-μ)/d) + ∂L/∂μ * (1/d)
+        # Chain rule: ∂L/∂x = ∂L/∂x̂ · ∂x̂/∂x
+        # ∂x̂_i/∂x_j = (1/σ)[δ_ij] + (x̂_i * [-1/(2σ³)] * 2(x_j-μ)/d) + [-1/(d·σ)]
+        # Vectorized: ∂L/∂x = d_x̂/σ + d_var * 2(x-μ)/d + d_mean / d
         d_x = d_x_norm / sigma
         d_x += d_var * 2.0 * (cache['x'] - cache['mean']) / d
         d_x += d_mean / d

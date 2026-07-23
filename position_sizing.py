@@ -140,7 +140,7 @@ def compute_safe_fraction(
         safe_fraction = max(0.05, exchange_min_order_pct)
         return {
             "kelly_raw": 0.0,
-            "half_kelly": 0.02,
+            "half_kelly": safe_fraction / 2.0,
             "drawdown_penalty": 1.0,
             "calibration_cap": calibration_cap,
             "safe_fraction": safe_fraction,
