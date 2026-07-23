@@ -1833,10 +1833,14 @@ def get_portfolio_history(timeframe: str = "1W"):
         conn = sqlite3.connect(database.DB_PATH)
         cursor = conn.cursor()
         
-        cursor.execute(
-            "SELECT timestamp, equity, pnl FROM portfolio_history ORDER BY timestamp ASC"
-        )
-        rows = cursor.fetchall()
+        try:
+            cursor.execute(
+                "SELECT timestamp, equity, pnl FROM portfolio_history ORDER BY timestamp ASC"
+            )
+            rows = cursor.fetchall()
+        except sqlite3.OperationalError:
+            # Table may not exist in fresh DB — fall through to trades-based
+            rows = []
         
         event_points = []
         if len(rows) > 1:

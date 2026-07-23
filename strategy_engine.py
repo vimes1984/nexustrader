@@ -269,7 +269,11 @@ class VWAPCrossoverStrategy(TradingStrategy):
 
     def generate_signal(self, row, history=None):
         close = row.get('close', 0)
+        if close is None:
+            close = 0
         vwap = row.get('vwma_20', close)
+        if vwap is None:
+            vwap = close
         # Require a meaningful deviation from VWAP (0.15% vs 0.05%) to reduce noise
         # 0.05% buffer was too tight — produces whipsaw signals in ranging markets
         if close > vwap * 1.0015:
@@ -422,9 +426,12 @@ class StrategyEnsemble:
         signals = []
         for strat in self.strategies:
             sig = strat.generate_signal(row, history_df)
+            # Guard against NaN or None signals from strategies
+            if sig is None or (isinstance(sig, float) and sig != sig):
+                sig = 0.0
             signals.append(sig)
         
-        signals = np.array(signals)
+        signals = np.array(signals, dtype=np.float64)
         
         # Compute active weights starting from performance-updated base weights
         active_weights = np.array(self.weights)
