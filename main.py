@@ -409,6 +409,9 @@ class NexusTraderOrchestrator:
         if strategy_signals:
             ensemble.record_trade_outcome(strategy_signals, direction, pnl_percent)
         
+        # Save pre-update weights for catastrophic forgetting guard
+        _weights_before = learner.policy_net.to_json()
+        
         # Run backpropagation on neural network weights using PnL as reward
         new_weights = learner.learn_from_trade(
             state,
@@ -416,6 +419,33 @@ class NexusTraderOrchestrator:
             direction,
             pnl_percent
         )
+        
+        # Catastrophic forgetting guard: if rolling WR drops >20% after update, revert weights
+        _ticker_closed = [t for t in getattr(self.execution_engine, 'closed_trades', [])
+                          if t.get('symbol') == ticker]
+        if len(_ticker_closed) >= 10:
+            _window = min(50, len(_ticker_closed))
+            _recent = _ticker_closed[-_window:]
+            _new_wr = sum(1 for t in _recent if t.get('pnl', 0) > 0) / _window
+            _wr_key = f"_catastrophic_wr_{ticker}"
+            _prev_wr = getattr(self, _wr_key, None)
+            if _prev_wr is not None and _prev_wr >= 0.30 and _new_wr < _prev_wr * 0.80:
+                logging.warning(
+                    f"[CATASTROPHIC FORGETTING] {ticker}: WR dropped from {_prev_wr:.1%} to "
+                    f"{_new_wr:.1%} (>20% decline). Reverting weights and saving pre-update snapshot."
+                )
+                learner.policy_net.from_json(_weights_before)
+                new_weights = learner.select_weights(state)
+                # Save a checkpoint of the reverted weights so we can investigate
+                conn = database.get_db_connection()
+                cur = conn.cursor()
+                cur.execute(
+                    "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+                    (f"catastrophic_forget_revert_{ticker}", _weights_before)
+                )
+                conn.commit()
+                conn.close()
+            setattr(self, _wr_key, _new_wr)
         
         # Write back to strategy ensemble
         ensemble.weights = new_weights
