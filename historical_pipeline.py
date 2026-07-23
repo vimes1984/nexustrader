@@ -158,12 +158,13 @@ class SimulatedTrader:
         self.lookahead = lookahead  # forward candles for reward calculation
         
         # Ensure ticker is initialized in the orchestrator before accessing ensembles
-        if hasattr(orchestrator, 'init_ticker') and ticker not in orchestrator.strategy_ensembles:
+        ensembles = getattr(orchestrator, 'strategy_ensembles', {})
+        if hasattr(orchestrator, 'init_ticker') and ticker not in ensembles:
             orchestrator.init_ticker(ticker)
         
         # Get the strategy ensemble and learning engine for this ticker
-        self.ensemble = orchestrator.strategy_ensembles.get(ticker)
-        self.learner = orchestrator.learning_engines.get(ticker) if hasattr(orchestrator, 'learning_engines') else None
+        self.ensemble = getattr(orchestrator, 'strategy_ensembles', {}).get(ticker)
+        self.learner = (getattr(orchestrator, 'learning_engines', {}) or {}).get(ticker)
         
         # Simulated state
         self.balance = 1000.0
@@ -586,7 +587,8 @@ class HistoricalPipeline:
         _log.info(f"=== Pipeline: {ticker} ({since_days}d history, {epochs} epochs) ===")
         
         # Ensure ticker is initialized in the orchestrator before running pipeline
-        if hasattr(self.orc, 'init_ticker') and ticker not in self.orc.strategy_ensembles:
+        ticker_ensembles = getattr(self.orc, 'strategy_ensembles', {})
+        if hasattr(self.orc, 'init_ticker') and ticker not in ticker_ensembles:
             self.orc.init_ticker(ticker)
         
         # 1. Fetch historical data
