@@ -360,12 +360,20 @@ def save_weights_history(timestamp: float, ticker: str, weights: dict, brain_nam
     except Exception as e:
         logging.error(f"Error saving weights history: {e}")
 
-def load_weights_history(ticker: str, limit: int = 100):
+def load_weights_history(ticker: str, limit: int = 100, descending: bool = True):
+    """Load weights history for a ticker.
+    
+    Args:
+        ticker: Asset symbol
+        limit: Max rows to return
+        descending: If True (default), returns most recent first; oldest first otherwise.
+    """
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
+        order = "DESC" if descending else "ASC"
         cursor.execute(
-            "SELECT timestamp, weights, brain_name FROM weights_history WHERE ticker = ? ORDER BY timestamp ASC LIMIT ?",
+            f"SELECT timestamp, weights, brain_name FROM weights_history WHERE ticker = ? ORDER BY timestamp {order} LIMIT ?",
             (ticker, limit)
         )
         rows = cursor.fetchall()
