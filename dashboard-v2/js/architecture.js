@@ -23,8 +23,6 @@ const Architecture = {
         this.render(data);
       }).catch(() => {
         this.render(null);
-      }).catch(() => {
-        this.render(null);
       });
     } else {
       this.render(null);

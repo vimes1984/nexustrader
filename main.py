@@ -1448,6 +1448,7 @@ def get_status():
     
     _db = __import__("database")
     _all_trades = _db.load_trades()
+    _total_pnl = sum(float(t.get("pnl", 0.0) or 0.0) for t in _all_trades)
     
     _today_start = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     _today_ts = _today_start.timestamp()
