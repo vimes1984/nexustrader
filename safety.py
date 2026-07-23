@@ -92,12 +92,15 @@ class KillSwitch:
 
         # Dynamic limits scaled to account size
         # For a $200 account: $20 daily loss, $50 per-position, $150 total exposure
-        # These scale linearly as the account grows
+        # These scale linearly as the account grows, BUT the config limit is the
+        # ABSOLUTE ceiling — never exceed the configured max_daily_loss.
+        # This prevents a $100k account from having a $50k daily loss limit.
         if current_equity is not None and current_equity > 0:
             scale = current_equity / 200.0  # Scale from $200 baseline
-            max_daily = max(self.max_daily_loss, 20.0 * scale)
-            max_per_pos = max(self.max_position_per_symbol, 50.0 * scale)
-            max_exposure = max(self.max_total_exposure, 150.0 * scale)
+            # Floor by scaled minimum, ceiling by configured max
+            max_daily = min(self.max_daily_loss, max(20.0 * scale, 20.0))
+            max_per_pos = min(self.max_position_per_symbol, max(50.0 * scale, 50.0))
+            max_exposure = min(self.max_total_exposure, max(150.0 * scale, 150.0))
         else:
             max_daily = self.max_daily_loss
             max_per_pos = self.max_position_per_symbol
