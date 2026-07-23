@@ -476,23 +476,6 @@ class ExecutionEngine:
             stop_loss_pct = 0.001  # At least 0.1% stop distance
         capped_stop_pct = min(stop_loss_pct, 0.5)  # Cap stop at 50% of entry
         
-        # Kelly fraction to position value: convert risk budget to notional
-        # position_value = risk_budget / stop_loss_pct
-        # Cap leverage at 3x to prevent degenerate cases (tight stop, small risk)
-        max_leverage = 3.0
-        raw_kelly_value = (available_capital * kf) / capped_stop_pct
-        kelly_position_value = min(raw_kelly_value, available_capital * max_leverage)
-        
-        if total_equity > 0 and kelly_position_value > 0:
-            new_total_exposure = (existing_exposure + kelly_position_value) / total_equity
-            if new_total_exposure > self.max_total_exposure:
-                logging.warning(f"[PORTFOLIO RISK] Total exposure {new_total_exposure:.1%} would exceed {self.max_total_exposure:.1%}. Skipping {symbol}.")
-                return False
-            single_exposure = kelly_position_value / total_equity
-            if single_exposure > self.max_concentration:
-                logging.warning(f"[PORTFOLIO RISK] Single position {single_exposure:.1%} exceeds {self.max_concentration:.1%}. Skipping {symbol}.")
-                return False
-        
         if symbol in self.active_positions:
             logging.warning(f"Position already exists for {symbol}. Skipping.")
             return False
@@ -503,11 +486,30 @@ class ExecutionEngine:
         sl = evaluation["stop_loss"]
         kelly_fraction = evaluation["kelly_fraction"]
 
-        # Calculate position size (same Kelly formula, single source of stop_loss_pct)
-        # Kelly f* gives the fraction of capital to RISK, not the position size.
-        # Convert: stop_loss_pct = distance from entry to stop as fraction of entry.
-        # position_value = (available_balance * kelly_fraction) / stop_loss_pct
+        # Calculate position size from Kelly risk budget:
+        # Kelly f* = fraction of capital to RISK
+        # position_value = risk_budget / stop_loss_pct = (capital * kelly_fraction) / stop_loss_pct
+        # Cap leverage at 3x to prevent degenerate cases (tight stop, small risk)
+        max_leverage = 3.0
         position_value = (available_capital * kelly_fraction) / capped_stop_pct
+        position_value = min(position_value, available_capital * max_leverage)
+        
+        # Cap by max % of equity (configurable, default 15%)
+        max_pos_pct = float(database.load_setting("max_position_pct", "15")) / 100.0
+        max_allowed_position = total_equity * max_pos_pct
+        if position_value > max_allowed_position:
+            position_value = max_allowed_position
+        
+        # Now check portfolio-level risk limits against the FINAL position_value
+        if total_equity > 0 and position_value > 0:
+            new_total_exposure = (existing_exposure + position_value) / total_equity
+            if new_total_exposure > self.max_total_exposure:
+                logging.warning(f"[PORTFOLIO RISK] Total exposure {new_total_exposure:.1%} would exceed {self.max_total_exposure:.1%}. Skipping {symbol}.")
+                return False
+            single_exposure = position_value / total_equity
+            if single_exposure > self.max_concentration:
+                logging.warning(f"[PORTFOLIO RISK] Single position {single_exposure:.1%} exceeds {self.max_concentration:.1%}. Skipping {symbol}.")
+                return False
         
         # For SELL orders, cap position value by actual base asset holdings
         if direction == "SELL":
@@ -541,14 +543,6 @@ class ExecutionEngine:
             except Exception as e:
                 logging.warning("[SIZE CAP] Could not cap SELL size: %s" % str(e))
         
-        # Hard cap position value to max_position_pct% of total equity
-        max_pos_pct = float(database.load_setting("max_position_pct", "15")) / 100.0
-        max_allowed_position = total_equity * max_pos_pct
-        if position_value > max_allowed_position:
-            logging.info("[SIZE CAP] Position ${:.2f} exceeds {:.0f}% of equity (${:.2f}). Capped to ${:.2f}.".format(
-                position_value, max_pos_pct*100, total_equity, max_allowed_position))
-            position_value = max_allowed_position
-
         # Minimum position floor: $5 to allow small-account trading
         if position_value < 5.0:
             logging.warning(f"[MIN SIZE] Position value ${position_value:.2f} below $5 minimum. Skipping {symbol}.")
