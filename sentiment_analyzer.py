@@ -104,7 +104,7 @@ def analyze_text_sentiment(text):
         nn_score, nn_confidence = finbert_result
         # Blend: high confidence → FinBERT dominates; low confidence → lexical dominates
         # confidence ∈ [0, 1] is 1 - P(neutral), so 0=all neutral, 1=no neutral
-        blend_weight = nn_confidence  # 0..1
+        blend_weight = min(max(nn_confidence, 0.0), 1.0)  # clamp to [0, 1]
         # Blend weight threshold: only use FinBERT if it adds value (>10% non-neutral)
         if blend_weight > 0.10:
             return lexical * (1 - blend_weight) + nn_score * blend_weight
