@@ -293,6 +293,43 @@ class PolicyNetwork:
         # Store in replay buffer
         self.replay.push(np.array(state, dtype=float), alignment, advantage)
         
+        # Online/offline gradient consistency check (occasional validation):
+        # If we have enough replay data, compute the offline (minibatch) gradient
+        # and compare its direction to the online (single-trade) gradient.
+        # If they disagree (cosine similarity < 0), the online update may be harmful.
+        if len(self.replay) >= self.replay_batch_size and self.total_learning_steps > 0 and (
+            self.total_learning_steps % 10 == 0  # Check every 10th step
+        ):
+            _batch = self.replay.sample(self.replay_batch_size)
+            # Compute offline gradient direction on a minibatch
+            dW_off = [np.zeros_like(w) for w in self.W]
+            db_off = [np.zeros_like(b) for b in self.b]
+            for s, al, adv in _batch:
+                dW_s, db_s = self._compute_gradients(s, al, adv)
+                for i in range(len(dW_off)):
+                    dW_off[i] += dW_s[i]
+                    db_off[i] += db_s[i]
+            n_batch = len(_batch)
+            for i in range(len(dW_off)):
+                dW_off[i] /= n_batch
+                db_off[i] /= n_batch
+            
+            # Cosine similarity between online and offline gradients
+            dot_num = 0.0
+            norm_online_sq = 0.0
+            norm_offline_sq = 0.0
+            eps_ = 1e-12
+            for i in range(len(dW)):
+                dot_num += np.sum(dW[i] * dW_off[i])
+                norm_online_sq += np.sum(dW[i] ** 2)
+                norm_offline_sq += np.sum(dW_off[i] ** 2)
+            cos_sim = dot_num / (np.sqrt(norm_online_sq) * np.sqrt(norm_offline_sq) + eps_)
+            if cos_sim < 0:
+                logging.warning(
+                    f"[GRADIENT CONSISTENCY] Online gradient disagrees with offline minibatch "
+                    f"(cosine_sim={cos_sim:.3f}). Online update may overfit to noise."
+                )
+        
         # Immediate gradient update for this trade (online learning)
         dW, db = self._compute_gradients(state, alignment, advantage)
         self._apply_gradients(dW, db)
