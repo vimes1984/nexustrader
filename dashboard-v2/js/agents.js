@@ -43,7 +43,7 @@ const Agents = {
         const desc = this._escape(a.description || a.desc || '');
         const schedule = this._escape(a.schedule || 'Manual');
         const agentId = this._escape(a.id || '');
-        const reportFile = a.last_report_file ? ' (' + this._escape(a.last_report_file) + ')' : '';
+        const reportFile = (a.last_report_file && a.last_report_file !== 'None') ? ' (' + this._escape(a.last_report_file) + ')' : '';
         return `<div class="glass-panel" style="padding:14px;margin-bottom:8px">
           <div style="display:flex;justify-content:space-between;align-items:flex-start">
             <div style="flex:1">
