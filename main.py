@@ -865,10 +865,20 @@ class NexusTraderOrchestrator:
                             f"[STARVATION RELAX] {ticker}: {_minutes_without_trade:.0f}m no trades. "
                             f"Relaxing threshold from {old_threshold:.3f} to {_min_sig:.3f}"
                         )
+            # ── Ticker cooldown: skip re-evaluation if recently blocked ──
+            # After a blocked signal, don't evaluate that ticker for N seconds
+            # (default 30s) to avoid log spam and give the market time to change.
+            _blocked_cooldown_key = f"_blocked_cooldown_{ticker}"
+            _blocked_until = getattr(self, _blocked_cooldown_key, 0.0)
+            if time.time() < _blocked_until:
+                pass  # Skip this ticker entirely — it was recently blocked
+            else:
+                pass  # Normal flow continues below
+            
             # ── Signal batching: Buffer this signal for batch evaluation ──
             # Instead of executing first-come-first-blocked, collect signals from
             # all tickers and pick the BEST one (highest expected value) in a batch.
-            if abs(weighted_signal) >= _min_sig:
+            if time.time() >= _blocked_until and abs(weighted_signal) >= _min_sig:
                 _dir = "BUY" if weighted_signal > 0 else "SELL"
                 
                 # Evaluate probability and risk
@@ -1061,7 +1071,14 @@ class NexusTraderOrchestrator:
         logging.info("\n".join(_log_lines))
         
         if not viable_signals:
-            # All signals blocked — circuit breaker check happens below
+            # All signals blocked — set cooldown on each to avoid re-evaluating them
+            # until the market has a chance to change
+            _blocked_cooldown_duration = float(database.load_setting("signal_blocked_cooldown_seconds", "30"))
+            for t in buf:
+                setattr(self, f'_blocked_cooldown_{t}', time.time() + _blocked_cooldown_duration)
+            _tickers_str = ", ".join(buf.keys())
+            logging.info(f"[SIGNAL BATCH] Set {_blocked_cooldown_duration}s cooldown on blocked signals: {_tickers_str}")
+            # Circuit breaker check
             if not hasattr(self, '_flush_blocked_count'):
                 self._flush_blocked_count = 0
             self._flush_blocked_count += 1
