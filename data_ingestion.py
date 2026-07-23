@@ -165,8 +165,8 @@ class DataIngestion:
                     df[col] = df[col].fillna(df[col].expanding().mean())
             # RSI, ATR, stoch_k are bounded and harder to expanding-fill; use ffill as last resort
             df['rsi'] = df['rsi'].fillna(50.0)  # neutral RSI for warmup gaps
-            df['atr'] = df['atr'].fillna(method='ffill')
-            df['stoch_k'] = df['stoch_k'].fillna(method='ffill')
+            df['atr'] = df['atr'].ffill().fillna(df['atr'].expanding().mean()).fillna(1.0)  # ATR=1% as final fallback
+            df['stoch_k'] = df['stoch_k'].ffill().fillna(50.0)  # neutral stoch for warmup gaps
             # Write back — still under lock to prevent TOCTOU corruption
             self.data = df
 
