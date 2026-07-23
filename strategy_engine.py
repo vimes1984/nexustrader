@@ -649,7 +649,8 @@ class StrategyEnsemble:
             # When theta is moderately positive → mean-reversion
             # When theta is near zero or negative → trending regime
             # A chop zone exists when theta is near zero AND vol is normal
-            recent_rets = np.diff(self.price_history[-20:]) / np.array(self.price_history[-20:-1])
+            prices = np.array(self.price_history[-20:])
+            recent_rets = (prices[1:] - prices[:-1]) / np.maximum(np.abs(prices[:-1]), 1e-12)
             chop_vol = float(np.std(recent_rets)) if len(recent_rets) > 1 else 0.0
             # Chop index: low when trend is strong, high when noise dominates
             if chop_vol > 0:
