@@ -142,7 +142,7 @@ def run_long_term_strategy_optimization():
 
         report_lines.append(advice_clean)
 
-        if json_block:
+        if json_block and json_block.strip():
             adjustments = json.loads(json_block)
             for key in (
                 "shadow_volatility_target_pct", "shadow_tp_atr_multiplier",
