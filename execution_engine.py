@@ -463,7 +463,12 @@ class ExecutionEngine:
         stop_loss_pct_est = abs(eprice - esl) / eprice if eprice > 0 else 0.1
         if stop_loss_pct_est < 0.001:
             stop_loss_pct_est = 0.001
-        kelly_position_value = (available_capital * kf) / min(stop_loss_pct_est, 0.5)
+        # Kelly fraction to position value: convert risk budget to notional
+        # position_value = risk_budget / stop_loss_pct
+        # Cap leverage at 3x to prevent degenerate cases (tight stop, small risk)
+        max_leverage = 3.0
+        raw_kelly_value = (available_capital * kf) / min(stop_loss_pct_est, 0.5)
+        kelly_position_value = min(raw_kelly_value, available_capital * max_leverage)
         
         if total_equity > 0 and kelly_position_value > 0:
             new_total_exposure = (existing_exposure + kelly_position_value) / total_equity
