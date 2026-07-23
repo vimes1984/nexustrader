@@ -3996,6 +3996,14 @@ async def websocket_endpoint(websocket: WebSocket):
             "trades": trades_to_send,
             "lifetime_steps": steps,
             "model_dna": model_dna,
+            "unrealized_pnl": round(sum(
+                abs(float(pos.get("quantity", 0) or 0)) * (
+                    float(pos.get("current_price", float(pos.get("entry_price", 0)))) - float(pos.get("entry_price", 0))
+                ) if pos.get("direction", "BUY") == "BUY" else (
+                    float(pos.get("entry_price", 0)) - float(pos.get("current_price", float(pos.get("entry_price", 0))))
+                ) * abs(float(pos.get("quantity", 0) or 0))
+                for sym, pos in (getattr(orchestrator.execution_engine, "active_positions", {}) or {}).items()
+            ), 2),
             "active_brains": active_brains,
             "ticker_prices": {
                 t: (orchestrator.data_ingestions[t].live_price if t in orchestrator.data_ingestions else
