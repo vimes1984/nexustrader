@@ -657,6 +657,17 @@ class NexusTraderOrchestrator:
                 f"closed trades. Learning may not be configured correctly."
             )
         
+        # ── Weight divergence monitoring — detect policy collapse (single strategy dominating) ──
+        _weights_arr = np.array(new_weights)
+        _max_w = np.max(_weights_arr)
+        _min_w = np.maximum(np.min(_weights_arr), 1e-9)
+        _divergence = _max_w / _min_w
+        if _divergence > 10.0:
+            logging.warning(
+                f"[WEIGHT DIVERGENCE] {ticker}: max/min weight ratio = {_divergence:.1f}. "
+                f"Policy may be collapsing — single strategy dominating."
+            )
+        
         # ── Cumulative PnL tracking per ticker (detect if learning is improving) ──
         _cumul_key = f"_cumulative_pnl_{ticker}"
         _cumul_count_key = f"_cumulative_pnl_count_{ticker}"
