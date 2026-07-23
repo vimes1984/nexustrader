@@ -467,12 +467,17 @@ const Dashboard = {
       var dc = dir === 'long' ? 'var(--neon-green)' : 'var(--neon-red)';
       var pnl = Number(pos.unrealized_pnl || 0);
       var sym = pos.symbol || '\u2014';
+      var curPrice = Number(pos.current_price || pos.mark_price || 0);
+      var entryPrice = Number(pos.entry_price||0);
+      var priceChange = entryPrice > 0 ? ((curPrice - entryPrice) / entryPrice * 100).toFixed(2) : null;
       return '<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:4px;padding-bottom:4px;border-bottom:1px solid var(--border-subtle)">' +
         '<span style="color:var(--text-muted);font-weight:600;font-size:11px;min-width:55px">' + sym + '</span>' +
         '<span style="color:' + dc + ';font-weight:700;font-size:12px">' + dir.toUpperCase() + '</span>' +
         '<span style="font-family:var(--font-mono);font-size:11px">Entry: <b>$' + Number(pos.entry_price||0).toFixed(2) + '</b></span>' +
+        (curPrice > 0 ? '<span style="font-family:var(--font-mono);font-size:11px">Price: <b>$' + curPrice.toFixed(2) + '</b></span>' : '') +
         '<span style="font-family:var(--font-mono);font-size:11px">Size: <b>' + Number(pos.size||pos.quantity||0).toFixed(6) + '</b></span>' +
-        '<span style="font-family:var(--font-mono);font-size:11px">PnL: <b style="color:' + (pnl>=0?'var(--neon-green)':'var(--neon-red)') + '">$' + pnl.toFixed(2) + '</b></span>' +
+        '<span style="font-family:var(--font-mono);font-size:11px">PnL: <b style="color:' + (pnl>=0?'var(--neon-green)':'var(--neon-red)') + '">$' + pnl.toFixed(2) + '</b>' +
+        (priceChange ? ' <span style="color:' + (pnl>=0?'var(--neon-green)':'var(--neon-red)') + ';font-size:9px">(' + (pnl>=0?'+':'') + priceChange + '%)</span>' : '') + '</span>' +
       '</div>';
     }).join('');
   },
