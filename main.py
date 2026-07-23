@@ -348,7 +348,16 @@ class NexusTraderOrchestrator:
         # BUGFIX: Track ALL trades (paper + live), not just live.
         # Otherwise KillSwitch never activates in paper mode and
         # paper-mode bugs cascade to live deployment undetected.
-        pnl_abs = pnl_percent * self.execution_engine.balance
+        # BUGFIX: pnl_percent is fraction of position cost, not of total balance.
+        # Multiply by position cost (balance delta) for correct absolute PnL.
+        # pnl_abs ≈ balance_before - balance_after (after close), but balance was
+        # already updated by execution_engine. Reconstruct from the closed trade.
+        closed_trades = [t for t in self.execution_engine.closed_trades if t.get('symbol') == ticker]
+        if closed_trades:
+            last_trade = closed_trades[-1]
+            pnl_abs = float(last_trade.get('pnl', 0))
+        else:
+            pnl_abs = pnl_percent * self.execution_engine.balance
         kill_switch.record_trade(pnl_abs)
         # Update drawdown from current equity
         current_prices = {}

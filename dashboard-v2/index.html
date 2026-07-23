@@ -452,19 +452,13 @@ if ('serviceWorker' in navigator) {
 }
 </script>
 
-<!-- Application Scripts (order matters!) -->
-<script src="/dashboard-v2/js/api.js?v=1784673479"></script>
-<script src="/dashboard-v2/js/router.js?v=1784673479"></script>
-<script src="/dashboard-v2/js/dashboard.js?v=1784673479"></script>
-<script src="/dashboard-v2/js/neural.js?v=1784673479"></script>
-<script src="/dashboard-v2/js/assets.js?v=1784673479"></script>
-<script src="/dashboard-v2/js/llm.js?v=1784673479"></script>
-<script src="/dashboard-v2/js/agents.js?v=1784673479"></script>
-<script src="/dashboard-v2/js/settings.js?v=1784673479"></script>
-<script src="/dashboard-v2/js/strategy.js?v=1784673479"></script>
-<script src="/dashboard-v2/js/optimizations.js?v=1784673479"></script>
-<script src="/dashboard-v2/js/architecture.js?v=1784673479"></script>
-<script src="/dashboard-v2/js/logs.js?v=1784673479"></script>
+<!-- Application Scripts (order matters!) — cache bust via inline timestamp -->
+<script>
+(function() { var ts = Date.now(); ['api','router','dashboard','neural','assets','llm','agents','settings','strategy','optimizations','architecture','logs'].forEach(function(m) {
+  var s = document.createElement('script'); s.src = '/dashboard-v2/js/' + m + '.js?v=' + ts; document.body.appendChild(s);
+}); })();
+</script>
+<noscript><div style="background:rgba(244,63,94,0.2);color:var(--neon-red);text-align:center;padding:20px;font-weight:700">JavaScript is required to run NexusTrader Dashboard.</div></noscript>
 
 </body>
 </html>
