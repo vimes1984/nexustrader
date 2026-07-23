@@ -9,18 +9,34 @@ class ReplayBuffer:
     Stores (state, alignment, advantage) tuples and samples minibatches.
     This decouples training from individual trade events, smoothing gradients
     and preventing catastrophic forgetting.
+    
+    Uses a set of state fingerprints to prevent duplicate experiences.
+    When capacity is reached, the OLDEST experience is evicted (FIFO)
+    rather than overwriting an arbitrary position, ensuring temporal
+    diversity in the buffer.
     """
     def __init__(self, capacity=200):
         self.capacity = capacity
         self.buffer = []
-        self.pos = 0
+        self._fingerprints = set()
 
     def push(self, state, alignment, advantage):
-        if len(self.buffer) < self.capacity:
-            self.buffer.append((state, alignment, advantage))
-        else:
-            self.buffer[self.pos] = (state, alignment, advantage)
-        self.pos = (self.pos + 1) % self.capacity
+        # Create a fingerprint from the state to detect duplicates
+        state_flat = np.asarray(state).flatten()
+        fp = hash(state_flat.tobytes())
+        if fp in self._fingerprints:
+            # Duplicate state — skip to avoid double-counting the same experience
+            return False
+        
+        if len(self.buffer) >= self.capacity:
+            # FIFO eviction: remove oldest to make room
+            oldest_state, _, _ = self.buffer.pop(0)
+            old_fp = hash(np.asarray(oldest_state).flatten().tobytes())
+            self._fingerprints.discard(old_fp)
+        
+        self.buffer.append((state, alignment, advantage))
+        self._fingerprints.add(fp)
+        return True
 
     def sample(self, batch_size=32):
         if len(self.buffer) < batch_size:
