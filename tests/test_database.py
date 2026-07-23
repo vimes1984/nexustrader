@@ -68,6 +68,80 @@ class TestDatabase(unittest.TestCase):
         self.assertEqual(opts[0]["new_value"], "2.0")
         self.assertEqual(opts[0]["rationale"], "For testing")
 
+    def test_concurrent_write_safety_wal_mode(self):
+        """Test that WAL mode is enabled and multiple connections can write concurrently.
+        
+        SQLite with WAL mode allows concurrent reads and a single writer.
+        This test verifies that the database functions correctly under
+        concurrent write scenarios from multiple connections.
+        """
+        import threading
+        
+        # Verify WAL mode is active
+        conn = database.get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA journal_mode")
+        mode = cursor.fetchone()[0]
+        conn.close()
+        self.assertEqual(mode.upper(), "WAL", "WAL journal mode must be enabled for concurrent safety")
+        
+        # Verify busy_timeout is set
+        conn = database.get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA busy_timeout")
+        timeout = cursor.fetchone()[0]
+        conn.close()
+        self.assertGreaterEqual(timeout, 100, "busy_timeout should be >= 100ms")
+        
+        # Test parallel writes from multiple threads
+        results = []
+        errors = []
+        
+        def threaded_write(thread_id: int):
+            try:
+                for i in range(10):
+                    database.save_setting(f"concurrent_key_{thread_id}_{i}", f"val_{thread_id}_{i}")
+                    database.save_trade({
+                        'symbol': f'TEST-{thread_id}',
+                        'direction': 'long',
+                        'quantity': 1.0,
+                        'entry_price': 100.0,
+                        'exit_price': 101.0,
+                        'pnl': 1.0,
+                        'pnl_percent': 0.01,
+                        'exit_reason': 'test_concurrent',
+                        'entry_time': 1000.0 + i,
+                        'exit_time': 2000.0 + i,
+                        'policy_brain': 'TestBrain',
+                        'trading_mode': 'paper',
+                    })
+                results.append(f"thread_{thread_id}_done")
+            except Exception as e:
+                errors.append(f"thread_{thread_id}_error: {e}")
+        
+        threads = []
+        for tid in range(5):
+            t = threading.Thread(target=threaded_write, args=(tid,))
+            threads.append(t)
+            t.start()
+        
+        for t in threads:
+            t.join(timeout=10)
+        
+        # Check all threads completed without errors
+        self.assertEqual(len(errors), 0, f"Concurrent write errors: {errors}")
+        self.assertEqual(len(results), 5, "All 5 threads must complete")
+        
+        # Verify data was written
+        for tid in range(5):
+            val = database.load_setting(f"concurrent_key_{tid}_9", "")
+            self.assertEqual(val, f"val_{tid}_9", f"Thread {tid} write should be readable")
+        
+        # Cleanup test settings
+        for tid in range(5):
+            for i in range(10):
+                database.save_setting_directly(f"concurrent_key_{tid}_{i}", "")
+
     def test_settings_edge_cases(self):
         """Test settings save/load with edge cases: JSON, empty, special chars, Unicode."""
         # JSON serialized data
