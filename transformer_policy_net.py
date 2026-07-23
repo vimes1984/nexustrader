@@ -339,51 +339,6 @@ class TransformerPolicyNetwork:
         return probs
     
     # ------------------------------------------------------------------
-    # Backward pass
-    # ------------------------------------------------------------------
-    
-    def backward(self, d_out: np.ndarray) -> np.ndarray:
-        """Backward pass. d_out = gradient of loss w.r.t. softmax output."""
-        cache = self._cache
-        if 'probs' not in cache:
-            logging.warning("[Transformer] backward() called without recent forward(training=True) — skipping")
-            return np.zeros_like(d_out)
-        batch_size = d_out.shape[0]
-        
-        # Gradient through softmax
-        # dL/dlogits = probs * (d_out - sum(d_out * probs))
-        d_logits = cache['probs'] * (d_out - np.sum(d_out * cache['probs'], axis=-1, keepdims=True))
-        
-        # Gradient through policy head
-        self.d_policy_b2 = np.sum(d_logits, axis=0)
-        self.d_policy_W2 = np.einsum('bh,ba->ha', cache['hidden'], d_logits)
-        d_hidden = np.einsum('ba,ha->bh', d_logits, self.policy_W2)
-        d_hidden = d_hidden * (cache['hidden'] > 0)  # ReLU backward
-        
-        self.d_policy_b1 = np.sum(d_hidden, axis=0)
-        self.d_policy_W1 = np.einsum('bd,bh->dh', cache['pooled'], d_hidden)
-        d_pooled = np.einsum('bh,dh->bd', d_hidden, self.policy_W1)
-        
-        # Gradient through mean pooling:
-        # pooled = mean(x, axis=1) so d_x = broadcast(d_pooled, seq) / seq_len
-        # Get seq_len from the encoder layer cache (most recent forward pass)
-        seq_len = self.max_seq_len
-        first_layer_cache = getattr(self.encoder_layers[0], '_cache', None)
-        if isinstance(first_layer_cache, dict):
-            x_cache = first_layer_cache.get('x', None)
-            if x_cache is not None and hasattr(x_cache, 'shape') and len(x_cache.shape) >= 2:
-                seq_len = x_cache.shape[1]
-        # Correct gradient: each position gets 1/seq_len of d_pooled
-        d_x = np.broadcast_to(d_pooled[:, np.newaxis, :], (batch_size, seq_len, self.d_model)) / seq_len
-        for layer in reversed(self.encoder_layers):
-            try:
-                d_x = layer.backward(d_x)
-            except Exception:
-                pass  # Skip if backward cache not available
-        
-        return d_x
-
-    # ------------------------------------------------------------------
     # RL backward pass (PolicyNetwork-compatible interface)
     # ------------------------------------------------------------------
 
