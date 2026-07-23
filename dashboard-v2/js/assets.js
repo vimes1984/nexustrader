@@ -75,14 +75,12 @@ const Assets = {
 
   async toggleAsset(ticker, currentlyActive) {
     try {
-      if (currentlyActive) {
-        await API.saveSetting('ticker_active_' + ticker, '0');
-      } else {
-        await API.saveSetting('ticker_active_' + ticker, '1');
-      }
+      const newState = currentlyActive ? '0' : '1';
+      await API.saveSetting('ticker_active_' + ticker, newState);
       App.toast(ticker + ' ' + (currentlyActive ? 'deactivated' : 'activated'), 'success');
-      this.load();
-    } catch(e) { App.toast('Toggle failed: ' + e.message, 'error'); }
+      // Re-fetch asset list to reflect new state
+      await this.load();
+    } catch(e) { App.toast('Toggle failed: ' + (e.message || 'Unknown error'), 'error'); }
   },
 
   async checkExchange() {
