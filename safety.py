@@ -70,6 +70,11 @@ class KillSwitch:
         self.daily_reset_time = time.time()
         self.tripped = False
         self.trigger_reason: Optional[str] = None
+        # Drawdown hysteresis: once tripped on drawdown, recovery must be
+        # to hysteresis_recover_pct below the limit before re-arming.
+        # Prevents flip-flopping at the boundary when price oscillates.
+        self._drawdown_hysteresis_active = False
+        self.hysteresis_recover_pct = 0.02  # 2% below max_drawdown_pct to re-arm
 
     def check(
         self,
@@ -116,9 +121,24 @@ class KillSwitch:
             self.trigger_reason = "Daily loss limit: {:.2f} >= {:.2f} (account: ${:.0f})".format(-self.daily_pnl, max_daily, current_equity or 0)
             return False, self.trigger_reason
 
-        if current_drawdown >= self.max_drawdown_pct:
+        # Drawdown check with hysteresis to prevent flip-flopping
+        effective_dd_threshold = self.max_drawdown_pct
+        if self._drawdown_hysteresis_active:
+            # Already in hysteresis zone: require recovery below threshold - margin
+            recovery_threshold = effective_dd_threshold - self.hysteresis_recover_pct
+            if current_drawdown < recovery_threshold:
+                self._drawdown_hysteresis_active = False  # Re-armed
+            else:
+                # Stay tripped until recovery
+                self.tripped = True
+                self.trigger_reason = "Drawdown hysteresis: {:.2%} still above {:.2%} recovery threshold".format(current_drawdown, recovery_threshold)
+                return False, self.trigger_reason
+
+        # Normal drawdown check (not in hysteresis)
+        if current_drawdown >= effective_dd_threshold:
             self.tripped = True
-            self.trigger_reason = "Max drawdown: {:.2%} >= {:.2%}".format(current_drawdown, self.max_drawdown_pct)
+            self._drawdown_hysteresis_active = True
+            self.trigger_reason = "Max drawdown: {:.2%} >= {:.2%} (hysteresis margin: {:.2%})".format(current_drawdown, effective_dd_threshold, self.hysteresis_recover_pct)
             return False, self.trigger_reason
 
         if open_positions:

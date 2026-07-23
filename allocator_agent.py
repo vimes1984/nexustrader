@@ -35,6 +35,111 @@ def load_active_assets():
 def save_active_asset(ticker, is_active, tp_multiplier, sl_multiplier, kelly_ceiling):
     _db.save_active_asset(ticker, is_active, tp_multiplier, sl_multiplier, kelly_ceiling)
 
+def compute_multi_asset_kelly() -> dict:
+    """Compute multi-asset Kelly-optimal allocation fractions using covariance.
+    
+    Uses the multi-asset Kelly criterion:
+      f* = inv(Σ) * μ
+    where Σ is the covariance matrix of trade returns and μ is the
+    vector of excess returns over risk-free.
+    
+    Falls back to single-asset Kelly if covariance is singular.
+    """
+    try:
+        conn = _db.get_db_connection()
+        conn.row_factory = __import__('sqlite3').Row
+        c = conn.cursor()
+        c.execute("""
+            SELECT symbol, pnl_percent, pnl FROM trades 
+            WHERE pnl_percent IS NOT NULL AND pnl_percent != ''
+            ORDER BY id DESC LIMIT 1000
+        """)
+        rows = [dict(r) for r in c.fetchall()]
+        conn.close()
+        
+        if not rows:
+            return {}
+            
+        # Group pnl_percent by symbol
+        from collections import defaultdict
+        ret_seqs = defaultdict(list)
+        for r in rows:
+            sym = r['symbol']
+            pct = r.get('pnl_percent')
+            if sym and pct is not None:
+                try:
+                    ret_seqs[sym].append(float(pct))
+                except (ValueError, TypeError):
+                    pass
+        
+        # Keep only symbols with >= 5 trades
+        ret_seqs = {k: np.array(v) for k, v in ret_seqs.items() if len(v) >= 5}
+        if len(ret_seqs) < 1:
+            return {}
+            
+        symbols = list(ret_seqs.keys())
+        n = len(symbols)
+        
+        # Truncate to shortest length for covariance
+        min_len = min(len(v) for v in ret_seqs.values())
+        X = np.column_stack([ret_seqs[s][:min_len] for s in symbols])
+        
+        # Mean returns and covariance
+        mu = X.mean(axis=0)
+        Sigma = np.cov(X.T)
+        Sigma_reg = Sigma + np.eye(n) * 1e-6  # regularize for numerical stability
+        
+        # Multi-asset Kelly: f* = inv(Σ) * μ
+        try:
+            inv_sigma = np.linalg.inv(Sigma_reg)
+            kelly_fractions = inv_sigma @ mu
+        except np.linalg.LinAlgError:
+            # Fallback: single-asset Kelly per symbol
+            kelly_fractions = np.array([
+                mu[i] / (Sigma[i, i] + 1e-12) for i in range(n)
+            ])
+        
+        # Apply ceiling constraint (keep fractions between 0.0 and 0.5)
+        kelly_fractions = np.clip(kelly_fractions, 0.0, 0.5)
+        # Scale back so sum doesn't exceed 1.0 (fractional Kelly)
+        total_kelly = kelly_fractions.sum()
+        if total_kelly > 1.0:
+            kelly_fractions = kelly_fractions / total_kelly
+        
+        # Also compute simple single-asset Kelly for comparison
+        simple_kelly = {}
+        for i, s in enumerate(symbols):
+            returns = ret_seqs[s]
+            w = (returns > 0).mean()
+            if w <= 0 or w >= 1:
+                simple_kelly[s] = 0.0
+            else:
+                avg_w = returns[returns > 0].mean() if returns[returns > 0].size > 0 else 0.0
+                avg_l = abs(returns[returns <= 0].mean()) if returns[returns <= 0].size > 0 else 1.0
+                b = avg_w / avg_l if avg_l > 1e-12 else 1.0
+                simple_kelly[s] = (w * b - (1 - w)) / b if b > 0 else 0.0
+                simple_kelly[s] = max(0.0, min(simple_kelly[s], 0.5))
+        
+        # Build return map
+        result = {}
+        for i, s in enumerate(symbols):
+            result[s] = {
+                "multi_asset_kelly": float(round(kelly_fractions[i], 4)),
+                "simple_kelly": float(round(simple_kelly.get(s, 0.0), 4)),
+                "mean_return_pct": float(round(mu[i], 4)),
+                "trade_count": len(ret_seqs[s]),
+            }
+            report_lines_log.append(f"📊 {s}: multi-Kelly={result[s]['multi_asset_kelly']:.4f}, "
+                                     f"simple-Kelly={result[s]['simple_kelly']:.4f}, "
+                                     f"mean ret={result[s]['mean_return_pct']:.4f}")
+        return result
+    except Exception as e:
+        logging.error(f"Multi-asset Kelly computation failed: {e}")
+        return {}
+
+report_lines_log = []  # global accumulator for in-function logging
+
+
 def load_performance_summary():
     summary = {}
     try:
