@@ -1558,6 +1558,13 @@ def get_status():
             ) if pos.get("direction", "BUY") == "BUY" else float(pos.get("entry_price", 0) or 0) - current_prices.get(sym, float(pos.get("entry_price", 0) or 0))
             for sym, pos in ee.active_positions.items()
         ), 2),
+        "probability": {
+            "probability": orchestrator.probability_engine.last_evaluation.get("probability", 0) if hasattr(orchestrator.probability_engine, "last_evaluation") else 0,
+            "ev": orchestrator.probability_engine.last_evaluation.get("expected_value", 0) if hasattr(orchestrator.probability_engine, "last_evaluation") else 0,
+            "risk_reward": orchestrator.probability_engine.last_evaluation.get("risk_reward", 0) if hasattr(orchestrator.probability_engine, "last_evaluation") else 0,
+            "kelly_fraction": orchestrator.probability_engine.kelly_fraction,
+            "viable": orchestrator.probability_engine.last_evaluation.get("is_viable", False) if hasattr(orchestrator.probability_engine, "last_evaluation") else False,
+        },
         "trades": _recent_trades
     }
 
