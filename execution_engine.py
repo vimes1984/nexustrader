@@ -840,21 +840,30 @@ class ExecutionEngine:
                 
             total_value = 0.0
             last_prices = getattr(self, "last_known_prices", {})
-            
-            # Find EUR/USD price rate to convert EUR cash
-            eur_usd_rate = 1.09 # fallback
-            if "EUR" in last_prices:
-                eur_usd_rate = last_prices["EUR"]
-            elif "ZEUR" in last_prices:
-                eur_usd_rate = last_prices["ZEUR"]
-            elif "EUR/USD" in last_prices:
-                eur_usd_rate = last_prices["EUR/USD"]
-                
+
+            # Known fiat currencies with USD conversion rates
+            fiat_map = {
+                "USD": 1.0, "ZUSD": 1.0,
+                "EUR": 1.09, "ZEUR": 1.09,
+                "GBP": 1.30, "ZGBP": 1.30,
+                "CAD": 0.73, "ZCAD": 0.73,
+                "JPY": 0.0064, "ZJPY": 0.0064,
+                "CHF": 1.15,
+                "AUD": 0.66, "ZAUD": 0.66,
+            }
+            # Override fiat rates with live prices where available
+            for fiat_code in ["EUR", "GBP", "CAD", "JPY", "CHF", "AUD"]:
+                if fiat_code in last_prices:
+                    rate = float(last_prices[fiat_code])
+                    # Find all matching asset keys
+                    for asset_key in list(fiat_map.keys()):
+                        norm = asset_key.lstrip("Z")
+                        if norm == fiat_code and rate > 0:
+                            fiat_map[asset_key] = rate
+
             for asset, qty in holdings.items():
-                if asset in ["USD", "ZUSD"]:
-                    total_value += qty
-                elif asset in ["EUR", "ZEUR"]:
-                    total_value += qty * eur_usd_rate
+                if asset in fiat_map:
+                    total_value += qty * fiat_map[asset]
                 else:
                     norm_asset = normalize_kraken_asset(asset)
                     
