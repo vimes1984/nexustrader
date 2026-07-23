@@ -1496,7 +1496,7 @@ def get_status():
         "balance": ee.balance,
         "equity": ee.get_equity(current_prices),
         "trading_mode": ee.trading_mode,
-        "total_pnl": round(sum(float(t.get("pnl", 0.0) or 0.0) for t in _all_trades), 2),
+        "total_pnl": round(_total_pnl, 2),
         "total_pnl_pct": round((_total_pnl / ee.initial_balance * 100) if ee.initial_balance > 0 else 0.0, 2),
         "initial_balance": ee.initial_balance,
         "closed_trades": len(_all_trades),
