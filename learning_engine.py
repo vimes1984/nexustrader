@@ -309,8 +309,14 @@ class PolicyNetwork:
         # Compute loss BEFORE update (no dropout for deterministic loss computation)
         loss_before = _compute_loss_for_state(state, alignment, advantage, training_=False)
         
-        # Store in replay buffer
-        self.replay.push(np.array(state, dtype=float), alignment, advantage)
+        # Store in replay buffer (returns False if duplicate state was skipped)
+        _added = self.replay.push(np.array(state, dtype=float), alignment, advantage)
+        if not _added:
+            if not hasattr(self, '_dup_count'):
+                self._dup_count = 0
+            self._dup_count += 1
+            if self._dup_count % 50 == 1:
+                logging.debug(f"[REPLAY DUPLICATE] Skipped {self._dup_count} duplicate experiences (state fingerprint collision)")
         
         # Online/offline gradient consistency check (occasional validation):
         # If we have enough replay data, compute the offline (minibatch) gradient
