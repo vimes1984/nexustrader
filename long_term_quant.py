@@ -5,6 +5,8 @@ import database as _db
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
+from openclaw_bridge import query_openclaw, extract_json_block
+
 
 def run_long_term_strategy_optimization():
     logging.info("Starting weekly Long-Term Strategy Quant Agent session...")
@@ -45,11 +47,20 @@ def run_long_term_strategy_optimization():
         total_pnl = sum(t.get("pnl") or 0.0 for t in shadow_trades)
         avg_pnl = (total_pnl / total_trades) if total_trades > 0 else 0.0
 
-        vol_target = float(settings.get("shadow_volatility_target_pct", "1.5"))
-        tp_mult = float(settings.get("shadow_tp_atr_multiplier", "3.0"))
-        sl_mult = float(settings.get("shadow_sl_atr_multiplier", "1.5"))
-        nn_consensus = float(settings.get("shadow_nn_consensus_min_weight", "0.12"))
-        max_hold_hours = float(settings.get("shadow_max_holding_hours", "48.0"))
+        def _safe_float(key, default):
+            val = settings.get(key, default)
+            if val is None or val == "":
+                return float(default)
+            try:
+                return float(val)
+            except (ValueError, TypeError):
+                return float(default)
+
+        vol_target = _safe_float("shadow_volatility_target_pct", "1.5")
+        tp_mult = _safe_float("shadow_tp_atr_multiplier", "3.0")
+        sl_mult = _safe_float("shadow_sl_atr_multiplier", "1.5")
+        nn_consensus = _safe_float("shadow_nn_consensus_min_weight", "0.12")
+        max_hold_hours = _safe_float("shadow_max_holding_hours", "48.0")
 
         report_lines = [
             "## Weekly Long-Term Strategy Attribution & Quant Optimization",
@@ -80,6 +91,25 @@ def run_long_term_strategy_optimization():
             )
             conn.commit()
 
+        # Summarize trades for the prompt (don't dump 50 raw trade dicts into LLM context)
+        trade_summary = {
+            "total": total_trades,
+            "wins": len(wins),
+            "losses": len(losses),
+            "ties": ties,
+            "win_rate_pct": round(win_rate, 1),
+            "total_pnl": round(total_pnl, 2),
+            "avg_pnl": round(avg_pnl, 2),
+            "best_pnl": round(max((t.get("pnl") or 0.0) for t in shadow_trades), 2) if shadow_trades else 0,
+            "worst_pnl": round(min((t.get("pnl") or 0.0) for t in shadow_trades), 2) if shadow_trades else 0,
+        }
+        # Include last 5 trades for sample detail
+        recent_5 = [
+            {"s": t.get("symbol", ""), "d": t.get("direction", ""),
+             "pnl": round(t.get("pnl") or 0.0, 2),
+             "r": t.get("exit_reason", "")[:20]}
+            for t in shadow_trades[:5]
+        ]
         prompt = (
             f"{db_prompt}\n\n"
             f"Current Parameters:\n"
@@ -88,20 +118,20 @@ def run_long_term_strategy_optimization():
             f"- shadow_sl_atr_multiplier: {sl_mult}x\n"
             f"- shadow_nn_consensus_min_weight: {nn_consensus}\n"
             f"- shadow_max_holding_hours: {max_hold_hours}h\n\n"
-            f"Walk-Forward Data:\n"
-            f"- Recent trades: {json.dumps(shadow_trades, indent=2) if shadow_trades else '[]'}\n"
-            f"- Win Rate: {win_rate:.2f}% | Total PnL: ${total_pnl:.2f} | Avg PnL: ${avg_pnl:.2f}\n"
-            f"- Target: $1,000/day.\n"
+            f"Walk-Forward Data Summary:\n"
+            f"{json.dumps(trade_summary, indent=2)}\n"
+            f"Recent Trades (last 5):\n"
+            f"{json.dumps(recent_5, indent=2)}\n\n"
+            f"Win Rate: {win_rate:.2f}% | Total PnL: ${total_pnl:.2f} | Avg PnL: ${avg_pnl:.2f}\n"
+            f"Target: $1,000/day.\n"
             f"Output your recommended setting adjustments in a ```json block."
         )
-
-        from openclaw_bridge import query_openclaw, extract_json_block
 
         try:
             raw_advice = query_openclaw(prompt, agent_name="quant", max_tokens=4096)
         except Exception as e_ai:
             logging.error(f"OpenClaw call failed for LongTermQuant: {e_ai}")
-            raise e_ai
+            raise
 
         advice_clean = raw_advice
         json_block = ""
