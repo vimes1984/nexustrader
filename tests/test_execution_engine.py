@@ -209,7 +209,7 @@ class TestExecutionEngine(unittest.TestCase):
         evaluation = {
             "direction": "BUY",
             "entry_price": 100.0,
-            "take_profit": 200.0,
+            "take_profit": 140.0,
             "stop_loss": 50.0,
             "kelly_fraction": 0.5,
         }
