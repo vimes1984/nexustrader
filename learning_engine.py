@@ -459,6 +459,12 @@ class PolicyNetwork:
                 logging.info(f"[WEIGHT MIGRATION] Truncating action_dim {current_action_dim}→{expected_dim}")
                 self.W[-1] = self.W[-1][:, :expected_dim]
                 self.b[-1] = self.b[-1][:, :expected_dim]
+        
+        # Restore LR scheduling state if present (backward-compatible: defaults to __init__ values)
+        self.initial_lr = data.get("initial_lr", self.initial_lr)
+        self.min_lr = data.get("min_lr", self.initial_lr * 0.1)
+        self.lr_decay_steps = data.get("lr_decay_steps", 100)
+        self.total_learning_steps = data.get("total_learning_steps", 0)
 
         # Init optimizer momentum/velocity if NOT already restored from saved state,
         # OR if individual optimizer tensor shapes don't match weights (dimension migration)
