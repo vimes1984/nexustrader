@@ -380,9 +380,16 @@ const Dashboard = {
       tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state" style="padding:30px 20px"><div class="empty-state-icon" style="font-size:36px" aria-hidden="true">📊</div><div class="empty-state-title">No trades yet</div><div class="empty-state-desc">The bot is collecting data and analyzing market conditions. Trades will appear here once executed.</div></div></td></tr>';
       return;
     }
-    tbody.innerHTML = trades.slice(0, 20).map(t => {
-      const entryTime = t.entry_time || t.exit_time || t.timestamp || t.time;
-      const date = entryTime ? new Date(Number(entryTime) * 1000).toLocaleDateString() : '—';
+    // Limit trades to avoid huge DOM operations
+    const tradeSlice = trades.slice(0, 50);
+    tbody.innerHTML = tradeSlice.map(t => {
+      const rawTs = t.entry_time || t.exit_time || t.timestamp || t.time;
+      let date = '—';
+      if (rawTs != null) {
+        let ts = Number(rawTs);
+        if (String(rawTs).length >= 13) ts = Math.floor(ts / 1000); // ms to s
+        if (ts > 0 && isFinite(ts)) date = new Date(ts * 1000).toLocaleDateString();
+      }
       const dir = t.direction || '—';
       const dirColor = dir === 'long' ? 'var(--neon-green)' : dir === 'short' ? 'var(--neon-red)' : 'var(--text-secondary)';
       const pnl = Number(t.pnl || 0);
