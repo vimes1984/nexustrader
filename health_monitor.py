@@ -80,12 +80,12 @@ async def health_monitor_loop(orchestrator, kill_switch, drawdown_tracker):
             
             # 5. Drawdown warning
             dd = drawdown_tracker
-            if dd and hasattr(dd, 'current_pct') and dd.current_pct > 5:
+            if dd and hasattr(dd, 'current_drawdown') and dd.current_drawdown > 0.05:
                 dd_alerted = notification_manager.get_health_state('drawdown_alerted', '0')
                 if dd_alerted != '1':
                     notification_manager.push_alert('warning', 'safety',
-                        f'Drawdown: {dd.current_pct:.1f}%',
-                        f'Current drawdown at {dd.current_pct:.1f}% (max: {dd.max_pct:.1f}%).')
+                        f'Drawdown: {dd.current_drawdown*100:.1f}%',
+                        f'Current drawdown at {dd.current_drawdown*100:.1f}% (max: {dd.max_drawdown*100:.1f}%).')
                     notification_manager.set_health_state('drawdown_alerted', '1')
             else:
                 notification_manager.set_health_state('drawdown_alerted', '0')
