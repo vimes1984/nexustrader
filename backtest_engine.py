@@ -139,12 +139,17 @@ class BacktestEngine:
 
                 # Get action (strategy-weight distribution) from the policy net
                 weights = ppo_agent.get_action(state)
-                # Weighted ensemble signal
-                weighted_signal = sum((j / len(weights) - 0.5) * w
-                                      for j, w in enumerate(weights))
+                # Weighted ensemble signal: map weight distribution [-1, 1]
+                # Convert N strategy weights to net direction by dividing into
+                # long-side (first half) and short-side (second half) buckets.
+                half = len(weights) // 2
+                long_weight = sum(weights[:half]) if half > 0 else 0.0
+                short_weight = sum(weights[half:]) if len(weights) > half else 0.0
+                total = long_weight + short_weight or 1.0
+                weighted_signal = (long_weight - short_weight) / total
 
                 # Entry / exit logic
-                if position is None and abs(weighted_signal) >= 0.25:
+                if position is None and abs(weighted_signal) >= 0.30:
                     side = "BUY" if weighted_signal > 0 else "SELL"
                     entry = apply_entry_cost(close, side, self.cost_model)
                     position = {"entry": entry, "side": side, "state": state}
