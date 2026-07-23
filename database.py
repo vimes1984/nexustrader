@@ -99,6 +99,18 @@ def init_db():
         if "trading_mode" not in columns:
             logging.info("Migrating trades table: adding trading_mode column...")
             cursor.execute("ALTER TABLE trades ADD COLUMN trading_mode TEXT DEFAULT 'paper'")
+        if "predicted_win_probability" not in columns:
+            logging.info("Migrating trades table: adding predicted_win_probability column...")
+            cursor.execute("ALTER TABLE trades ADD COLUMN predicted_win_probability REAL")
+        if "expected_value" not in columns:
+            logging.info("Migrating trades table: adding expected_value column...")
+            cursor.execute("ALTER TABLE trades ADD COLUMN expected_value REAL")
+        if "risk_reward_ratio" not in columns:
+            logging.info("Migrating trades table: adding risk_reward_ratio column...")
+            cursor.execute("ALTER TABLE trades ADD COLUMN risk_reward_ratio REAL")
+        if "kelly_fraction" not in columns:
+            logging.info("Migrating trades table: adding kelly_fraction column...")
+            cursor.execute("ALTER TABLE trades ADD COLUMN kelly_fraction REAL")
     except Exception as e:
         logging.error(f"Error migrating trades table: {e}")
 
