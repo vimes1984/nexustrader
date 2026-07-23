@@ -97,11 +97,17 @@ async def api_auth_middleware(request: Request, call_next):
         "/api/safety/status", "/api/quant/status", "/api/quant/prompt",
         "/api/system/config", "/api/system/logs", "/api/system/daily_goal",
         "/api/system/shadow_trades", "/api/system/shadow_performance",
-        "/api/system/backups", "/api/system/alerts",
-        "/api/exchange/status", "/api/neural/brains", "/api/neural/brain/specs",
+        "/api/system/backups", "/api/system/alerts", "/api/system/schedule",
+        "/api/exchange/status",
+        "/api/neural/brains", "/api/neural/brain/specs",
+        "/api/llm/status", "/api/llm/config",
+        "/api/nn/architecture",
+        "/api/training/status",
+        "/api/gateway/status", "/api/gateway/reasoning",
+        "/api/blog/config",
     )
     # Partial-prefix matches for parameterized routes
-    public_prefixes = ("/api/history?", "/api/portfolio/", "/api/system/shadow_", "/api/neural/", "/api/system/shadow_", "/api/system/backup/", "/api/system/alerts/")
+    public_prefixes = ("/api/history?", "/api/portfolio/", "/api/system/shadow_", "/api/neural/", "/api/system/backup/", "/api/system/alerts/", "/api/optimizations/")
     
     is_protected = is_api and (path not in public_api)
     if is_protected:

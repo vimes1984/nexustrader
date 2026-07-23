@@ -328,8 +328,22 @@ class PolicyNetwork:
                 self.W[-1] = self.W[-1][:, :expected_dim]
                 self.b[-1] = self.b[-1][:, :expected_dim]
 
-        # Init optimizer momentum/velocity if NOT already restored from saved state
+        # Init optimizer momentum/velocity if NOT already restored from saved state,
+        # OR if individual optimizer tensor shapes don't match weights (dimension migration)
+        need_optimizer_reinit = False
         if "m_W" not in data or not hasattr(self, 'm_W') or len(self.m_W) != len(self.W):
+            need_optimizer_reinit = True
+        else:
+            # Check that every optimizer state tensor matches its corresponding weight shape
+            for i in range(len(self.W)):
+                if self.m_W[i].shape != self.W[i].shape or self.m_b[i].shape != self.b[i].shape:
+                    need_optimizer_reinit = True
+                    break
+                if self.v_W[i].shape != self.W[i].shape or self.v_b[i].shape != self.b[i].shape:
+                    need_optimizer_reinit = True
+                    break
+
+        if need_optimizer_reinit:
             self.m_W = [np.zeros_like(w) for w in self.W]
             self.m_b = [np.zeros_like(b) for b in self.b]
             self.v_W = [np.zeros_like(w) for w in self.W]
