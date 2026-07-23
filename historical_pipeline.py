@@ -511,8 +511,8 @@ class OfflineTrainer:
             # Reward: use alignment * |reward| as the training signal
             pnl_reward = sample.alignment * abs(sample.reward)
             
-            # Trade direction: 1 for positive alignment, -1 for negative
-            trade_direction = 1 if sample.alignment > 0 else (-1 if sample.alignment < 0 else 0)
+            # Trade direction: backward() expects "BUY" or "SELL" string, not int
+            trade_direction = "BUY" if sample.alignment > 0 else ("SELL" if sample.alignment < 0 else "BUY")
             
             # Use the policy network's own training step
             self.engine.policy_net.backward(
