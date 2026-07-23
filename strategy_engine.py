@@ -549,22 +549,27 @@ class StrategyEnsemble:
             theta, mu, is_mr = estimate_ou_process(self.price_history)
             regime_strength = min(abs(theta) * 5.0, 1.5)
             
-            if is_mr and theta > 0.05:
+            # Determine regime: require both is_mr AND sufficient theta
+            # If theta is near zero, price is trending with slow decay
+            # If theta is negative (a < 0), OU estimate indicates unstable/trending
+            if is_mr and theta > 0.03:
                 # Mean-Reversion Regime: boost mean-reversion, suppress trend
+                real_mr_strength = min((theta - 0.03) / 0.05, 1.5)  # 0→1.5 scaled
                 for i, strat in enumerate(self.strategies):
                     regime = getattr(strat, 'regime', None)
                     if regime == 'mean_reversion':
-                        active_weights[i] *= 1.0 + 0.3 * regime_strength
+                        active_weights[i] *= 1.0 + 0.3 * real_mr_strength
                     elif regime == 'trend':
-                        active_weights[i] *= 1.0 - 0.4 * regime_strength
+                        active_weights[i] *= max(1.0 - 0.5 * real_mr_strength, 0.1)
             else:
                 # Trend Regime: boost trend, suppress mean-reversion
+                trend_strength = min(abs(theta) * 3.0, 1.5) if abs(theta) > 0.001 else 0.5
                 for i, strat in enumerate(self.strategies):
                     regime = getattr(strat, 'regime', None)
                     if regime == 'trend':
-                        active_weights[i] *= 1.0 + 0.3 * regime_strength
+                        active_weights[i] *= 1.0 + 0.3 * trend_strength
                     elif regime == 'mean_reversion':
-                        active_weights[i] *= 1.0 - 0.4 * regime_strength
+                        active_weights[i] *= max(1.0 - 0.5 * trend_strength, 0.1)
         
         # Layer 2: Omitted — performance bias is already persisted in self.weights
         # via update_base_weights().  Applying it again here would double-count.

@@ -57,9 +57,13 @@ class ProbabilityEngine:
         if direction == "BUY":
             tp = price + tp_distance
             sl = price - sl_distance
+            # SL can't go below 0 (price can't go negative) and max loss = entry
+            sl = max(sl, 0.01 * price)  # Clamp to 1% of price minimum
         else: # SELL
             tp = price - tp_distance
             sl = price + sl_distance
+            # TP can't go below 0 (max gain on short = full price decline to 0)
+            tp = max(tp, 0.01 * price)  # Clamp to 1% of price minimum
 
         return float(tp), float(sl)
 
