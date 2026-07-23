@@ -1685,6 +1685,7 @@ def reconstruct_trades_from_exchange(exchange):
                         pnl_pct = pnl / (pos["price"] * pos["qty"]) if pos["price"] > 0 else 0.0
                         completed_trades.append({
                             "exit_time": timestamp,
+                            "entry_time": pos.get("timestamp", timestamp - 1),
                             "symbol": dash_symbol,
                             "direction": pos["direction"],
                             "quantity": pos["qty"],
@@ -1717,6 +1718,7 @@ def reconstruct_trades_from_exchange(exchange):
                         pnl_pct = pnl / (pos["price"] * qty) if pos["price"] > 0 else 0.0
                         completed_trades.append({
                             "exit_time": timestamp,
+                            "entry_time": pos.get("timestamp", timestamp - 1),
                             "symbol": dash_symbol,
                             "direction": pos["direction"],
                             "quantity": qty,
