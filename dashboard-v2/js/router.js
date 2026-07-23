@@ -197,8 +197,19 @@ const App = {
   },
 
   async setRiskMode(mode) {
-    try { await API.setRiskMode(mode); this.state.riskMode = mode; this.toast('Risk: ' + mode, 'success'); }
-    catch(e) { this.toast('Risk mode change failed', 'error'); }
+    try {
+      await API.setRiskMode(mode);
+      this.state.riskMode = mode;
+      this.toast('Risk: ' + mode, 'success');
+      // Persist to select UI
+      var rs = byId('risk-mode-select');
+      if (rs) rs.value = mode;
+    } catch(e) {
+      this.toast('Risk mode change failed: ' + (e.message || 'API error'), 'error');
+      // Revert select to previous value
+      var rs = byId('risk-mode-select');
+      if (rs) rs.value = this.state.riskMode;
+    }
   },
 
   openDrawer() {
