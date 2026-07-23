@@ -73,10 +73,19 @@ def compute_kelly_fraction(win_rate: float, avg_win: float, avg_loss: float) -> 
 
     Returns 0 if win_rate or avg_loss is invalid.
     """
-    if win_rate <= 0 or win_rate >= 1 or avg_loss <= 0:
-        return 0.0
+    if avg_loss <= 0 and win_rate < 1.0:
+        return 0.0  # No losing trades to calibrate risk
     if avg_win <= 0:
         return 0.0  # No winning trades means no edge
+
+    # Handle edge cases at win_rate boundaries
+    if win_rate <= 0:
+        return 0.0  # Never bet on a guaranteed loss
+    elif win_rate >= 1:
+        # 100% win rate: Kelly is undefined, cap at half-kelly max
+        # f* = (p*W - q*L) / (W*L) with q=0 gives f* = p*W / (W*L) = 1/L
+        # But with no losses, L is undefined. Use conservative cap.
+        return min(0.25, avg_win / (avg_win + 0.01))
 
     q = 1.0 - win_rate
     # Edge / odds formulation: f* = (p*W - q*L) / (W*L)
