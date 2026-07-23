@@ -1256,7 +1256,7 @@ async def api_init_state(request: Request):
 
     return {
         "status":"ok", "balance":balance, "equity":equity,
-        "trades":all_trades, "total_pnl":sum(t.get("pnl",0)or 0 for t in all_trades),
+        "trades":all_trades, "total_pnl":round(sum(float(t.get("pnl",0)or 0) for t in all_trades), 2),
         "tickers":tickers, "ticker":default_ticker, "ticker_prices":ticker_prices,
         "active_brains":active_brains,
         "initial_balance":float(_db.load_setting("initial_portfolio_balance","100.0")),

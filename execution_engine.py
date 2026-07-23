@@ -503,7 +503,6 @@ class ExecutionEngine:
             logging.warning(f"[MIN SIZE] Position value ${position_value:.2f} below $5 minimum. Skipping {symbol}.")
             return False
         quantity = position_value / entry_price
-        fee = position_value * self.transaction_fee_rate
 
         # Apply slippage on entry for realistic simulation
         slippage_cost = entry_price * self.slippage_rate
@@ -545,6 +544,9 @@ class ExecutionEngine:
             exec_label = "paper"
             
         position_cost = actual_qty * effective_entry
+        # BUGFIX: Compute fee from actual execution cost (effective_entry * qty), not from
+        # the pre-slippage position_value estimate. Inconsistent fee calc caused micro-balance drift.
+        fee = position_cost * self.transaction_fee_rate
         if direction == "BUY":
             self.balance -= (position_cost + fee)
         else:
