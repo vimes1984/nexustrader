@@ -42,7 +42,19 @@ def brier_score(predictions: List[float], outcomes: List[int]) -> float:
         )
         return 0.25
 
-    score = sum((p - o) ** 2 for p, o in zip(predictions, outcomes)) / len(predictions)
+    # Filter out any NaN/None pairs that would corrupt the score
+    clean_pairs = [(p, o) for p, o in zip(predictions, outcomes)
+                   if p is not None and o is not None
+                   and not (isinstance(p, float) and p != p)  # NaN check
+                   and not (isinstance(o, float) and o != o)]  # NaN check
+    if len(clean_pairs) < MINIMUM_CALIBRATION_SAMPLES:
+        logging.debug(
+            f"[CALIBRATION] Only {len(clean_pairs)} clean samples after NaN filtering; "
+            f"need {MINIMUM_CALIBRATION_SAMPLES}. Returning random baseline."
+        )
+        return 0.25
+
+    score = sum((p - o) ** 2 for p, o in clean_pairs) / len(clean_pairs)
     return round(score, 6)
 
 
