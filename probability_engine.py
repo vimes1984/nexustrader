@@ -132,7 +132,10 @@ class ProbabilityEngine:
                 similar_mask = rsi_series.between(rsi - 10, rsi + 10) & valid_idx
                 # Exclude last 5 rows to avoid look-ahead from shift(-5) NaN values
                 # shift(-5) creates NaN for the 5 most recent rows
-                similar_mask = similar_mask & (close_series.index < len(close_series) - 5)
+                # Use iloc-based position instead of index comparison for multi-type index support
+                n_rows = len(close_series)
+                position_mask = pd.Series([True] * (n_rows - 5) + [False] * 5, index=close_series.index)
+                similar_mask = similar_mask & position_mask
                 similar_count = similar_mask.sum()
                 
                 if similar_count > 10:

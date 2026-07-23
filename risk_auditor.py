@@ -365,9 +365,10 @@ At the very end of your response, output a strict JSON block with risk parameter
     except Exception as e:
         logging.error(f"Error querying trades for risk audit: {e}")
 
-    # --- Quantitative risk analysis: correlation + hedging ---
+    # --- Quantitative risk analysis: correlation + hedging + stress test ---
     corr_block = _compute_correlation_risk_block()
     hedging_block = _compute_hedging_risk_block()
+    stress_block = _compute_stress_test_block()
 
     prompt = f"""{db_prompt}
 
@@ -381,6 +382,8 @@ Recent trades telemetry:
 {corr_block}
 
 {hedging_block}
+
+{stress_block}
 """
     
     report_lines = ["\n## 🛡️ Portfolio Risk Audit Report"]
