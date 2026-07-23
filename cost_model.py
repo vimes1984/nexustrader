@@ -40,46 +40,59 @@ class CostModel:
 
 
 def apply_entry_cost(price: float, side: str, cost_model: CostModel,
-                    symbol: str = "") -> float:
+                    symbol: str = "", is_maker: bool = False) -> float:
     """Returns the effective entry price after fees and slippage.
+
+    slippage_bps already includes the half-spread + market impact, so we do NOT
+    add spread separately — that would double-count. The function uses:
+    - fee (maker or taker)
+    - slippage_bps (includes spread + market impact)
 
     Args:
         symbol: Optional pair symbol (e.g. 'BTC-USD') for pair-specific spread.
+        is_maker: If True, use maker fee instead of taker (limit orders).
     """
-    fee = cost_model.taker_fee
+    fee = cost_model.maker_fee if is_maker else cost_model.taker_fee
     slip = cost_model.slippage_bps / 10_000.0
-    spread_bps = get_spread_bps_for_symbol(symbol)
-    spread = (spread_bps / 2) / 10_000.0
     if side.upper() == "BUY":
-        return price * (1 + fee + slip + spread)
+        return price * (1 + fee + slip)
     else:  # SELL
-        return price * (1 - fee - slip - spread)
+        return price * (1 - fee - slip)
 
 
 def apply_exit_cost(price: float, side: str, cost_model: CostModel,
-                    symbol: str = "") -> float:
+                    symbol: str = "", is_maker: bool = False) -> float:
     """Returns the effective exit price after fees and slippage.
 
+    slippage_bps already includes the half-spread + market impact.
+
     side = original entry side.
-    symbol: Optional pair symbol for pair-specific spread.
+    symbol: Optional pair symbol (e.g. 'BTC-USD') for pair-specific spread.
+    is_maker: If True, use maker fee instead of taker (limit orders on exit).
     """
-    fee = cost_model.taker_fee
+    fee = cost_model.maker_fee if is_maker else cost_model.taker_fee
     slip = cost_model.slippage_bps / 10_000.0
-    spread_bps = get_spread_bps_for_symbol(symbol)
-    spread = (spread_bps / 2) / 10_000.0
     if side.upper() == "BUY":
-        return price * (1 - fee - slip - spread)
+        return price * (1 - fee - slip)
     else:
-        return price * (1 + fee + slip + spread)
+        return price * (1 + fee + slip)
 
 
 def estimate_round_trip_cost(position_value: float, cost_model: CostModel,
-                             symbol: str = "") -> float:
+                             symbol: str = "", maker_entry: bool = False,
+                             maker_exit: bool = False) -> float:
     """Estimates total cost for a full round-trip trade on Kraken.
 
-    Entry: pays taker fee + slippage + half-spread
-    Exit: pays taker fee + slippage + half-spread
-    Total: 2*taker_fee + 2*slippage + spread
+    Entry: pays fee + slippage (slippage = half-spread + market impact)
+    Exit: pays fee + slippage
+    Total: fee_entry + fee_exit + 2*slippage
+
+    slippage_bps already includes spread + market impact, so no separate
+    spread cost is added (avoids double-counting with apply_entry_cost/apply_exit_cost).
+
+    Optional maker routing:
+    - maker_entry: use maker fee on entry (post-only limit order)
+    - maker_exit: use maker fee on exit (post-only limit order)
 
     Spread varies by pair (see SPREAD_BPS_BY_PAIR):
     - BTC pairs: ~2 bps
@@ -87,8 +100,8 @@ def estimate_round_trip_cost(position_value: float, cost_model: CostModel,
     - DOGE pairs: ~12 bps
     """
     slip_bps = cost_model.slippage_bps / 10_000.0
-    spread_bps = get_spread_bps_for_symbol(symbol) / 10_000.0
-    fee_cost = position_value * cost_model.taker_fee * 2  # entry + exit
+    fee_entry = cost_model.maker_fee if maker_entry else cost_model.taker_fee
+    fee_exit = cost_model.maker_fee if maker_exit else cost_model.taker_fee
+    fee_cost = position_value * (fee_entry + fee_exit)
     slip_cost = position_value * slip_bps * 2
-    spread_cost = position_value * spread_bps
-    return fee_cost + slip_cost + spread_cost
+    return fee_cost + slip_cost
