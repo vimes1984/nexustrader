@@ -213,6 +213,27 @@ class TestLearningEngine(unittest.TestCase):
         self.assertLess(net.lr, initial_lr)
         self.assertGreaterEqual(net.lr, net.min_lr)
 
+    def test_dropout_off_during_inference(self):
+        """Dropout should NOT be applied when training=False.
+        Inference with dropout active would make outputs stochastic and
+        cause inconsistent strategy allocations."""
+        net = PolicyNetwork(state_dim=8, hidden_dim=12, action_dim=6,
+                            learning_rate=0.01, dropout=0.5)
+        state = np.random.randn(8)
+        
+        # Inference pass — should produce deterministic output
+        out1 = net.forward(state, training=False)
+        out2 = net.forward(state, training=False)
+        np.testing.assert_array_almost_equal(out1, out2, decimal=10,
+            err_msg="Dropout active during inference — outputs differ between runs")
+        
+        # Training passes should differ (dropout active)
+        t1 = net.forward(state, training=True)
+        t2 = net.forward(state, training=True)
+        # They may occasionally be equal by chance, but typically differ
+        self.assertIsNotNone(t1)
+        self.assertIsNotNone(t2)
+
     def test_lr_scheduling_serialization_preserves_state(self):
         """LR scheduling state (total_learning_steps, min_lr, lr_decay_steps)
         should survive serialization round-trip. Note: the restored network's

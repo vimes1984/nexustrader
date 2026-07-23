@@ -67,6 +67,46 @@ class TestDatabase(unittest.TestCase):
         self.assertEqual(opts[0]["new_value"], "2.0")
         self.assertEqual(opts[0]["rationale"], "For testing")
 
+    def test_settings_edge_cases(self):
+        """Test settings save/load with edge cases: JSON, empty, special chars, Unicode."""
+        # JSON serialized data
+        json_data = json.dumps({"key": "value", "nested": {"a": 1}})
+        database.save_setting("json_setting", json_data)
+        loaded = database.load_setting("json_setting", "")
+        self.assertEqual(json.loads(loaded), {"key": "value", "nested": {"a": 1}})
+        
+        # Empty string
+        database.save_setting("empty_setting", "")
+        loaded_empty = database.load_setting("empty_setting", "fallback")
+        self.assertEqual(loaded_empty, "")
+        
+        # Special characters
+        database.save_setting("special_chars", "val=123&test=true#hash")
+        loaded_special = database.load_setting("special_chars", "")
+        self.assertEqual(loaded_special, "val=123&test=true#hash")
+        
+        # Unicode
+        database.save_setting("unicode", "café — ✓ ✅")
+        loaded_unicode = database.load_setting("unicode", "")
+        self.assertEqual(loaded_unicode, "café — ✓ ✅")
+        
+        # Long string (10KB)
+        long_val = "x" * 10000
+        database.save_setting("long_val", long_val)
+        loaded_long = database.load_setting("long_val", "")
+        self.assertEqual(loaded_long, long_val)
+        self.assertEqual(len(loaded_long), 10000)
+        
+        # Setting with equals sign in value
+        database.save_setting("eq_val", "key=value")
+        loaded_eq = database.load_setting("eq_val", "")
+        self.assertEqual(loaded_eq, "key=value")
+        
+        # Numeric value saved as string, verify round-trip
+        database.save_setting("numeric", "123.456")
+        loaded_num = database.load_setting("numeric", "0")
+        self.assertEqual(float(loaded_num), 123.456)
+
     def test_active_positions_cleanup(self):
         """Test that active_positions are properly cleaned up on close/delete.
         
