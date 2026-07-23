@@ -469,16 +469,13 @@ class TransformerPolicyNetwork:
             # Flat state vector — use as if it's a 1-timestep sequence padded to seq_len
             x = np.zeros((self.max_seq_len, self.d_model), dtype=np.float32)
             x[0, :min(state.shape[0], self.d_model)] = state[:self.d_model]
-            x = x[np.newaxis, :, :]
+            probs = self.forward(x[np.newaxis, :, :], training=False)
         elif state.ndim == 2 and state.dtype.kind in ('i', 'u'):
             # Token ID array — forward handles embedding
-            probs = self.forward(state, training=False)  # no batch dim needed
+            probs = self.forward(state, training=False)
         else:
             # Already embedded or batched
-            if state.ndim == 2:
-                x = state[np.newaxis, :, :]
-            else:
-                x = state
+            x = state[np.newaxis, :, :] if state.ndim == 2 else state
             probs = self.forward(x, training=False)
         weights = probs[0].tolist()
         
