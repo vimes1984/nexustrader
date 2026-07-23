@@ -1347,7 +1347,8 @@ async def api_positions():
                     unrealized_pnl = (current_price - entry_price) * quantity
                 else:
                     unrealized_pnl = (entry_price - current_price) * quantity
-                unrealized_pnl_pct = unrealized_pnl / (entry_price * quantity + 1e-9) * 100 if entry_price * quantity != 0 else 0.0
+                # Keep consistency: execution engine stores pct as decimal fraction (0.05 = 5%)
+                unrealized_pnl_pct = unrealized_pnl / (entry_price * quantity + 1e-9) if entry_price * quantity != 0 else 0.0
                 positions.append({
                     "symbol": sym,
                     "direction": direction,
@@ -1356,7 +1357,7 @@ async def api_positions():
                     "quantity": quantity,
                     "entry_time": entry_time,
                     "unrealized_pnl": round(unrealized_pnl, 2),
-                    "unrealized_pnl_pct": round(unrealized_pnl_pct, 2),
+                    "unrealized_pnl_pct": round(unrealized_pnl_pct, 4),
                     "age_seconds": int(_time.time()) - entry_time,
                 })
     except Exception as e:
