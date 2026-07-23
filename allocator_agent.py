@@ -448,6 +448,16 @@ At the very end of your response, output a strict JSON block with your recommend
         f"  Turnover regime: {turnover['turnover_label']}\n"
     )
     
+    # Risk parity weights
+    rp_weights = compute_risk_parity_weights()
+    rp_block = ""
+    if rp_weights:
+        rp_lines = ["\n### Risk Parity Weights (Equal Risk Contribution):",
+                     "Symbol    | Volatility | RP-Diag | RP-Cov | Risk Contrib", "-" * 65]
+        for sym, vals in rp_weights.items():
+            rp_lines.append(f"{sym:<10} | {vals['volatility']:<10.6f} | {vals['risk_parity_diag']:<7.4f} | {vals['risk_parity_cov']:<7.4f} | {vals['risk_contribution_pct']:.2%}")
+        rp_block = "\n".join(rp_lines)
+    
     # Drift-based rebalance decision
     rebalance = compute_optimal_rebalance(active_assets, perf_summary)
     rebalance_block = (
@@ -473,6 +483,8 @@ Recent Performance Summary (Last 100 Trades Grouped By Ticker):
 {json.dumps(perf_summary, indent=2)}
 
 {kelly_block}
+
+{rp_block}
 
 {turnover_block}
 

@@ -53,7 +53,7 @@ def apply_entry_cost(price: float, side: str, cost_model: CostModel,
         is_maker: If True, use maker fee instead of taker (limit orders).
     """
     fee = cost_model.maker_fee if is_maker else cost_model.taker_fee
-    slip = get_slippage_bps_for_symbol(cost_model, symbol) / 10_000.0
+    slip = get_slippage_bps_for_symbol(cost_model, symbol, is_maker=is_maker) / 10_000.0
     if side.upper() == "BUY":
         return price * (1 + fee + slip)
     else:  # SELL
@@ -71,24 +71,28 @@ def apply_exit_cost(price: float, side: str, cost_model: CostModel,
     is_maker: If True, use maker fee instead of taker (limit orders on exit).
     """
     fee = cost_model.maker_fee if is_maker else cost_model.taker_fee
-    slip = get_slippage_bps_for_symbol(cost_model, symbol) / 10_000.0
+    slip = get_slippage_bps_for_symbol(cost_model, symbol, is_maker=is_maker) / 10_000.0
     if side.upper() == "BUY":
         return price * (1 - fee - slip)
     else:
         return price * (1 + fee + slip)
 
 
-def get_slippage_bps_for_symbol(cost_model: CostModel, symbol: str = "") -> float:
+def get_slippage_bps_for_symbol(cost_model: CostModel, symbol: str = "", is_maker: bool = False) -> float:
     """Returns total slippage estimate in bps for a symbol.
 
     Combines the baseline slippage_bps from the cost model with the
     asset-specific spread from SPREAD_BPS_BY_PAIR.
+
+    For maker orders (limit), slippage is approximately the half-spread since
+    the order provides liquidity rather than taking it. Market impact is minimal.
     """
-    base_slip = cost_model.slippage_bps
     pair_spread = get_spread_bps_for_symbol(symbol)
-    # Use the larger of the two: if we know the spread is wide (e.g. DOGE: 12 bps),
-    # the slippage estimate should not be lower than the raw spread.
-    return max(base_slip, pair_spread)
+    if is_maker:
+        # Maker: only pay half-spread (liquidity provider), no market impact
+        return pair_spread / 2.0
+    # Taker: slippage = max(baseline impact, full spread)
+    return max(cost_model.slippage_bps, pair_spread)
 
 
 def get_volume_adjusted_slippage(position_value: float, cost_model: CostModel,
