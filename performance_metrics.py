@@ -16,12 +16,45 @@ class PerformanceMetrics:
     avg_loser: float = 0.0
     expectancy: float = 0.0
 
-def calculate_metrics(equity_curve: List[float], trades: List[dict], periods_per_year: int = 252, risk_free_rate: float = 0.0) -> PerformanceMetrics:
+def _infer_periods_per_year(curve_len: int) -> int:
+    """Infer the number of bars per year from the length of the equity curve.
+    
+    If we have ~252 bars, assume daily data.
+    If we have ~4000+ bars, assume hourly data.
+    If we have ~100, assume weekly data.
+    
+    Default heuristic uses curve_len as a proxy for granularity.
+    """
+    if curve_len < 50:
+        return 52  # weekly-ish
+    elif curve_len < 200:
+        return 252  # daily-ish
+    elif curve_len < 1000:
+        return 252 * 6  # ~4-hour bars
+    elif curve_len < 5000:
+        return 252 * 24  # hourly
+    else:
+        return 252 * 78  # 5-min bars
+
+
+def calculate_metrics(equity_curve: List[float], trades: List[dict], periods_per_year: int = 0, risk_free_rate: float = 0.0) -> PerformanceMetrics:
     """
     Calculate performance metrics from an equity curve and list of trades.
-    trades: list of dicts with keys: pnl (float)
-    equity_curve: list of portfolio values over time
+    
+    Parameters
+    ----------
+    equity_curve : list[float]
+        Portfolio values over time.
+    trades : list[dict]
+        List of dicts with keys: pnl (float).
+    periods_per_year : int
+        Number of bars per year for Sharpe annualization.
+        If 0 (default), inferred from equity_curve length.
+    risk_free_rate : float
+        Annual risk-free rate (e.g., 0.05 for 5%).
     """
+    if periods_per_year == 0:
+        periods_per_year = _infer_periods_per_year(len(equity_curve))
     m = PerformanceMetrics()
     # Sanitize inputs: filter NaN, None, negative values from equity curve
     cleaned_curve = [float(v) for v in equity_curve if v is not None and isinstance(v, (int, float)) and not (isinstance(v, float) and math.isnan(v))]
