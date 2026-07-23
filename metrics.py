@@ -18,6 +18,12 @@ def sharpe_ratio(returns: Sequence[float], risk_free_rate: float = 0.0,
     variance = sum((r - mean_r) ** 2 for r in returns) / (n - 1)
     if variance <= 0:
         return 0.0
+    # Guard against near-zero variance from floating-point rounding
+    # when all returns are nearly identical. Use a relative threshold.
+    abs_mean = abs(mean_r) if mean_r != 0 else 1e-12
+    rel_std = math.sqrt(variance) / abs_mean
+    if rel_std < 1e-10:
+        return 0.0
     std = math.sqrt(variance)
     excess = mean_r - risk_free_rate
     sharpe = excess / std if std > 0 else 0.0

@@ -100,16 +100,21 @@ class BacktestEngine:
 
     def run_walk_forward(self, candles: list, n_splits: int = 5,
                           purge_bars: int = 10, embargo_bars: int = 5,
+                          min_train_pct: float = 0.3,
                           entry_threshold: float = 0.30,
                           exit_threshold: float = 0.10) -> dict:
-        """Walk-forward optimization with proper purging and embargo.
+        """Walk-forward optimization with proper purging, embargo, and
+        expanding training windows.
 
-        Splits the candle series into n_splits sequential train/test folds.
-        Each fold: train on fold_N-1, test on fold_N.
+        Uses **expanding window** training (not sliding): each fold trains on
+        ALL prior data up to the current test window, providing more training
+        samples and better model stability.
+
         - **Purging**: removes purge_bars from the start of each test set to
           avoid stale indicator lookback contamination.
         - **Embargo**: removes embargo_bars from the end of each training set
           to prevent test data leaking into the next training window.
+        - **min_train_pct**: minimum % of total data used as initial train set.
 
         Returns per-fold metrics plus an out-of-sample (OOS) composite.
         """
@@ -117,25 +122,32 @@ class BacktestEngine:
         if total < 100:
             return {"error": f"Not enough data ({total} candles, need >= 100)"}
 
-        fold_size = total // n_splits
-        if fold_size < 50:
-            n_splits = max(2, total // 50)
-            fold_size = total // n_splits
+        # Use expanding windows: test sets are equal-sized, training expands
+        initial_train = int(total * min_train_pct)
+        test_size = max(50, (total - initial_train) // n_splits)
+        if test_size < 30:
+            n_splits = max(2, (total - initial_train) // 30)
+            test_size = max(30, (total - initial_train) // n_splits)
 
         fold_results = []
         oos_equity = [1.0]
         oos_nav = 1.0
         oos_trades = []
 
-        for fold in range(1, n_splits):
-            # Training set: fold_N-1
-            train_start = (fold - 1) * fold_size
-            train_end = fold * fold_size
+        for fold in range(1, n_splits + 1):
+            # Expanding window: train on data from start up to test window
+            test_start_raw = initial_train + (fold - 1) * test_size
+            test_end = min(total, test_start_raw + test_size)
 
-            # Test set: fold_N with purging
-            test_start_raw = fold * fold_size
+            # Apply purging at start of test set
             test_start = test_start_raw + purge_bars
-            test_end = total if fold == n_splits - 1 else (fold + 1) * fold_size
+
+            # Apply embargo from end of training
+            train_end = test_start_raw - embargo_bars
+            train_start = 0  # expanding window: always start from beginning
+
+            if train_end <= train_start + 30:
+                continue  # too little training data
 
             # Apply embargo: remove embargo_bars from end of training
             effective_train_end = train_end - embargo_bars
