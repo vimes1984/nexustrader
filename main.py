@@ -594,6 +594,31 @@ class NexusTraderOrchestrator:
                     )
         except Exception as e:
             logging.warning(f"[CALIBRATION] Update failed: {e}")
+        
+        # ── Rolling win rate tracking: detect if learning improves or degrades performance ──
+        # Maintains a rolling 50-trade win rate to track model improvement over time.
+        # Logs INFO every 10 trades and WARNING if rolling WR drops below cold-start baseline.
+        _all_closed = getattr(self.execution_engine, 'closed_trades', [])
+        _ticker_trades = [t for t in _all_closed if t.get('symbol') == ticker]
+        if len(_ticker_trades) > 0:
+            _window = min(50, len(_ticker_trades))
+            _recent = _ticker_trades[-_window:]
+            _rolling_wr = sum(1 for t in _recent if t.get('pnl', 0) > 0) / _window
+            _key = f"rolling_wr_{ticker}"
+            _prev_wr = getattr(self, _key, None)
+            setattr(self, _key, _rolling_wr)
+            _total = len(_ticker_trades)
+            if _total >= 10 and _total % 10 == 0:
+                logging.info(
+                    f"[ROLLING WR] {ticker}: {_window}-trade rolling WR = {_rolling_wr:.1%} "
+                    f"({sum(1 for t in _recent if t.get('pnl', 0) > 0)}/{_window}). "
+                    f"Total closed trades: {_total}"
+                )
+                if _prev_wr is not None and (_rolling_wr - _prev_wr) < -0.15:
+                    logging.warning(
+                        f"[ROLLING WR] {ticker}: rolling WR dropped from {_prev_wr:.1%} to "
+                        f"{_rolling_wr:.1%} (>15% decline). Learning may be degrading performance."
+                    )
 
     def process_tick(self, row, ticker):
         """Orchestrates single price tick logic for a specific ticker."""
