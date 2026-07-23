@@ -1,6 +1,6 @@
 """
 FinBERT-style crypto sentiment analysis via local LLaMA server.
-Uses the fine-tuned nexustrader-3B model (192.168.0.77:8080) for neural
+Uses the fine-tuned nexustrader-3B model (192.168.0.193:8080) for neural
 sentiment scoring of crypto headlines. Zero additional dependencies required.
 """
 
@@ -9,7 +9,7 @@ import urllib.request
 import json
 from typing import Optional, Tuple
 
-LLAMA_URL = "http://192.168.0.77:8080/completion"
+LLAMA_URL = "http://192.168.0.193:8080/completion"
 
 # Structured prompt engineered for the fine-tuned nexustrader model
 SENTIMENT_PROMPT_TEMPLATE = """[INST] Analyze the sentiment of this crypto market headline.
@@ -122,7 +122,7 @@ def is_llama_available(timeout: float = 3.0) -> bool:
     """Quick health check — is the LLaMA server reachable?"""
     try:
         req = urllib.request.Request(
-            "http://192.168.0.77:8080/health",
+            "http://192.168.0.193:8080/health",
             headers={"Content-Type": "application/json"}
         )
         with urllib.request.urlopen(req, timeout=timeout) as resp:

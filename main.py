@@ -223,7 +223,7 @@ class NexusTraderOrchestrator:
         # LLaMA integration
         self.llm_client = None
         self.llm_enabled = LLM_AVAILABLE and database.load_setting("llm_enabled", "true").lower() == "true"
-        self.llm_endpoint = database.load_setting("llm_endpoint", "http://192.168.0.77:8080")
+        self.llm_endpoint = database.load_setting("llm_endpoint", "http://192.168.0.193:8080")
         self.llm_last_sentiment = {"sentiment_score": 0.0, "conviction": 0.0, "direction": "neutral"}
         self.llm_last_regimes = {}
         self.llm_last_sentiment_time = 0.0
@@ -4635,12 +4635,12 @@ def api_llm_regime_force():
 def api_llm_config_get():
     """Get LLM configuration including local LLaMA settings."""
     return {
-        "endpoint": getattr(getattr(orchestrator, 'llm_client', None), 'endpoint', 'http://192.168.0.77:8080'),
+        "endpoint": getattr(getattr(orchestrator, 'llm_client', None), 'endpoint', 'http://192.168.0.193:8080'),
         "poll_interval_sec": orchestrator.llm_sentiment_interval if hasattr(orchestrator, 'llm_sentiment_interval') else 900,
         "timeout_sec": getattr(getattr(orchestrator, 'llm_client', None), 'timeout', 60),
         "enabled": orchestrator.llm_enabled if hasattr(orchestrator, 'llm_enabled') else False,
         "use_local_llama": database.load_setting("enable_local_llama", "false").lower() == "true",
-        "llama_server_url": database.load_setting("llama_server_url", "http://192.168.0.77:8080/v1/chat/completions"),
+        "llama_server_url": database.load_setting("llama_server_url", "http://192.168.0.193:8080/v1/chat/completions"),
         "llama_fallback_to_openclaw": database.load_setting("llama_fallback_to_openclaw", "true").lower() == "true",
     }
 

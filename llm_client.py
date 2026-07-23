@@ -8,7 +8,7 @@ Queries a local llama.cpp server (OpenAI-compatible API) for three roles:
   3. Trade Explanation — entry context → natural language reasoning
 
 Architecture:
-  Bot VM (192.168.0.144) → HTTP → llama-server (192.168.0.77:8080)
+  Bot VM (192.168.0.144) → HTTP → llama-server (192.168.0.193:8080)
 
 Reuses the same HTTP patterns as openclaw_bridge.py — single retry,
 5s timeout, structured JSON responses.
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 # Configuration
 # ---------------------------------------------------------------------------
 
-DEFAULT_ENDPOINT = "http://192.168.0.77:8080"
+DEFAULT_ENDPOINT = "http://192.168.0.193:8080"
 DEFAULT_TIMEOUT = 60  # seconds — Llama 3B on CPU needs ~10-15s per query
 DEFAULT_MAX_TOKENS = 120
 SYSTEM_PROMPT = (

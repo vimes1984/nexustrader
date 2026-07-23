@@ -19,7 +19,7 @@ DEFAULT_GATEWAY_URL = "http://192.168.0.197:18789/v1/chat/completions"
 DEFAULT_GATEWAY_TOKEN = "c49d2de941b0ec6a93e2fd89bf293ee8cd9f8e805cdda2d6"
 
 # Local LLaMA server defaults (llama.cpp OpenAI-compatible API on LAN)
-DEFAULT_LLAMA_URL = "http://192.168.0.77:8080/v1/chat/completions"
+DEFAULT_LLAMA_URL = "http://192.168.0.193:8080/v1/chat/completions"
 DEFAULT_LLAMA_TOKEN = ""  # no auth needed on LAN
 
 # Agent name -> display string (mirrors agent_map in quant_utils.py)
@@ -167,7 +167,7 @@ def query_llama(
     temperature=0.7,
     system_prompt=None,
 ):
-    """Send a prompt to the LOCAL LLaMA server on chris-System (192.168.0.77:8080).
+    """Send a prompt to the LOCAL LLaMA server on chris-System (192.168.0.193:8080).
 
     Uses llama.cpp's OpenAI-compatible /v1/chat/completions endpoint.
     Falls back to OpenClaw Gateway if local LLaMA is unreachable and fallback enabled.
