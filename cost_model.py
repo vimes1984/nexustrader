@@ -20,6 +20,15 @@ SPREAD_BPS_BY_PAIR = {
     "MATIC": 10.0,
     "ATOM": 10.0,
     "UNI": 10.0,
+    "ARB": 8.0,
+    "OP": 8.0,
+    "SUI": 8.0,
+    "AAVE": 8.0,
+    "PEPE": 15.0,
+    "INJ": 10.0,
+    "RUNE": 10.0,
+    "FET": 10.0,
+    "APT": 10.0,
     # Default for unknown pairs
     "DEFAULT": 10.0,
 }
