@@ -953,33 +953,28 @@ class NexusTraderOrchestrator:
         evaluation = None
         trade_opened = False
         
+        # ── Signal batching: batch-evaluate ALL tickers and pick the BEST signal ──
+        # Instead of first-come-first-blocked, collect pending signals and select
+        # the one with the highest expected value that passes all viability checks.
+        # This prevents multi-signal starvation where the first ticker gets blocked
+        # by exposure and all subsequent tickers fail for different reasons.
         if not pos_open:
-            # Dynamic signal threshold: higher for small accounts (fewer, higher-conviction trades)
-            # Scales inversely with account balance: $200 -> 0.35, $1K -> 0.25, $10K -> 0.20
-            # Override via DB setting 'signal_threshold' (set by optimization agents)
+            # Initialize signal buffer on first use
+            if not hasattr(self, '_pending_signal_buffer'):
+                self._pending_signal_buffer = {}
+            
+            # Collect this ticker's signal into the batch buffer
             _saved_threshold = database.load_setting("signal_threshold", None)
             if _saved_threshold is not None and str(_saved_threshold).strip():
-                # SAFETY CLAMP [0.10, 0.45]: optimizer once set this to 0.60, gating ALL trades for 6+ hours.
-                # 0.45 ensures at least some trades pass in a $200 account (default ~0.35).
                 try:
                     _min_sig = max(0.10, min(0.45, float(str(_saved_threshold).strip())))
                 except (ValueError, TypeError):
                     _min_sig = 0.30
             else:
-                # BUGFIX: Use total EQUITY (balance + unrealized PnL) instead of cash balance.
-                # When a position is open, balance drops by position cost (e.g. $990→$792)
-                # making the threshold skyrocket to 0.387, blocking all new signals.
-                # Equity stays representative of true portfolio size (~$990).
                 _ref_val = current_equity if current_equity > 0 else self.execution_engine.balance
-                # BUGFIX: Lower scaling denominator from 500 to 350 so threshold decays faster.
-                # At $200 equity: 1/(1+200/350) = 0.636 → clamped to 0.45
-                # At $500 equity: 1/(1+500/350) = 0.412 → 0.41 (was 0.50 → 0.45)
-                # At $1K equity: 1/(1+1000/350) = 0.259 → 0.26 (was 0.33)
-                # This allows more signals through as the account grows, preventing
-                # the starvation issue where most ensemble signals (0.10-0.25) are
-                # blocked despite being valid trading opportunities.
                 _min_sig = max(0.15, min(0.45, 1.0 / (1.0 + _ref_val / 350.0)))
             
+<<<<<<< Updated upstream
             # STARVATION RELAXATION: If the bot has zero trades in >1 hour and no open positions,
             # progressively lower the signal threshold on each subsequent tick to let trades through.
             # This prevents the death spiral where high thresholds + tight risk = 0 trades forever.
@@ -1023,6 +1018,10 @@ class NexusTraderOrchestrator:
                 logging.debug(f"[SIGNAL] {ticker} {_dir} sig={weighted_signal:.4f} str={_sig_strength:.4f} min_sig={_min_sig:.3f} top={_top_strat_info}")
                 
                 # Evaluate probability and risk
+=======
+            if abs(weighted_signal) >= _min_sig:
+                _dir = "BUY" if weighted_signal > 0 else "SELL"
+>>>>>>> Stashed changes
                 _eval = self.probability_engine.evaluate_trade(
                     price=current_price,
                     atr=atr,
@@ -1037,6 +1036,35 @@ class NexusTraderOrchestrator:
                 _eval["_current_price"] = current_price
                 _eval["_weighted_signal"] = weighted_signal
                 _eval["_strategy_breakdown"] = strategy_breakdown
+<<<<<<< Updated upstream
+=======
+                
+                self._pending_signal_buffer[ticker] = _eval
+                evaluation = _eval  # Keep for broadcast
+            
+            # Only execute the best signal when we've collected all tickers
+            # (determine by checking if all tickers have reported this cycle)
+            if hasattr(self, '_signal_batch_cycle_start'):
+                if time.time() - self._signal_batch_cycle_start > 2.0:
+                    # Edge case: some tickers didn't report; flush what we have
+                    self._flush_signal_batch()
+            else:
+                # Reset cycle when a ticker first reports without a position
+                pass
+            
+            # Check if all tickers have reported (via a simple cooldown/reset mechanism)
+            # We use a cycle marker: batch_cycle tracks which tickers have reported
+            if not hasattr(self, '_signal_batch_reported'):
+                self._signal_batch_reported = set()
+            self._signal_batch_reported.add(ticker)
+            
+            # If all tickers have reported OR this cycle has been open too long, flush
+            _all_tickers_for_batch = [t for t in self.tickers if t not in self.execution_engine.active_positions]
+            if len(self._signal_batch_reported) >= len(_all_tickers_for_batch) or \
+               (len(self._pending_signal_buffer) > 0 and len(self._signal_batch_reported) >= len(self.tickers)):
+                self._flush_signal_batch()
+                self._signal_batch_reported = set()
+>>>>>>> Stashed changes
                 
                 if not hasattr(self, '_pending_signal_buffer'):
                     self._pending_signal_buffer = {}
