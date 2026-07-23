@@ -213,6 +213,7 @@ class KillSwitch:
             "daily_reset_time": self.daily_reset_time,
             "base_equity": self._base_equity,
             "drawdown_hysteresis_active": self._drawdown_hysteresis_active,
+            "hysteresis_recover_pct": self.hysteresis_recover_pct,
         }
 
     @classmethod
@@ -224,6 +225,7 @@ class KillSwitch:
         ks.daily_reset_time = data.get("daily_reset_time", time.time())
         ks._base_equity = data.get("base_equity", 0.0)
         ks._drawdown_hysteresis_active = data.get("drawdown_hysteresis_active", False)
+        ks.hysteresis_recover_pct = data.get("hysteresis_recover_pct", 0.02)
         return ks
 
 
