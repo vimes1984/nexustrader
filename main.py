@@ -4763,7 +4763,8 @@ if __name__ == "__main__":
             _port = 8000
             logging.info(f"Starting backend server thread on {_host}:{_port}...")
             try:
-                uvicorn.run(app, host=_host, port=_port, log_level="warning")
+                uvicorn.run(app, host=_host, port=_port, log_level="warning",
+                           timeout_keep_alive=30, loop="uvloop")
             except Exception as e:
                 logging.error(f"Uvicorn server crashed on {_host}:{_port}: {e}")
 
@@ -4795,6 +4796,7 @@ if __name__ == "__main__":
         _port = 8000
         logging.info(f"Headless environment detected (no DISPLAY). Running server on {_host}:{_port} (main thread)...")
         try:
-            uvicorn.run(app, host=_host, port=_port, log_level="info", access_log=False)
+            uvicorn.run(app, host=_host, port=_port, log_level="info", access_log=False,
+                       timeout_keep_alive=30, loop="uvloop")
         except KeyboardInterrupt:
             logging.info("Shutting down server.")
