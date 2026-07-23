@@ -118,13 +118,26 @@ class TransformerEncoderLayer:
         return x
     
     def backward(self, d_out: np.ndarray) -> np.ndarray:
-        # Backward through norm2 + FFN residual
-        d_ffn = self.ffn.backward(d_out)
-        d_before_norm2 = self.norm2.backward(d_out) + d_ffn
+        # Forward: output = Norm2(x_normed + FFN(x_normed))
+        #
+        # Backward through norm2 first:
+        # d_residual = ∂L/∂(x_normed + ffn_out)  (the input to Norm2)
+        d_residual = self.norm2.backward(d_out)
+        #
+        # The residual connection splits the gradient:
+        # d(x_normed) receives the SAME gradient as d(ffn_out)
+        # PLUS the gradient backpropagated through FFN(x_normed)
+        d_ffn = d_residual  # ∂(x_normed + ffn_out)/∂ffn_out = I
+        d_x_normed = d_residual  # ∂(x_normed + ffn_out)/∂x_normed = I
+        d_x_normed += self.ffn.backward(d_ffn)  # ∂L/∂x_normed from FFN path
         
         # Backward through norm1 + attention residual
-        d_attn = self.attention.backward(d_before_norm2)
-        d_before_norm1 = self.norm1.backward(d_before_norm2) + d_attn
+        # Forward: x_normed = Norm1(x_input + Attention(x_input))
+        # d_before_norm1 = ∂L/∂(x_input + attn_out)
+        d_before_norm1 = self.norm1.backward(d_x_normed)
+        # Residual split: both x_input and attn_out get the same gradient
+        d_attn = d_before_norm1
+        d_before_norm1 += self.attention.backward(d_attn)
         
         return d_before_norm1
     

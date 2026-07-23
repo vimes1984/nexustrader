@@ -71,7 +71,7 @@ class DataIngestion:
     def compute_technical_indicators(self):
         """Computes technical indicators on the historical dataset.
         
-        Locks are held for the full read-compute-write cycle to prevent
+        Lock held for the full read-compute-write cycle to prevent
         TOCTOU data corruption: another thread may append/update rows between
         the copy and the write-back.
         """
@@ -85,91 +85,89 @@ class DataIngestion:
             if len(df) < 14:
                 return
 
-        # Simple Moving Averages (SMA)
-        df['sma_20'] = df['close'].rolling(window=20).mean()
-        df['sma_50'] = df['close'].rolling(window=50).mean()
+            # Simple Moving Averages (SMA)
+            df['sma_20'] = df['close'].rolling(window=20).mean()
+            df['sma_50'] = df['close'].rolling(window=50).mean()
 
-        # Exponential Moving Averages (EMA)
-        df['ema_12'] = df['close'].ewm(span=12, adjust=False).mean()
-        df['ema_26'] = df['close'].ewm(span=26, adjust=False).mean()
-        
-        # MACD
-        df['macd'] = df['ema_12'] - df['ema_26']
-        df['macd_signal'] = df['macd'].ewm(span=9, adjust=False).mean()
-        df['macd_hist'] = df['macd'] - df['macd_signal']
+            # Exponential Moving Averages (EMA)
+            df['ema_12'] = df['close'].ewm(span=12, adjust=False).mean()
+            df['ema_26'] = df['close'].ewm(span=26, adjust=False).mean()
+            
+            # MACD
+            df['macd'] = df['ema_12'] - df['ema_26']
+            df['macd_signal'] = df['macd'].ewm(span=9, adjust=False).mean()
+            df['macd_hist'] = df['macd'] - df['macd_signal']
 
-        # Relative Strength Index (RSI) — Wilder's Smoothed RMA (14-period)
-        # Wilder's method: avg_gain[13] = SMA(gain, 14), then RMA: avg_t = avg_{t-1} + (val_t - avg_{t-1})/14
-        # pd.ewm(alpha=1/14, adjust=False) does NOT seed with SMA — it seeds with the first value.
-        # We must manually implement Wilder's RMA for correctness.
-        delta = df['close'].diff()
-        gain = delta.where(delta > 0, 0.0)
-        loss = (-delta.where(delta < 0, 0.0))
-        
-        # Wilder's smoothing: first avg = SMA(14), subsequent values = RMA (alpha=1/14)
-        sma14_gain = gain.rolling(window=14).mean()
-        sma14_loss = loss.rolling(window=14).mean()
-        avg_gain = gain.copy()
-        avg_loss = loss.copy()
-        # First 13 values: undefined (set to 0, RSI will be NaN until period 14)
-        avg_gain.iloc[:13] = np.nan
-        avg_loss.iloc[:13] = np.nan
-        # Period 14 (index 13): SMA(14)
-        avg_gain.iloc[13] = sma14_gain.iloc[13]
-        avg_loss.iloc[13] = sma14_loss.iloc[13]
-        # Periods 15+: RMA (Wilder's recursive smoothing)
-        for i in range(14, len(df)):
-            avg_gain.iloc[i] = avg_gain.iloc[i-1] + (gain.iloc[i] - avg_gain.iloc[i-1]) / 14.0
-            avg_loss.iloc[i] = avg_loss.iloc[i-1] + (loss.iloc[i] - avg_loss.iloc[i-1]) / 14.0
-        
-        rs = avg_gain / (avg_loss + 1e-9)
-        df['rsi'] = 100.0 - (100.0 / (1.0 + rs))
+            # Relative Strength Index (RSI) — Wilder's Smoothed RMA (14-period)
+            # Wilder's method: avg_gain[13] = SMA(gain, 14), then RMA: avg_t = avg_{t-1} + (val_t - avg_{t-1})/14
+            # pd.ewm(alpha=1/14, adjust=False) does NOT seed with SMA — it seeds with the first value.
+            # We must manually implement Wilder's RMA for correctness.
+            delta = df['close'].diff()
+            gain = delta.where(delta > 0, 0.0)
+            loss = (-delta.where(delta < 0, 0.0))
+            
+            # Wilder's smoothing: first avg = SMA(14), subsequent values = RMA (alpha=1/14)
+            sma14_gain = gain.rolling(window=14).mean()
+            sma14_loss = loss.rolling(window=14).mean()
+            avg_gain = gain.copy()
+            avg_loss = loss.copy()
+            # First 13 values: undefined (set to 0, RSI will be NaN until period 14)
+            avg_gain.iloc[:13] = np.nan
+            avg_loss.iloc[:13] = np.nan
+            # Period 14 (index 13): SMA(14)
+            avg_gain.iloc[13] = sma14_gain.iloc[13]
+            avg_loss.iloc[13] = sma14_loss.iloc[13]
+            # Periods 15+: RMA (Wilder's recursive smoothing)
+            for i in range(14, len(df)):
+                avg_gain.iloc[i] = avg_gain.iloc[i-1] + (gain.iloc[i] - avg_gain.iloc[i-1]) / 14.0
+                avg_loss.iloc[i] = avg_loss.iloc[i-1] + (loss.iloc[i] - avg_loss.iloc[i-1]) / 14.0
+            
+            rs = avg_gain / (avg_loss + 1e-9)
+            df['rsi'] = 100.0 - (100.0 / (1.0 + rs))
 
-        # Bollinger Bands (20-period, 2 std dev, uses POPULATION std ddof=0)
-        # Standard Bollinger uses population standard deviation, not sample
-        df['bb_mid'] = df['close'].rolling(window=20).mean()
-        df['bb_std'] = df['close'].rolling(window=20).std(ddof=0)
-        df['bb_upper'] = df['bb_mid'] + (2 * df['bb_std'])
-        df['bb_lower'] = df['bb_mid'] - (2 * df['bb_std'])
+            # Bollinger Bands (20-period, 2 std dev, uses POPULATION std ddof=0)
+            # Standard Bollinger uses population standard deviation, not sample
+            df['bb_mid'] = df['close'].rolling(window=20).mean()
+            df['bb_std'] = df['close'].rolling(window=20).std(ddof=0)
+            df['bb_upper'] = df['bb_mid'] + (2 * df['bb_std'])
+            df['bb_lower'] = df['bb_mid'] - (2 * df['bb_std'])
 
-        # Average True Range (ATR) — Wilder's Smoothed (14-period)
-        high_low = df['high'] - df['low']
-        high_close_prev = (df['high'] - df['close'].shift()).abs()
-        low_close_prev = (df['low'] - df['close'].shift()).abs()
-        
-        # Standard ATR using maximum of the three ranges
-        tr = pd.concat([high_low, high_close_prev, low_close_prev], axis=1).max(axis=1)
-        # Wilder's ATR: first value = SMA(TR, 14), then RMA with alpha=1/14
-        sma14_tr = tr.rolling(window=14).mean()
-        atr = tr.copy()
-        atr.iloc[:13] = np.nan
-        atr.iloc[13] = sma14_tr.iloc[13]
-        for i in range(14, len(df)):
-            atr.iloc[i] = atr.iloc[i-1] + (tr.iloc[i] - atr.iloc[i-1]) / 14.0
-        df['atr'] = atr
-        
-        # Volume Weighted Moving Average (VWMA)
-        df['vwma_20'] = (df['close'] * df['volume']).rolling(window=20).sum() / (df['volume'].rolling(window=20).sum() + 1e-9)
-        
-        # Stochastic Oscillator (14, 3)
-        low_14 = df['low'].rolling(window=14).min()
-        high_14 = df['high'].rolling(window=14).max()
-        df['stoch_k'] = 100 * ((df['close'] - low_14) / (high_14 - low_14 + 1e-9))
-        df['stoch_d'] = df['stoch_k'].rolling(window=3).mean()
-        
-        # Use expanding mean for early NaN windows instead of ffill
-        # (ffill produces flat lines at trim boundaries; expanding.mean() gives smooth initialization)
-        for col in ['sma_20', 'sma_50', 'ema_12', 'ema_26', 'macd', 'macd_signal', 'macd_hist',
-                    'bb_mid', 'bb_std', 'bb_upper', 'bb_lower', 'vwma_20', 'stoch_d']:
-            if col in df.columns:
-                df[col] = df[col].fillna(df[col].expanding().mean())
-        # RSI, ATR, stoch_k are bounded and harder to expanding-fill; use ffill as last resort
-        df['rsi'] = df['rsi'].fillna(50.0)  # neutral RSI for warmup gaps
-        df['atr'] = df['atr'].fillna(method='ffill')
-        df['stoch_k'] = df['stoch_k'].fillna(method='ffill')
-        # Assign back under lock
-        self._require_lock()
-        with self._data_lock:
+            # Average True Range (ATR) — Wilder's Smoothed (14-period)
+            high_low = df['high'] - df['low']
+            high_close_prev = (df['high'] - df['close'].shift()).abs()
+            low_close_prev = (df['low'] - df['close'].shift()).abs()
+            
+            # Standard ATR using maximum of the three ranges
+            tr = pd.concat([high_low, high_close_prev, low_close_prev], axis=1).max(axis=1)
+            # Wilder's ATR: first value = SMA(TR, 14), then RMA with alpha=1/14
+            sma14_tr = tr.rolling(window=14).mean()
+            atr = tr.copy()
+            atr.iloc[:13] = np.nan
+            atr.iloc[13] = sma14_tr.iloc[13]
+            for i in range(14, len(df)):
+                atr.iloc[i] = atr.iloc[i-1] + (tr.iloc[i] - atr.iloc[i-1]) / 14.0
+            df['atr'] = atr
+            
+            # Volume Weighted Moving Average (VWMA)
+            df['vwma_20'] = (df['close'] * df['volume']).rolling(window=20).sum() / (df['volume'].rolling(window=20).sum() + 1e-9)
+            
+            # Stochastic Oscillator (14, 3)
+            low_14 = df['low'].rolling(window=14).min()
+            high_14 = df['high'].rolling(window=14).max()
+            df['stoch_k'] = 100 * ((df['close'] - low_14) / (high_14 - low_14 + 1e-9))
+            df['stoch_d'] = df['stoch_k'].rolling(window=3).mean()
+            
+            # Use expanding mean for early NaN windows instead of ffill
+            # (ffill produces flat lines at trim boundaries; expanding.mean() gives smooth initialization)
+            for col in ['sma_20', 'sma_50', 'ema_12', 'ema_26', 'macd', 'macd_signal', 'macd_hist',
+                        'bb_mid', 'bb_std', 'bb_upper', 'bb_lower', 'vwma_20', 'stoch_d']:
+                if col in df.columns:
+                    df[col] = df[col].fillna(df[col].expanding().mean())
+            # RSI, ATR, stoch_k are bounded and harder to expanding-fill; use ffill as last resort
+            df['rsi'] = df['rsi'].fillna(50.0)  # neutral RSI for warmup gaps
+            df['atr'] = df['atr'].fillna(method='ffill')
+            df['stoch_k'] = df['stoch_k'].fillna(method='ffill')
+            # Write back — still under lock to prevent TOCTOU corruption
             self.data = df
 
     def subscribe(self, callback):
