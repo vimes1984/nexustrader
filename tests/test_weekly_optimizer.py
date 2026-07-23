@@ -11,8 +11,10 @@ import weekly_optimizer
 
 class TestWeeklyOptimizer(unittest.TestCase):
     def setUp(self):
+        import database as _db
         self.test_db = "test_nexustrader_weekly_opt.db"
         weekly_optimizer.DB_PATH = self.test_db
+        _db.DB_PATH = self.test_db
         
         conn = sqlite3.connect(self.test_db)
         c = conn.cursor()
